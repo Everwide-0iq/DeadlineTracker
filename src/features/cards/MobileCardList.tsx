@@ -55,7 +55,6 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
       className={cn(
         'deadline-card relative rounded-[18px] border p-4',
         card.status === 'done' && 'deadline-card-done',
-        visual.shouldPulse && 'deadline-card-pulse',
       )}
       style={style}
     >

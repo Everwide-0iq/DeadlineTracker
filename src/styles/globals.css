@@ -304,7 +304,7 @@ button {
 
 .deadline-card-noise {
   background-image:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.08), transparent 24%),
+    radial-gradient(circle at 16% 10%, rgba(255, 255, 255, 0.045), transparent 34%),
     repeating-linear-gradient(30deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 6px);
 }
 
@@ -502,24 +502,6 @@ button {
     opacity: 0.86;
     transform: translate3d(1%, -2%, 0) scale(1.03);
   }
-}
-
-@keyframes hotPulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 30px var(--deadline-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  }
-  50% {
-    box-shadow:
-      0 0 52px var(--deadline-glow),
-      inset 0 1px 0 rgba(255, 255, 255, 0.13);
-  }
-}
-
-.deadline-card-pulse {
-  animation: hotPulse 2.8s ease-in-out infinite;
 }
 
 .deadline-list-row {

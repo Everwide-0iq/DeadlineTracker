@@ -138,7 +138,6 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
       className={cn(
         'deadline-card group absolute select-none overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
         card.status === 'done' && 'deadline-card-done',
-        visual.shouldPulse && 'deadline-card-pulse',
         isSelected && 'deadline-card-selected',
         canDrag && 'cursor-grab active:cursor-grabbing',
       )}
