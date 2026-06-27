@@ -151,7 +151,6 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
       onPointerMove={handleCardPointerMove}
       style={cardStyle}
     >
-      <div className="deadline-card-border pointer-events-none absolute inset-[-1px] rounded-[19px]" />
       <div className="pointer-events-none absolute inset-0 rounded-[18px] opacity-45 deadline-card-noise" />
       <div className="relative z-10">
         <div className="mb-4 flex items-start justify-between gap-4">

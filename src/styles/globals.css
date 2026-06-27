@@ -272,38 +272,6 @@ button {
   transform: perspective(900px) rotateX(var(--card-tilt-y)) rotateY(var(--card-tilt-x)) translate3d(0, -2px, 0) scale(var(--card-scale));
 }
 
-.deadline-card-border {
-  position: absolute;
-  overflow: hidden;
-  opacity: 0.48;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  padding: 1px;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-}
-
-.deadline-card-border::after {
-  position: absolute;
-  inset: -45% auto -45% -65%;
-  width: 46%;
-  content: "";
-  background: linear-gradient(
-    115deg,
-    transparent 0 18%,
-    color-mix(in srgb, var(--deadline-border) 84%, white) 46%,
-    transparent 74% 100%
-  );
-  transform: translate3d(-30%, 0, 0);
-  opacity: 0;
-  animation: borderTrace 6.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-  will-change: opacity, transform;
-}
-
 .deadline-card[data-zone="calm"] {
   backdrop-filter: blur(20px) saturate(1.08);
 }
@@ -496,33 +464,6 @@ button {
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes borderTrace {
-  0% {
-    opacity: 0;
-    transform: translate3d(-55%, 0, 0);
-  }
-  16% {
-    opacity: 0;
-    transform: translate3d(-55%, 0, 0);
-  }
-  24% {
-    opacity: 0.75;
-    transform: translate3d(15%, 0, 0);
-  }
-  58% {
-    opacity: 0.75;
-    transform: translate3d(340%, 0, 0);
-  }
-  66% {
-    opacity: 0;
-    transform: translate3d(430%, 0, 0);
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(430%, 0, 0);
   }
 }
 
