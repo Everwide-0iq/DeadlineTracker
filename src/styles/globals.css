@@ -273,9 +273,9 @@ button {
 }
 
 .deadline-card-border {
+  position: absolute;
+  overflow: hidden;
   opacity: 0.48;
-  background: linear-gradient(115deg, transparent 0 26%, color-mix(in srgb, var(--deadline-border) 84%, white) 45%, transparent 62% 100%);
-  background-size: 240% 240%;
   mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -286,6 +286,22 @@ button {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
+}
+
+.deadline-card-border::after {
+  position: absolute;
+  inset: -45% auto -45% -65%;
+  width: 46%;
+  content: "";
+  background: linear-gradient(
+    115deg,
+    transparent 0 18%,
+    color-mix(in srgb, var(--deadline-border) 84%, white) 46%,
+    transparent 74% 100%
+  );
+  transform: translate3d(-30%, 0, 0);
+  animation: borderTrace 5.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  will-change: transform;
 }
 
 .deadline-card[data-zone="calm"] {
@@ -484,11 +500,13 @@ button {
 }
 
 @keyframes borderTrace {
-  0% {
-    background-position: 180% 50%;
+  0%,
+  18% {
+    transform: translate3d(-30%, 0, 0);
   }
+  72%,
   100% {
-    background-position: -80% 50%;
+    transform: translate3d(390%, 0, 0);
   }
 }
 
