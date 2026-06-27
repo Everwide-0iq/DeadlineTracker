@@ -1,0 +1,85 @@
+import { createClient } from '@supabase/supabase-js'
+import { env } from './env.ts'
+
+export type CardStatus = 'todo' | 'done'
+export type BoardScope = 'personal' | 'shared'
+
+export type Database = {
+  public: {
+    Tables: {
+      cards: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          deadline_at: string
+          status: CardStatus
+          board_scope: BoardScope
+          x: number
+          y: number
+          w: number
+          h: number
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          deadline_at: string
+          board_scope?: BoardScope
+          status?: CardStatus
+          x?: number
+          y?: number
+          w?: number
+          h?: number
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          title?: string
+          description?: string | null
+          deadline_at?: string
+          board_scope?: BoardScope
+          status?: CardStatus
+          x?: number
+          y?: number
+          w?: number
+          h?: number
+          created_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: Record<string, never>
+    Functions: Record<string, never>
+    Enums: Record<string, never>
+    CompositeTypes: Record<string, never>
+  }
+}
+
+export const supabase = env.isSupabaseConfigured
+  ? createClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        persistSession: true,
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 8,
+        },
+      },
+    })
+  : null
+
+export function requireSupabase() {
+  if (!supabase) {
+    throw new Error('Supabase не настроен. Добавь VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.')
+  }
+
+  return supabase
+}
