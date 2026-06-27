@@ -141,7 +141,7 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
   }
 
   return (
-    <div className="pointer-events-auto absolute right-6 top-6 hidden rounded-2xl border border-white/10 bg-black/35 p-3 shadow-2xl backdrop-blur-xl xl:block">
+    <div className="pointer-events-auto absolute right-6 top-6 z-20 hidden rounded-2xl border border-white/10 bg-black/35 p-3 shadow-2xl backdrop-blur-xl xl:block">
       <div
         aria-label="Миникарта доски"
         className="relative cursor-crosshair overflow-hidden rounded-xl border border-white/[0.08] bg-[#05080d]"

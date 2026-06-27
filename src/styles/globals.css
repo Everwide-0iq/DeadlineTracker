@@ -131,6 +131,18 @@ button {
     @apply border-red-300/50 bg-red-500/[0.15] text-white shadow-[0_0_20px_rgb(255_70_61_/_0.14)];
   }
 
+  .mobile-create-button {
+    @apply border border-red-200/[0.42] bg-red-500/[0.88] shadow-[0_14px_44px_rgb(255_70_61_/_0.36),inset_0_1px_0_rgb(255_255_255_/_0.22)] backdrop-blur-xl transition duration-200 active:scale-[0.98];
+  }
+
+  .mobile-create-button::before {
+    @apply pointer-events-none absolute inset-0 rounded-full bg-white/[0.06] content-[''];
+  }
+
+  .mobile-create-button > * {
+    @apply relative z-10;
+  }
+
   .view-toggle-button {
     @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-white/45 transition duration-200 hover:bg-white/[0.055] hover:text-white;
   }

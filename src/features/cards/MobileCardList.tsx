@@ -213,14 +213,19 @@ export function MobileCardList({
         ))}
       </section>
 
-      <button
-        aria-label="Создать карточку"
-        className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-5 z-30 grid h-16 w-16 place-items-center rounded-2xl border border-[var(--accent)]/50 bg-[var(--accent)] text-white shadow-[0_0_34px_rgb(255_69_58_/_0.42)] transition hover:scale-105"
-        type="button"
-        onClick={onCreate}
-      >
-        <Plus size={28} />
-      </button>
+      {!isLoading && !error && cards.length > 0 ? (
+        <button
+          aria-label={boardScope === 'personal' ? 'Создать личную задачу' : 'Создать карточку'}
+          className="mobile-create-button fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2.5 rounded-full px-4 py-3 text-sm font-black text-white"
+          type="button"
+          onClick={onCreate}
+        >
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--accent)] shadow-[0_0_18px_rgb(255_255_255_/_0.16)]">
+            <Plus size={21} strokeWidth={3} />
+          </span>
+          <span>{boardScope === 'personal' ? 'Новая задача' : 'Новая карточка'}</span>
+        </button>
+      ) : null}
     </main>
   )
 }
