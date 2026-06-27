@@ -281,7 +281,6 @@ button {
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   padding: 1px;
-  animation: borderTrace 5.2s linear infinite;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -300,8 +299,9 @@ button {
     transparent 74% 100%
   );
   transform: translate3d(-30%, 0, 0);
-  animation: borderTrace 5.8s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-  will-change: transform;
+  opacity: 0;
+  animation: borderTrace 6.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  will-change: opacity, transform;
 }
 
 .deadline-card[data-zone="calm"] {
@@ -500,13 +500,29 @@ button {
 }
 
 @keyframes borderTrace {
-  0%,
-  18% {
-    transform: translate3d(-30%, 0, 0);
+  0% {
+    opacity: 0;
+    transform: translate3d(-55%, 0, 0);
   }
-  72%,
+  16% {
+    opacity: 0;
+    transform: translate3d(-55%, 0, 0);
+  }
+  24% {
+    opacity: 0.75;
+    transform: translate3d(15%, 0, 0);
+  }
+  58% {
+    opacity: 0.75;
+    transform: translate3d(340%, 0, 0);
+  }
+  66% {
+    opacity: 0;
+    transform: translate3d(430%, 0, 0);
+  }
   100% {
-    transform: translate3d(390%, 0, 0);
+    opacity: 0;
+    transform: translate3d(430%, 0, 0);
   }
 }
 
