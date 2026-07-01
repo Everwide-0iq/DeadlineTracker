@@ -18,7 +18,9 @@ import {
   Clock3,
   Flame,
   Keyboard,
+  Plus,
   Sparkles,
+  X,
 } from 'lucide-react'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
@@ -52,15 +54,25 @@ type ParsedQuickCommand = {
   label: string
 }
 
+type TimePreset = {
+  custom?: boolean
+  label: string
+  value: string
+}
+
+const customTimePresetStorageKey = 'fireboard.customTimePresets.v1'
+const maxCustomTimePresets = 6
 const weekdayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
-const timePresets = [
+const defaultTimePresets: TimePreset[] = [
   { label: 'Утро', value: '09:00' },
   { label: 'День', value: '12:00' },
   { label: 'После обеда', value: '15:00' },
   { label: 'Вечер', value: '18:00' },
   { label: 'Ночь', value: '21:00' },
 ]
+const defaultTimePresetValues = new Set(defaultTimePresets.map((preset) => preset.value))
+const timeValuePattern = /^([01]\d|2[0-3]):[0-5]\d$/
 
 const dayFormatter = new Intl.DateTimeFormat('ru-RU', {
   day: 'numeric',
@@ -80,6 +92,52 @@ const fullDateFormatter = new Intl.DateTimeFormat('ru-RU', {
 })
 
 const pad = (value: number) => value.toString().padStart(2, '0')
+
+function isTimeValue(value: unknown): value is string {
+  return typeof value === 'string' && timeValuePattern.test(value)
+}
+
+function getCleanCustomTimePresets(values: string[]) {
+  const seen = new Set<string>()
+
+  return values
+    .filter((value) => isTimeValue(value) && !defaultTimePresetValues.has(value))
+    .sort()
+    .filter((value) => {
+      if (seen.has(value)) {
+        return false
+      }
+
+      seen.add(value)
+      return true
+    })
+    .slice(0, maxCustomTimePresets)
+}
+
+function readCustomTimePresets() {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(customTimePresetStorageKey) ?? '[]')
+    return Array.isArray(parsed) ? getCleanCustomTimePresets(parsed) : []
+  } catch {
+    return []
+  }
+}
+
+function saveCustomTimePresets(values: string[]) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(customTimePresetStorageKey, JSON.stringify(values))
+  } catch {
+    // Local storage can be blocked by browser privacy settings; presets remain usable in memory.
+  }
+}
 
 function parseLocalDateTime(value: string) {
   const parsed = new Date(value)
@@ -292,8 +350,31 @@ export function DeadlinePicker({
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(selectedDate))
   const [quickCommand, setQuickCommand] = useState('')
   const [quickFeedback, setQuickFeedback] = useState<string | null>(null)
+  const [customTimePresets, setCustomTimePresets] = useState(readCustomTimePresets)
   const now = Date.now()
   const visual = getDeadlineVisualState(selectedDate, status, now)
+  const selectedTimeValue = getTimeValue(selectedDate)
+  const timePresets = useMemo<TimePreset[]>(
+    () => [
+      ...defaultTimePresets,
+      ...customTimePresets.map((value) => ({
+        custom: true,
+        label: 'Своё',
+        value,
+      })),
+    ],
+    [customTimePresets],
+  )
+  const canAddSelectedTime =
+    !defaultTimePresetValues.has(selectedTimeValue) &&
+    !customTimePresets.includes(selectedTimeValue) &&
+    customTimePresets.length < maxCustomTimePresets
+  const addTimePresetTitle =
+    defaultTimePresetValues.has(selectedTimeValue) || customTimePresets.includes(selectedTimeValue)
+      ? 'Это время уже есть в заготовках'
+      : customTimePresets.length >= maxCustomTimePresets
+        ? `Можно добавить до ${maxCustomTimePresets} своих заготовок`
+        : 'Добавить время в заготовки'
   const scopedCards = useMemo(
     () =>
       cards.filter((card) =>
@@ -348,6 +429,22 @@ export function DeadlinePicker({
     commitDate(result.date)
     setQuickCommand('')
     setQuickFeedback(result.label)
+  }
+
+  const addCustomTimePreset = () => {
+    if (!canAddSelectedTime) {
+      return
+    }
+
+    const nextPresets = getCleanCustomTimePresets([...customTimePresets, selectedTimeValue])
+    setCustomTimePresets(nextPresets)
+    saveCustomTimePresets(nextPresets)
+  }
+
+  const removeCustomTimePreset = (timeValue: string) => {
+    const nextPresets = customTimePresets.filter((presetValue) => presetValue !== timeValue)
+    setCustomTimePresets(nextPresets)
+    saveCustomTimePresets(nextPresets)
   }
 
   return (
@@ -480,30 +577,54 @@ export function DeadlinePicker({
             </div>
             <div className="grid grid-cols-3 gap-2">
               {timePresets.map((preset) => (
-                <button
-                  className={cn(
-                    'deadline-time-button',
-                    getTimeValue(selectedDate) === preset.value && 'deadline-time-button-active',
-                  )}
-                  key={preset.value}
-                  type="button"
-                  onClick={() => commitDate(setTimeValue(selectedDate, preset.value))}
-                >
-                  <span>{preset.label}</span>
-                  <strong>{preset.value}</strong>
-                </button>
+                <div className="deadline-time-preset-shell" key={preset.value}>
+                  <button
+                    aria-label={`${preset.label} ${preset.value}`}
+                    className={cn(
+                      'deadline-time-button',
+                      selectedTimeValue === preset.value && 'deadline-time-button-active',
+                    )}
+                    type="button"
+                    onClick={() => commitDate(setTimeValue(selectedDate, preset.value))}
+                  >
+                    <span>{preset.label}</span>
+                    <strong>{preset.value}</strong>
+                  </button>
+                  {preset.custom ? (
+                    <button
+                      aria-label={`Удалить заготовку ${preset.value}`}
+                      className="deadline-time-remove"
+                      type="button"
+                      onClick={() => removeCustomTimePreset(preset.value)}
+                    >
+                      <X size={11} />
+                    </button>
+                  ) : null}
+                </div>
               ))}
             </div>
             <label className="mt-3 block">
               <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-white/35">
                 Точно
               </span>
-              <input
-                className="deadline-time-input"
-                type="time"
-                value={getTimeValue(selectedDate)}
-                onChange={(event) => commitDate(setTimeValue(selectedDate, event.target.value))}
-              />
+              <div className="flex gap-2">
+                <input
+                  className="deadline-time-input min-w-0"
+                  type="time"
+                  value={selectedTimeValue}
+                  onChange={(event) => commitDate(setTimeValue(selectedDate, event.target.value))}
+                />
+                <button
+                  aria-label="Добавить время в заготовки"
+                  className="deadline-time-add-button"
+                  disabled={!canAddSelectedTime}
+                  title={addTimePresetTitle}
+                  type="button"
+                  onClick={addCustomTimePreset}
+                >
+                  <Plus size={17} />
+                </button>
+              </div>
             </label>
           </div>
 

@@ -155,8 +155,21 @@ button {
     @apply border-red-200/[0.65] bg-red-500/[0.16] text-white shadow-[0_0_22px_rgb(255_70_61_/_0.2),inset_0_0_0_1px_rgb(255_255_255_/_0.08)];
   }
 
+  .deadline-time-preset-shell {
+    @apply relative min-w-0;
+  }
+
   .deadline-time-button {
-    @apply rounded-2xl border border-white/10 bg-white/[0.045] px-2.5 py-2 text-left transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.07];
+    @apply w-full rounded-2xl border border-white/10 bg-white/[0.045] px-2.5 py-2 text-left transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.07];
+  }
+
+  .deadline-time-remove {
+    @apply absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full border border-white/10 bg-[#17191f] text-white/[0.42] opacity-0 shadow-[0_0_14px_rgb(0_0_0_/_0.35)] transition duration-200 hover:border-red-300/[0.45] hover:bg-red-500/[0.15] hover:text-red-50 disabled:pointer-events-none;
+  }
+
+  .deadline-time-preset-shell:hover .deadline-time-remove,
+  .deadline-time-remove:focus-visible {
+    @apply opacity-100;
   }
 
   .deadline-time-button span {
@@ -174,6 +187,10 @@ button {
   .deadline-time-input,
   .deadline-quick-input {
     @apply w-full rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2.5 text-sm font-bold text-white outline-none transition placeholder:text-white/25 focus:border-red-300/45 focus:bg-white/[0.07] focus:shadow-[0_0_0_4px_rgb(255_70_61_/_0.08)];
+  }
+
+  .deadline-time-add-button {
+    @apply grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-red-300/[0.3] bg-red-500/10 text-red-50 transition duration-200 hover:-translate-y-0.5 hover:border-red-200/[0.55] hover:bg-red-500/[0.16] hover:shadow-[0_0_18px_rgb(255_70_61_/_0.18)] active:translate-y-0 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.035] disabled:text-white/25 disabled:shadow-none;
   }
 
   .sidebar-filter {
