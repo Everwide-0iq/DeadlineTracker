@@ -1,6 +1,7 @@
 import { CalendarClock, CheckCircle2, Save, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useAuthStore } from '../auth/auth.store.ts'
+import { useProjectStore } from '../projects/project.store.ts'
 import { useCardStore } from './card.store.ts'
 import type { CardStatus } from './card.types.ts'
 import {
@@ -19,9 +20,16 @@ export function CardEditor() {
   const saveError = useCardStore((state) => state.saveError)
   const updateCard = useCardStore((state) => state.updateCard)
   const userId = useAuthStore((state) => state.user?.id ?? null)
+  const projects = useProjectStore((state) => state.projects)
   const card = useMemo(
     () => (editor?.mode === 'edit' ? cards.find((item) => item.id === editor.cardId) ?? null : null),
     [cards, editor],
+  )
+  const editorProjectId =
+    editor?.mode === 'edit' ? card?.projectId ?? null : editor?.mode === 'create' ? editor.projectId : null
+  const editorProjectName = useMemo(
+    () => projects.find((project) => project.id === editorProjectId)?.name ?? null,
+    [editorProjectId, projects],
   )
   const [deadlineLocal, setDeadlineLocal] = useState('')
   const [description, setDescription] = useState('')
@@ -118,6 +126,7 @@ export function CardEditor() {
             deadlineAt,
             description: description.trim() || null,
             h: defaultCardSize.h,
+            projectId: editor.boardScope === 'shared' ? editor.projectId : null,
             status,
             title: trimmedTitle,
             w: defaultCardSize.w,
@@ -161,7 +170,9 @@ export function CardEditor() {
             </div>
             <h2 className="text-2xl font-black text-white">{isEditing ? 'Настроить дедлайн' : 'Добавить дедлайн'}</h2>
             <p className="mt-1 text-sm text-white/40">
-              {editorScope === 'personal' ? 'Личная доска, видишь только ты' : 'Командная доска, видно всем участникам'}
+              {editorScope === 'personal'
+                ? 'Личная доска, видишь только ты'
+                : `Командный проект${editorProjectName ? `: ${editorProjectName}` : ', видно всем участникам'}`}
             </p>
           </div>
           <button aria-label="Закрыть редактор" className="icon-button" type="button" onClick={requestClose}>

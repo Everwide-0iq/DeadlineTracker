@@ -11,6 +11,7 @@ export type Card = {
   deadlineAt: string
   status: CardStatus
   boardScope: BoardScope
+  projectId: string | null
   x: number
   y: number
   w: number
@@ -27,6 +28,7 @@ export type CardRow = {
   deadline_at: string
   status: CardStatus
   board_scope: BoardScope
+  project_id: string | null
   x: number
   y: number
   w: number
@@ -41,6 +43,7 @@ export type CreateCardInput = {
   description: string | null
   deadlineAt: string
   boardScope: BoardScope
+  projectId: string | null
   status?: CardStatus
   x: number
   y: number
@@ -56,6 +59,7 @@ export type CardEditorState =
   | {
       mode: 'create'
       boardScope: BoardScope
+      projectId: string | null
       initialX: number
       initialY: number
     }

@@ -6,8 +6,11 @@ import type { BoardFilter, BoardScope, Card, FilterCounts } from './card.types.t
 import { boardFilters } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
+import { ProjectList } from '../projects/ProjectList.tsx'
+import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../projects/project.types.ts'
 
 type MobileCardListProps = {
+  activeProjectId: string
   boardScope: BoardScope
   cards: Card[]
   counts: FilterCounts
@@ -15,9 +18,16 @@ type MobileCardListProps = {
   filter: BoardFilter
   isLoading: boolean
   now: number
+  projects: Project[]
+  projectCardCounts: Record<string, number>
+  projectDeadlines: Record<string, ProjectDeadlineSummary | undefined>
   onCreate: () => void
+  onCreateProject: () => void
+  onDeleteProject: (project: Project) => void
   onBoardScopeChange: (scope: BoardScope) => void
   onFilterChange: (filter: BoardFilter) => void
+  onProjectChange: (projectId: string) => void
+  onMoveProject: (project: Project, direction: ProjectMoveDirection) => void
   onLogout: () => void
   onRetry: () => void
 }
@@ -107,6 +117,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
 })
 
 export function MobileCardList({
+  activeProjectId,
   boardScope,
   cards,
   counts,
@@ -114,9 +125,16 @@ export function MobileCardList({
   filter,
   isLoading,
   now,
+  projects,
+  projectCardCounts,
+  projectDeadlines,
   onCreate,
+  onCreateProject,
+  onDeleteProject,
   onBoardScopeChange,
   onFilterChange,
+  onProjectChange,
+  onMoveProject,
   onLogout,
   onRetry,
 }: MobileCardListProps) {
@@ -158,6 +176,20 @@ export function MobileCardList({
             Личное
           </button>
         </div>
+
+        {boardScope === 'shared' ? (
+          <ProjectList
+            activeProjectId={activeProjectId}
+            counts={projectCardCounts}
+            deadlines={projectDeadlines}
+            projects={projects}
+            variant="mobile"
+            onCreate={onCreateProject}
+            onDelete={onDeleteProject}
+            onMove={onMoveProject}
+            onSelect={onProjectChange}
+          />
+        ) : null}
 
         <div className="scrollbar-hidden -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {boardFilters.map((item) => (

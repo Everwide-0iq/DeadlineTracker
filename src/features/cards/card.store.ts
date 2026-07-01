@@ -36,7 +36,12 @@ type CardState = {
   deleteCard: (id: string) => Promise<void>
   loadCards: () => Promise<void>
   moveCardLocal: (id: string, x: number, y: number) => void
-  openCreateEditor: (initialX: number, initialY: number, boardScope: BoardScope) => void
+  openCreateEditor: (
+    initialX: number,
+    initialY: number,
+    boardScope: BoardScope,
+    projectId: string | null,
+  ) => void
   openEditEditor: (cardId: string) => void
   persistCardPosition: (id: string, x: number, y: number) => Promise<void>
   selectCard: (id: string | null) => void
@@ -63,6 +68,10 @@ const getMessage = (error: unknown) => {
 
     if (message?.includes("Could not find the 'board_scope' column")) {
       return 'В таблице public.cards не найден столбец board_scope. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.'
+    }
+
+    if (message?.includes("Could not find the 'project_id' column")) {
+      return 'В таблице public.cards не найден столбец project_id. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.'
     }
 
     if (message) {
@@ -147,8 +156,8 @@ export const useCardStore = create<CardState>((set, get) => ({
       cards: state.cards.map((card) => (card.id === id ? { ...card, x, y } : card)),
     }))
   },
-  openCreateEditor: (initialX, initialY, boardScope) =>
-    set({ editor: { mode: 'create', boardScope, initialX, initialY } }),
+  openCreateEditor: (initialX, initialY, boardScope, projectId) =>
+    set({ editor: { mode: 'create', boardScope, projectId, initialX, initialY } }),
   openEditEditor: (cardId) => set({ editor: { mode: 'edit', cardId }, selectedCardId: cardId }),
   persistCardPosition: async (id, x, y) => {
     set({ saveError: null })

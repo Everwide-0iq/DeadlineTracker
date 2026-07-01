@@ -35,9 +35,9 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 3. Создай двух пользователей вручную или пригласи их.
 4. Открой SQL Editor.
 5. Выполни `supabase/migrations/0001_initial_schema.sql`.
-6. В Database -> Replication проверь, что Realtime включён для `public.cards`. Миграция также пытается добавить `public.cards` в `supabase_realtime`.
+6. В Database -> Replication проверь, что Realtime включён для `public.cards` и `public.projects`. Миграция также пытается добавить обе таблицы в `supabase_realtime`.
 
-Если проект уже был создан до появления личных задач, выполни миграцию повторно: она добавит `board_scope` и обновит RLS policies.
+Если проект уже был создан до появления личных задач или командных проектов, выполни миграцию повторно: она добавит `board_scope`, таблицу `projects`, `project_id` у карточек, `sort_order` у проектов и обновит RLS policies.
 
 ## Деплой на Vercel
 
@@ -54,9 +54,10 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 - Вход и выход через Supabase email/password.
 - Защищённый route приложения с восстановлением сессии.
-- Миграция таблицы `cards` с индексами, `updated_at` trigger, RLS policies и настройкой Realtime publication.
+- Миграция таблиц `cards` и `projects` с индексами, `updated_at` trigger, RLS policies и настройкой Realtime publication.
 - CRUD карточек: создать, редактировать, отметить готово/в работу, удалить.
 - Две области: командная доска `shared` и личная доска `personal`, где карточки видит только владелец.
+- Командные проекты: общий проект `Общее`, создание проектов с цветом, ближайший дедлайн, ручной порядок проектов, realtime-синхронизация, удаление проекта вместе с его карточками.
 - Desktop-доска от `1024px`: pan, zoom, draggable DOM-карточки, mini map, sidebar-фильтры.
 - Mobile-список ниже `1024px`: сортировка по дедлайну, chips-фильтры, floating create button, без drag-and-drop.
 - Динамическая deadline color utility с floating `daysLeft`, HSL-нагревом, urgency label, glow, progress и pulse только для горячих карточек.
