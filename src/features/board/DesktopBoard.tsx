@@ -12,6 +12,7 @@ import {
 import { useCardStore } from '../cards/card.store.ts'
 import { DeadlineCard } from '../cards/DeadlineCard.tsx'
 import type { BoardScope, Card } from '../cards/card.types.ts'
+import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
 import { BoardControls, type BoardMode } from './BoardControls.tsx'
 import type { DragGuide } from './dragGuide.types.ts'
@@ -51,14 +52,15 @@ const realtimeLabels = {
 
 const CardUnderlight = memo(function CardUnderlight({ card, now }: { card: Card; now: number }) {
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
-  const horizontalBleed = Math.max(42, card.w * 0.18)
-  const verticalBleed = Math.max(36, card.h * 0.28)
+  const renderSize = getCardRenderSize(card)
+  const horizontalBleed = Math.max(42, renderSize.w * 0.18)
+  const verticalBleed = Math.max(36, renderSize.h * 0.28)
   const style: UnderlightStyle = {
     '--deadline-border': visual.borderColor,
-    height: card.h + verticalBleed * 2,
+    height: renderSize.h + verticalBleed * 2,
     left: card.x - horizontalBleed,
     top: card.y - verticalBleed,
-    width: card.w + horizontalBleed * 2,
+    width: renderSize.w + horizontalBleed * 2,
   }
 
   return (

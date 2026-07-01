@@ -83,10 +83,19 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
           </button>
         </div>
 
-        <h3 className={cn('mb-2 text-xl font-black leading-tight text-white', card.status === 'done' && 'line-through text-white/55')}>
+        <h3
+          className={cn(
+            'mb-2 whitespace-pre-wrap break-words text-xl font-black leading-tight text-white',
+            card.status === 'done' && 'line-through text-white/55',
+          )}
+        >
           {card.title}
         </h3>
-        {card.description ? <p className="mb-4 text-sm leading-6 text-white/55">{card.description}</p> : null}
+        {card.description ? (
+          <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-6 text-white/55">
+            {card.description}
+          </p>
+        ) : null}
 
         <div className="mb-4 flex items-center gap-3 text-[var(--deadline-text)]">
           <span className="text-3xl font-black">{countdown}</span>

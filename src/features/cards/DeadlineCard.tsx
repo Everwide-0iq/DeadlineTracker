@@ -5,6 +5,7 @@ import { useDragCard } from '../board/useDragCard.ts'
 import type { BoardCamera } from '../board/useBoardCamera.ts'
 import { useCardStore } from './card.store.ts'
 import type { Card } from './card.types.ts'
+import { getCardRenderSize } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
 
@@ -32,6 +33,7 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
   const dragPointerDown = useDragCard({ camera, card, enabled: canDrag })
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
   const countdown = formatCountdown(card.deadlineAt, card.status, now)
+  const renderSize = getCardRenderSize(card)
 
   const cardStyle: CardStyle = {
     '--deadline-bg': visual.backgroundColor,
@@ -39,9 +41,9 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
     '--deadline-glow': visual.glowColor,
     '--deadline-text': visual.textColor,
     left: card.x,
-    minHeight: card.h,
+    minHeight: renderSize.h,
     top: card.y,
-    width: card.w,
+    width: renderSize.w,
   }
 
   useEffect(() => {
@@ -174,7 +176,7 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
 
         <h3
           className={cn(
-            'mb-3 line-clamp-2 text-[22px] font-bold leading-tight text-white drop-shadow',
+            'mb-3 whitespace-pre-wrap break-words text-[22px] font-bold leading-tight text-white drop-shadow',
             card.status === 'done' && 'text-white/55 line-through',
           )}
         >
@@ -182,7 +184,9 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
         </h3>
 
         {card.description ? (
-          <p className="mb-4 line-clamp-2 text-sm leading-6 text-white/55">{card.description}</p>
+          <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-6 text-white/55">
+            {card.description}
+          </p>
         ) : null}
 
         <div className="mb-4 flex items-center gap-3 text-[var(--deadline-text)]">

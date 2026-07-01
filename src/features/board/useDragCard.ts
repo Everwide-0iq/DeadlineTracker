@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { useCardStore } from '../cards/card.store.ts'
 import type { Card } from '../cards/card.types.ts'
+import { getCardRenderSize } from '../cards/card.utils.ts'
 import type { BoardCamera } from './useBoardCamera.ts'
 
 type DragState = {
@@ -25,18 +26,22 @@ type SnapAxis = {
   delta: number
 }
 
-const getCardLines = (card: Card, x = card.x, y = card.y) => ({
-  horizontal: [
-    { coordinate: x, offset: 0 },
-    { coordinate: x + card.w / 2, offset: card.w / 2 },
-    { coordinate: x + card.w, offset: card.w },
-  ],
-  vertical: [
-    { coordinate: y, offset: 0 },
-    { coordinate: y + card.h / 2, offset: card.h / 2 },
-    { coordinate: y + card.h, offset: card.h },
-  ],
-})
+const getCardLines = (card: Card, x = card.x, y = card.y) => {
+  const renderSize = getCardRenderSize(card)
+
+  return {
+    horizontal: [
+      { coordinate: x, offset: 0 },
+      { coordinate: x + renderSize.w / 2, offset: renderSize.w / 2 },
+      { coordinate: x + renderSize.w, offset: renderSize.w },
+    ],
+    vertical: [
+      { coordinate: y, offset: 0 },
+      { coordinate: y + renderSize.h / 2, offset: renderSize.h / 2 },
+      { coordinate: y + renderSize.h, offset: renderSize.h },
+    ],
+  }
+}
 
 const findSnapAxis = (
   ownLines: Array<{ coordinate: number; offset: number }>,

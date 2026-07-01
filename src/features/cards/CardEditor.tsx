@@ -7,6 +7,7 @@ import type { CardStatus } from './card.types.ts'
 import {
   defaultCardSize,
   fromDateTimeLocalValue,
+  getCardContentHeight,
   getDefaultDeadline,
   toDateTimeLocalValue,
 } from './card.utils.ts'
@@ -112,10 +113,18 @@ export function CardEditor() {
     setIsSaving(true)
 
     try {
+      const trimmedDescription = description.trim() || null
+      const nextHeight = getCardContentHeight({
+        description: trimmedDescription,
+        title: trimmedTitle,
+        w: card?.w ?? defaultCardSize.w,
+      })
+
       if (isEditing && card) {
         await updateCard(card.id, {
           deadlineAt,
-          description: description.trim() || null,
+          description: trimmedDescription,
+          h: nextHeight,
           status,
           title: trimmedTitle,
         })
@@ -124,8 +133,8 @@ export function CardEditor() {
           {
             boardScope: editor.boardScope,
             deadlineAt,
-            description: description.trim() || null,
-            h: defaultCardSize.h,
+            description: trimmedDescription,
+            h: nextHeight,
             projectId: editor.boardScope === 'shared' ? editor.projectId : null,
             status,
             title: trimmedTitle,

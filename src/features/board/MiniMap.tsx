@@ -1,5 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import type { Card } from '../cards/card.types.ts'
+import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
 import type { BoardCamera } from './useBoardCamera.ts'
 
@@ -47,12 +48,16 @@ function getViewportBounds(camera: BoardCamera, viewportSize: ViewportSize): Wor
 function getMiniMapGeometry(cards: Card[], camera: BoardCamera, viewportSize: ViewportSize) {
   const viewportBounds = getViewportBounds(camera, viewportSize)
   const cardBounds = cards.reduce<WorldBounds>(
-    (acc, card) => ({
-      maxX: Math.max(acc.maxX, card.x + card.w),
-      maxY: Math.max(acc.maxY, card.y + card.h),
-      minX: Math.min(acc.minX, card.x),
-      minY: Math.min(acc.minY, card.y),
-    }),
+    (acc, card) => {
+      const renderSize = getCardRenderSize(card)
+
+      return {
+        maxX: Math.max(acc.maxX, card.x + renderSize.w),
+        maxY: Math.max(acc.maxY, card.y + renderSize.h),
+        minX: Math.min(acc.minX, card.x),
+        minY: Math.min(acc.minY, card.y),
+      }
+    },
     viewportBounds,
   )
 
@@ -153,6 +158,7 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
       >
         {cards.map((card) => {
           const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
+          const renderSize = getCardRenderSize(card)
           const left = toMapX(card.x)
           const top = toMapY(card.y)
 
@@ -163,10 +169,10 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
               style={{
                 backgroundColor: visual.borderColor,
                 boxShadow: `0 0 10px ${visual.glowColor}`,
-                height: Math.max(card.h * geometry.scale, 4),
+                height: Math.max(renderSize.h * geometry.scale, 4),
                 left,
                 top,
-                width: Math.max(card.w * geometry.scale, 6),
+                width: Math.max(renderSize.w * geometry.scale, 6),
               }}
             />
           )

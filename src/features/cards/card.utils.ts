@@ -14,6 +14,68 @@ export const defaultCardSize = {
   h: 190,
 }
 
+const cardHorizontalPadding = 40
+const titleAverageCharWidth = 12.5
+const descriptionAverageCharWidth = 7.4
+const titleLineHeight = 28
+const descriptionLineHeight = 24
+const includedTitleLines = 2
+const includedDescriptionLines = 2
+
+type CardContentSizeInput = {
+  description: string | null
+  h?: number
+  title: string
+  w?: number
+}
+
+const getTextLineCount = (value: string | null, charactersPerLine: number) => {
+  const normalizedValue = value?.trim()
+
+  if (!normalizedValue) {
+    return 0
+  }
+
+  return normalizedValue
+    .replace(/\r/g, '')
+    .split('\n')
+    .reduce((lineCount, paragraph) => {
+      const length = Math.max(Array.from(paragraph.trim()).length, 1)
+      return lineCount + Math.max(Math.ceil(length / charactersPerLine), 1)
+    }, 0)
+}
+
+export function getCardContentHeight({ description, h, title, w }: CardContentSizeInput) {
+  const cardWidth = w ?? defaultCardSize.w
+  const contentWidth = Math.max(cardWidth - cardHorizontalPadding, 220)
+  const titleCharactersPerLine = Math.max(Math.floor(contentWidth / titleAverageCharWidth), 12)
+  const descriptionCharactersPerLine = Math.max(
+    Math.floor(contentWidth / descriptionAverageCharWidth),
+    18,
+  )
+  const titleLines = Math.max(getTextLineCount(title, titleCharactersPerLine), 1)
+  const descriptionLines = getTextLineCount(description, descriptionCharactersPerLine)
+  const titleExtraHeight = Math.max(titleLines - includedTitleLines, 0) * titleLineHeight
+  const descriptionExtraHeight =
+    Math.max(descriptionLines - includedDescriptionLines, 0) * descriptionLineHeight
+
+  return Math.ceil(Math.max(h ?? defaultCardSize.h, defaultCardSize.h + titleExtraHeight + descriptionExtraHeight))
+}
+
+export function getCardRenderSize(card: Pick<Card, 'description' | 'h' | 'title' | 'w'>) {
+  const width = card.w || defaultCardSize.w
+
+  return {
+    h: getCardContentHeight({
+      description: card.description,
+      h: card.h,
+      title: card.title,
+      w: width,
+    }),
+    w: width,
+  }
+}
+
 export function getDefaultDeadline() {
   const nextDay = new Date()
   nextDay.setDate(nextDay.getDate() + 1)

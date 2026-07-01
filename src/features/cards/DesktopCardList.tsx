@@ -59,13 +59,13 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
         <div className="min-w-0">
           <h3
             className={cn(
-              'truncate text-lg font-black text-white',
+              'break-words text-lg font-black leading-snug text-white',
               card.status === 'done' && 'line-through text-white/55',
             )}
           >
             {card.title}
           </h3>
-          <p className="mt-1 truncate text-sm text-white/42">
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-white/42">
             {card.description || 'Без описания'}
           </p>
         </div>
