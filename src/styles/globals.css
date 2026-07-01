@@ -422,8 +422,75 @@ button {
 }
 
 .deadline-card-selected {
+  z-index: 13;
   outline: 1px solid color-mix(in srgb, var(--deadline-border) 80%, white);
   outline-offset: 4px;
+}
+
+.card-link-handle {
+  --link-handle-transform: translate3d(0, 0, 0);
+  position: absolute;
+  z-index: 28;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 999px;
+  opacity: 0;
+  transform: var(--link-handle-transform);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.card-link-handle span {
+  width: 15px;
+  height: 15px;
+  border: 1px solid color-mix(in srgb, var(--deadline-border) 82%, white);
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 38% 32%, rgba(255, 255, 255, 0.9), transparent 18%),
+    color-mix(in srgb, var(--deadline-border) 36%, #06080c);
+  box-shadow:
+    0 0 0 7px color-mix(in srgb, var(--deadline-border) 10%, transparent),
+    0 0 22px var(--deadline-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.deadline-card:hover .card-link-handle,
+.deadline-card-selected .card-link-handle,
+.deadline-card-connecting .card-link-handle {
+  opacity: 0.42;
+}
+
+.card-link-handle:hover,
+.deadline-card-connecting .card-link-handle:hover {
+  opacity: 1;
+  transform: var(--link-handle-transform) scale(1.12);
+}
+
+.card-link-handle-top {
+  --link-handle-transform: translateX(-50%);
+  left: 50%;
+  top: -25px;
+}
+
+.card-link-handle-right {
+  --link-handle-transform: translateY(-50%);
+  right: -25px;
+  top: 50%;
+}
+
+.card-link-handle-bottom {
+  --link-handle-transform: translateX(-50%);
+  bottom: -25px;
+  left: 50%;
+}
+
+.card-link-handle-left {
+  --link-handle-transform: translateY(-50%);
+  left: -25px;
+  top: 50%;
 }
 
 .deadline-card-done {
@@ -460,6 +527,96 @@ button {
 
 .magnetic-guide-horizontal {
   height: 1px;
+}
+
+.card-link-glow,
+.card-link-draft-glow {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 10;
+  opacity: 0.09;
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.card-link-path,
+.card-link-draft-path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-link-path {
+  stroke-width: 3.25;
+  opacity: 0.88;
+  pointer-events: stroke;
+  transition:
+    opacity 160ms ease,
+    stroke-width 160ms ease;
+}
+
+.card-link-group:hover .card-link-path,
+.card-link-path-selected {
+  stroke-width: 4.25;
+  opacity: 1;
+}
+
+.card-link-flow {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.48);
+  stroke-dasharray: 7 24;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  animation: cardLinkFlow 1.2s linear infinite;
+}
+
+.card-link-group:hover .card-link-flow,
+.card-link-path-selected + .card-link-flow {
+  opacity: 0.34;
+}
+
+.card-link-draft-path {
+  stroke-dasharray: 10 14;
+  stroke-width: 2.75;
+  opacity: 0.86;
+  pointer-events: none;
+  animation: cardLinkFlow 0.9s linear infinite;
+}
+
+.card-link-draft-end {
+  fill: #05070b;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 8px currentColor);
+  pointer-events: none;
+}
+
+.card-link-delete-popover {
+  position: absolute;
+  z-index: 32;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(6, 8, 13, 0.9);
+  box-shadow:
+    0 0 24px rgba(255, 70, 61, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: rgba(255, 236, 236, 0.94);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 8px 12px;
+  pointer-events: auto;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.card-link-delete-popover:hover {
+  border-color: rgba(255, 117, 109, 0.55);
+  background: rgba(72, 16, 19, 0.94);
 }
 
 .remote-cursor {
@@ -626,6 +783,12 @@ button {
   }
   50% {
     opacity: 0.86;
+  }
+}
+
+@keyframes cardLinkFlow {
+  to {
+    stroke-dashoffset: -30;
   }
 }
 

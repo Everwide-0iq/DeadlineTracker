@@ -3,6 +3,7 @@ import { env } from './env.ts'
 
 export type CardStatus = 'todo' | 'done'
 export type BoardScope = 'personal' | 'shared'
+export type CardLinkSide = 'top' | 'right' | 'bottom' | 'left'
 
 export type Database = {
   public: {
@@ -51,6 +52,43 @@ export type Database = {
           y?: number
           w?: number
           h?: number
+          created_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      card_links: {
+        Row: {
+          id: string
+          from_card_id: string
+          from_side: CardLinkSide
+          to_card_id: string
+          to_side: CardLinkSide
+          board_scope: BoardScope
+          project_id: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          from_card_id: string
+          from_side: CardLinkSide
+          to_card_id: string
+          to_side: CardLinkSide
+          board_scope?: BoardScope
+          project_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          from_card_id?: string
+          from_side?: CardLinkSide
+          to_card_id?: string
+          to_side?: CardLinkSide
+          board_scope?: BoardScope
+          project_id?: string | null
           created_by?: string | null
           updated_at?: string
         }

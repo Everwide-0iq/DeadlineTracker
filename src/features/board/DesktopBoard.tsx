@@ -3,18 +3,23 @@ import {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type PointerEvent,
   type WheelEvent,
 } from 'react'
+import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
+import type { CardLink, CardLinkSide } from '../cardLinks/cardLink.types.ts'
 import { useCardStore } from '../cards/card.store.ts'
 import { DeadlineCard } from '../cards/DeadlineCard.tsx'
 import type { BoardScope, Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
+import { defaultProjectId } from '../projects/project.types.ts'
 import { BoardControls, type BoardMode } from './BoardControls.tsx'
+import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
 import type { DragGuide } from './dragGuide.types.ts'
 import { HeatHorizon } from './HeatHorizon.tsx'
 import { MiniMap } from './MiniMap.tsx'
@@ -25,6 +30,7 @@ type DesktopBoardProps = {
   camera: BoardCamera
   boardScope: BoardScope
   cards: Card[]
+  links: CardLink[]
   error: string | null
   isLoading: boolean
   now: number
@@ -166,6 +172,7 @@ export function DesktopBoard({
   camera,
   boardScope,
   cards,
+  links,
   error,
   isLoading,
   now,
@@ -179,8 +186,15 @@ export function DesktopBoard({
   zoomBy,
 }: DesktopBoardProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const linkDraftCleanupRef = useRef<(() => void) | null>(null)
   const [mode, setMode] = useState<BoardMode>('select')
+  const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
+  const createLink = useCardLinkStore((state) => state.createLink)
+  const deleteLink = useCardLinkStore((state) => state.deleteLink)
+  const linkSaveError = useCardLinkStore((state) => state.saveError)
+  const selectedLinkId = useCardLinkStore((state) => state.selectedLinkId)
+  const selectLink = useCardLinkStore((state) => state.selectLink)
   const deleteCard = useCardStore((state) => state.deleteCard)
   const dragGuide = useCardStore((state) => state.dragGuide)
   const editor = useCardStore((state) => state.editor)
@@ -193,10 +207,17 @@ export function DesktopBoard({
     userId,
   })
   const gridSize = clamp(34 * camera.zoom, 18, 72)
+  const cardById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards])
   const sceneStyle: SceneStyle = {
     '--scene-depth-x': `${camera.x * 0.018}px`,
     '--scene-depth-y': `${camera.y * 0.018}px`,
   }
+
+  useEffect(() => {
+    return () => {
+      linkDraftCleanupRef.current?.()
+    }
+  }, [])
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -221,17 +242,28 @@ export function DesktopBoard({
 
   useEffect(() => {
     const handleDeleteKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Delete' || editor || !selectedCardId) {
+      if (event.key !== 'Delete' || editor) {
         return
       }
 
-      const target = event.target as HTMLElement | null
+      const target = event.target
 
       if (
+        target instanceof HTMLElement &&
         target?.closest(
           'input, textarea, select, button, [contenteditable="true"], [data-card-action="true"]',
         )
       ) {
+        return
+      }
+
+      if (selectedLinkId) {
+        event.preventDefault()
+        void deleteLink(selectedLinkId).catch(() => undefined)
+        return
+      }
+
+      if (!selectedCardId) {
         return
       }
 
@@ -253,7 +285,7 @@ export function DesktopBoard({
     window.addEventListener('keydown', handleDeleteKey)
 
     return () => window.removeEventListener('keydown', handleDeleteKey)
-  }, [cards, deleteCard, editor, selectedCardId])
+  }, [cards, deleteCard, deleteLink, editor, selectedCardId, selectedLinkId])
 
   const zoomAtPoint = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
@@ -291,6 +323,7 @@ export function DesktopBoard({
 
     event.preventDefault()
     selectCard(null)
+    selectLink(null)
 
     const startClientX = event.clientX
     const startClientY = event.clientY
@@ -330,6 +363,96 @@ export function DesktopBoard({
     window.addEventListener('pointerup', handleUp)
     window.addEventListener('pointercancel', handleUp)
   }
+
+  const getWorldPointFromClient = useCallback(
+    (clientX: number, clientY: number) => {
+      const viewport = viewportRef.current
+
+      if (!viewport) {
+        return { x: 0, y: 0 }
+      }
+
+      const rect = viewport.getBoundingClientRect()
+      return {
+        x: (clientX - rect.left - camera.x) / camera.zoom,
+        y: (clientY - rect.top - camera.y) / camera.zoom,
+      }
+    },
+    [camera.x, camera.y, camera.zoom],
+  )
+
+  const handleStartConnection = useCallback(
+    (card: Card, side: CardLinkSide, event: PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0 || event.pointerType === 'touch' || mode !== 'select') {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      selectCard(null)
+      selectLink(null)
+      linkDraftCleanupRef.current?.()
+
+      setDraftLink({
+        fromCardId: card.id,
+        fromSide: side,
+        pointer: getWorldPointFromClient(event.clientX, event.clientY),
+      })
+
+      const handleMove = (moveEvent: globalThis.PointerEvent) => {
+        setDraftLink({
+          fromCardId: card.id,
+          fromSide: side,
+          pointer: getWorldPointFromClient(moveEvent.clientX, moveEvent.clientY),
+        })
+      }
+
+      const handleUp = (upEvent: globalThis.PointerEvent) => {
+        const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY) as HTMLElement | null
+        const handle = target?.closest('[data-card-link-handle="true"]') as HTMLElement | null
+        const targetCardId = handle?.dataset.cardId ?? null
+        const targetSide = handle?.dataset.cardSide as CardLinkSide | undefined
+
+        removeListeners()
+        setDraftLink(null)
+
+        if (!targetCardId || !targetSide || targetCardId === card.id) {
+          return
+        }
+
+        const targetCard = cardById.get(targetCardId)
+
+        if (!targetCard) {
+          return
+        }
+
+        void createLink(
+          {
+            boardScope,
+            fromCardId: card.id,
+            fromSide: side,
+            projectId: boardScope === 'shared' ? card.projectId ?? defaultProjectId : null,
+            toCardId: targetCard.id,
+            toSide: targetSide,
+          },
+          userId,
+        ).catch(() => undefined)
+      }
+
+      function removeListeners() {
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', handleUp)
+        window.removeEventListener('pointercancel', handleUp)
+        linkDraftCleanupRef.current = null
+      }
+
+      linkDraftCleanupRef.current = removeListeners
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', handleUp)
+      window.addEventListener('pointercancel', handleUp)
+    },
+    [boardScope, cardById, createLink, getWorldPointFromClient, mode, selectCard, selectLink, userId],
+  )
 
   const handleScenePointerMove = useCallback(
     (event: PointerEvent<HTMLElement>) => {
@@ -376,13 +499,31 @@ export function DesktopBoard({
             <CardUnderlight card={card} key={`light-${card.id}`} now={now} />
           ))}
 
+          <CardLinkLayer
+            cards={cards}
+            draftLink={draftLink}
+            links={links}
+            now={now}
+            selectedLinkId={selectedLinkId}
+            onDeleteLink={(id) => {
+              void deleteLink(id).catch(() => undefined)
+            }}
+            onSelectLink={(id) => {
+              selectCard(null)
+              selectLink(id)
+            }}
+          />
+
           {cards.map((card) => (
             <div data-card-root="true" key={card.id}>
               <DeadlineCard
                 camera={camera}
+                canConnect={mode === 'select'}
                 canDrag={mode === 'select'}
                 card={card}
+                isConnecting={Boolean(draftLink)}
                 isSelected={selectedCardId === card.id}
+                onStartConnection={handleStartConnection}
               />
             </div>
           ))}
@@ -467,9 +608,9 @@ export function DesktopBoard({
         Синхронизация: {realtimeLabels[realtimeStatus]}
       </div>
 
-      {saveError ? (
+      {saveError || linkSaveError ? (
         <div className="absolute bottom-5 left-5 z-20 max-w-md rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100 backdrop-blur-xl">
-          {saveError}
+          {saveError ?? linkSaveError}
         </div>
       ) : null}
     </main>

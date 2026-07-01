@@ -5,6 +5,7 @@ import { getBoardCenterPosition } from '../features/board/board.utils.ts'
 import type { DesktopViewMode } from '../features/board/board.types.ts'
 import { useBoardCamera } from '../features/board/useBoardCamera.ts'
 import { useAuthStore } from '../features/auth/auth.store.ts'
+import { useCardLinkStore } from '../features/cardLinks/cardLink.store.ts'
 import { useCardStore } from '../features/cards/card.store.ts'
 import { CardEditor } from '../features/cards/CardEditor.tsx'
 import { DesktopCardList } from '../features/cards/DesktopCardList.tsx'
@@ -86,6 +87,10 @@ export function BoardPage() {
   const selectedCardId = useCardStore((state) => state.selectedCardId)
   const setFilter = useCardStore((state) => state.setFilter)
   const subscribeRealtime = useCardStore((state) => state.subscribeRealtime)
+  const linkError = useCardLinkStore((state) => state.error)
+  const links = useCardLinkStore((state) => state.links)
+  const loadLinks = useCardLinkStore((state) => state.loadLinks)
+  const subscribeLinkRealtime = useCardLinkStore((state) => state.subscribeRealtime)
   const createProject = useProjectStore((state) => state.createProject)
   const deleteProject = useProjectStore((state) => state.deleteProject)
   const loadProjects = useProjectStore((state) => state.loadProjects)
@@ -111,6 +116,13 @@ export function BoardPage() {
 
     return unsubscribe
   }, [loadProjects, subscribeProjectRealtime])
+
+  useEffect(() => {
+    void loadLinks()
+    const unsubscribe = subscribeLinkRealtime()
+
+    return unsubscribe
+  }, [loadLinks, subscribeLinkRealtime])
 
   useEffect(() => {
     window.localStorage.setItem('fireboard.desktopViewMode', desktopViewMode)
@@ -148,7 +160,7 @@ export function BoardPage() {
     () => getProjectDeadlineSummaries(sharedCards, now),
     [now, sharedCards],
   )
-  const boardError = activeBoardScope === 'shared' ? error ?? projectError : error
+  const boardError = activeBoardScope === 'shared' ? error ?? projectError ?? linkError : error ?? linkError
   const scopedCards = useMemo(
     () =>
       cards.filter((card) =>
@@ -160,6 +172,22 @@ export function BoardPage() {
   )
   const counts = useMemo(() => getFilterCounts(scopedCards, now), [now, scopedCards])
   const visibleCards = useMemo(() => filterCards(scopedCards, filter, now), [filter, now, scopedCards])
+  const visibleCardIds = useMemo(() => new Set(visibleCards.map((card) => card.id)), [visibleCards])
+  const visibleLinks = useMemo(
+    () =>
+      links.filter((link) => {
+        if (!visibleCardIds.has(link.fromCardId) || !visibleCardIds.has(link.toCardId)) {
+          return false
+        }
+
+        if (activeBoardScope === 'personal') {
+          return link.boardScope === 'personal' && link.createdBy === userId
+        }
+
+        return link.boardScope === 'shared' && link.projectId === activeProjectId
+      }),
+    [activeBoardScope, activeProjectId, links, userId, visibleCardIds],
+  )
   const mobileCards = useMemo(() => sortCardsForMobile(visibleCards, now), [now, visibleCards])
 
   const openCreateAtCenter = useCallback(() => {
@@ -219,8 +247,9 @@ export function BoardPage() {
 
   const handleRetry = useCallback(() => {
     void loadCards()
+    void loadLinks()
     void loadProjects()
-  }, [loadCards, loadProjects])
+  }, [loadCards, loadLinks, loadProjects])
 
   if (!isDesktop) {
     return (
@@ -284,6 +313,7 @@ export function BoardPage() {
           camera={camera}
           boardScope={activeBoardScope}
           cards={visibleCards}
+          links={visibleLinks}
           error={boardError}
           isLoading={isLoading}
           now={now}

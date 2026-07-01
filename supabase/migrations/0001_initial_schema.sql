@@ -114,6 +114,40 @@ exception
 end;
 $$;
 
+create table if not exists public.card_links (
+  id uuid primary key default gen_random_uuid(),
+  from_card_id uuid not null references public.cards(id) on delete cascade,
+  from_side text not null check (from_side in ('top', 'right', 'bottom', 'left')),
+  to_card_id uuid not null references public.cards(id) on delete cascade,
+  to_side text not null check (to_side in ('top', 'right', 'bottom', 'left')),
+  board_scope text not null default 'shared' check (board_scope in ('shared', 'personal')),
+  project_id uuid references public.projects(id) on delete cascade,
+  created_by uuid default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint card_links_not_self_check check (from_card_id <> to_card_id),
+  constraint card_links_project_scope_check check (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and project_id is not null)
+  )
+);
+
+alter table public.card_links
+add column if not exists board_scope text not null default 'shared';
+
+alter table public.card_links
+add column if not exists project_id uuid references public.projects(id) on delete cascade;
+
+alter table public.card_links
+alter column board_scope set default 'shared';
+
+update public.card_links
+set board_scope = 'shared'
+where board_scope is null;
+
+alter table public.card_links
+alter column board_scope set not null;
+
 create index if not exists projects_created_at_idx on public.projects (created_at);
 create index if not exists projects_created_by_idx on public.projects (created_by);
 create index if not exists projects_sort_order_idx on public.projects (sort_order);
@@ -123,6 +157,11 @@ create index if not exists cards_created_at_idx on public.cards (created_at);
 create index if not exists cards_board_scope_idx on public.cards (board_scope);
 create index if not exists cards_project_id_idx on public.cards (project_id);
 create index if not exists cards_created_by_idx on public.cards (created_by);
+create index if not exists card_links_from_card_id_idx on public.card_links (from_card_id);
+create index if not exists card_links_to_card_id_idx on public.card_links (to_card_id);
+create index if not exists card_links_board_scope_idx on public.card_links (board_scope);
+create index if not exists card_links_project_id_idx on public.card_links (project_id);
+create index if not exists card_links_created_by_idx on public.card_links (created_by);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -145,11 +184,82 @@ begin
 end;
 $$;
 
+create or replace function public.validate_card_link_scope()
+returns trigger
+language plpgsql
+as $$
+declare
+  source_card public.cards%rowtype;
+  target_card public.cards%rowtype;
+begin
+  select * into source_card
+  from public.cards
+  where id = new.from_card_id;
+
+  select * into target_card
+  from public.cards
+  where id = new.to_card_id;
+
+  if source_card.id is null or target_card.id is null then
+    raise exception 'Linked cards were not found';
+  end if;
+
+  if source_card.id = target_card.id then
+    raise exception 'A card cannot be linked to itself';
+  end if;
+
+  if source_card.board_scope <> target_card.board_scope then
+    raise exception 'Cards from different board scopes cannot be linked';
+  end if;
+
+  if source_card.board_scope = 'shared' then
+    if source_card.project_id is distinct from target_card.project_id then
+      raise exception 'Cards from different projects cannot be linked';
+    end if;
+
+    new.board_scope = 'shared';
+    new.project_id = source_card.project_id;
+    return new;
+  end if;
+
+  if source_card.created_by is distinct from auth.uid()
+    or target_card.created_by is distinct from auth.uid() then
+    raise exception 'Personal card links can only connect your own cards';
+  end if;
+
+  new.board_scope = 'personal';
+  new.project_id = null;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_card_link_ownership()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.created_by = old.created_by;
+  return new;
+end;
+$$;
+
 drop trigger if exists protect_cards_ownership on public.cards;
 create trigger protect_cards_ownership
 before update on public.cards
 for each row
 execute function public.protect_card_ownership();
+
+drop trigger if exists protect_card_links_ownership on public.card_links;
+create trigger protect_card_links_ownership
+before update on public.card_links
+for each row
+execute function public.protect_card_link_ownership();
+
+drop trigger if exists validate_card_links_scope on public.card_links;
+create trigger validate_card_links_scope
+before insert or update on public.card_links
+for each row
+execute function public.validate_card_link_scope();
 
 drop trigger if exists set_projects_updated_at on public.projects;
 create trigger set_projects_updated_at
@@ -163,8 +273,15 @@ before update on public.cards
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists set_card_links_updated_at on public.card_links;
+create trigger set_card_links_updated_at
+before update on public.card_links
+for each row
+execute function public.set_updated_at();
+
 alter table public.projects enable row level security;
 alter table public.cards enable row level security;
+alter table public.card_links enable row level security;
 
 drop policy if exists "projects_select_authenticated" on public.projects;
 create policy "projects_select_authenticated"
@@ -239,6 +356,45 @@ for delete
 to authenticated
 using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
 
+drop policy if exists "card_links_select_authenticated" on public.card_links;
+create policy "card_links_select_authenticated"
+on public.card_links
+for select
+to authenticated
+using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
+
+drop policy if exists "card_links_insert_authenticated" on public.card_links;
+create policy "card_links_insert_authenticated"
+on public.card_links
+for insert
+to authenticated
+with check (
+  auth.role() = 'authenticated'
+  and created_by = auth.uid()
+  and (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and project_id is not null)
+  )
+);
+
+drop policy if exists "card_links_update_authenticated" on public.card_links;
+create policy "card_links_update_authenticated"
+on public.card_links
+for update
+to authenticated
+using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()))
+with check (
+  board_scope = 'shared'
+  or (board_scope = 'personal' and created_by = auth.uid())
+);
+
+drop policy if exists "card_links_delete_authenticated" on public.card_links;
+create policy "card_links_delete_authenticated"
+on public.card_links
+for delete
+to authenticated
+using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
+
 do $$
 begin
   alter publication supabase_realtime add table public.projects;
@@ -251,6 +407,15 @@ $$;
 do $$
 begin
   alter publication supabase_realtime add table public.cards;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.card_links;
 exception
   when duplicate_object then null;
   when undefined_object then null;

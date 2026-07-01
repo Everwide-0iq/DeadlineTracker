@@ -3,6 +3,8 @@ import { memo, useEffect, useState, type CSSProperties, type MouseEvent, type Po
 import { cn } from '../../lib/cn.ts'
 import { useDragCard } from '../board/useDragCard.ts'
 import type { BoardCamera } from '../board/useBoardCamera.ts'
+import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
+import type { CardLinkSide } from '../cardLinks/cardLink.types.ts'
 import { useCardStore } from './card.store.ts'
 import type { Card } from './card.types.ts'
 import { getCardRenderSize } from './card.utils.ts'
@@ -12,8 +14,15 @@ import { getDeadlineVisualState } from './deadlineColor.ts'
 type DeadlineCardProps = {
   camera: BoardCamera
   canDrag: boolean
+  canConnect?: boolean
   card: Card
+  isConnecting?: boolean
   isSelected: boolean
+  onStartConnection?: (
+    card: Card,
+    side: CardLinkSide,
+    event: PointerEvent<HTMLButtonElement>,
+  ) => void
 }
 
 type CardStyle = CSSProperties & Record<`--${string}`, string | number>
@@ -22,7 +31,17 @@ type MenuPosition = {
   y: number
 }
 
-function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCardProps) {
+const linkSides: CardLinkSide[] = ['top', 'right', 'bottom', 'left']
+
+function DeadlineCardComponent({
+  camera,
+  canConnect = false,
+  canDrag,
+  card,
+  isConnecting = false,
+  isSelected,
+  onStartConnection,
+}: DeadlineCardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
   const now = useCardStore((state) => state.now)
@@ -30,6 +49,7 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const selectCard = useCardStore((state) => state.selectCard)
   const updateCard = useCardStore((state) => state.updateCard)
+  const selectLink = useCardLinkStore((state) => state.selectLink)
   const dragPointerDown = useDragCard({ camera, card, enabled: canDrag })
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
   const countdown = formatCountdown(card.deadlineAt, card.status, now)
@@ -103,11 +123,13 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
       return
     }
 
+    selectLink(null)
     selectCard(card.id)
   }
 
   const handleContextMenu = (event: MouseEvent<HTMLElement>) => {
     event.preventDefault()
+    selectLink(null)
     selectCard(card.id)
 
     const rect = event.currentTarget.getBoundingClientRect()
@@ -138,8 +160,9 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
   return (
     <article
       className={cn(
-        'deadline-card group absolute select-none overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
+        'deadline-card group absolute z-[12] select-none overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
         card.status === 'done' && 'deadline-card-done',
+        isConnecting && 'deadline-card-connecting',
         isSelected && 'deadline-card-selected',
         canDrag && 'cursor-grab active:cursor-grabbing',
       )}
@@ -153,6 +176,23 @@ function DeadlineCardComponent({ camera, canDrag, card, isSelected }: DeadlineCa
       style={cardStyle}
     >
       <div className="pointer-events-none absolute inset-0 rounded-[18px] opacity-45 deadline-card-noise" />
+      {canConnect
+        ? linkSides.map((side) => (
+            <button
+              aria-label={`Создать связь ${side}`}
+              className={cn('card-link-handle', `card-link-handle-${side}`)}
+              data-card-action="true"
+              data-card-id={card.id}
+              data-card-link-handle="true"
+              data-card-side={side}
+              key={side}
+              type="button"
+              onPointerDown={(event) => onStartConnection?.(card, side, event)}
+            >
+              <span />
+            </button>
+          ))
+        : null}
       <div className="relative z-10">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_22px_var(--deadline-glow)]">
