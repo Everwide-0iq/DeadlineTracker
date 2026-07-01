@@ -1,9 +1,11 @@
 import { CalendarClock, CheckCircle2, Save, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { useProjectStore } from '../projects/project.store.ts'
 import { useCardStore } from './card.store.ts'
 import type { CardStatus } from './card.types.ts'
+import { DeadlinePicker } from './DeadlinePicker.tsx'
 import {
   defaultCardSize,
   fromDateTimeLocalValue,
@@ -168,17 +170,17 @@ export function CardEditor() {
       .finally(() => setIsSaving(false))
   }
 
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-end bg-black/55 p-0 backdrop-blur-sm lg:place-items-center lg:p-6">
-      <section className="w-full max-w-xl rounded-t-[28px] border border-white/10 bg-[#090b10]/95 p-5 shadow-[0_0_70px_rgb(255_65_65_/_0.17)] lg:rounded-[28px] lg:p-6">
-        <div className="mb-5 flex items-start justify-between gap-4">
+  return createPortal(
+    <div className="fixed inset-0 z-50 grid place-items-end bg-black/55 p-0 backdrop-blur-sm lg:place-items-center lg:p-3">
+      <section className="max-h-[calc(100vh-1rem)] w-full max-w-6xl overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#090b10]/95 p-5 shadow-[0_0_70px_rgb(255_65_65_/_0.17)] lg:max-h-[calc(100vh-1.5rem)] lg:rounded-[28px] lg:p-4">
+        <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
               <CalendarClock size={17} />
               {isEditing ? 'Редактирование' : 'Новая карточка'}
             </div>
             <h2 className="text-2xl font-black text-white">{isEditing ? 'Настроить дедлайн' : 'Добавить дедлайн'}</h2>
-            <p className="mt-1 text-sm text-white/40">
+            <p className="mt-1 text-sm text-white/40 lg:hidden xl:block">
               {editorScope === 'personal'
                 ? 'Личная доска, видишь только ты'
                 : `Командный проект${editorProjectName ? `: ${editorProjectName}` : ', видно всем участникам'}`}
@@ -189,104 +191,110 @@ export function CardEditor() {
           </button>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <label className="form-field">
-            <span>Название</span>
-            <input
-              autoFocus
-              maxLength={120}
-              placeholder="Билд игры к пятнице"
-              type="text"
-              value={title}
-              onChange={(event) => {
-                setTitle(event.target.value)
-                markDirty()
-              }}
+        <form
+          className="grid gap-4 lg:grid-cols-[minmax(290px,360px)_minmax(0,1fr)] lg:items-start"
+          onSubmit={handleSubmit}
+        >
+          <div className="space-y-4">
+            <label className="form-field">
+              <span>Название</span>
+              <input
+                autoFocus
+                maxLength={120}
+                placeholder="Билд игры к пятнице"
+                type="text"
+                value={title}
+                onChange={(event) => {
+                  setTitle(event.target.value)
+                  markDirty()
+                }}
+              />
+            </label>
+
+            <label className="form-field">
+              <span>Описание</span>
+              <textarea
+                maxLength={360}
+                placeholder="Необязательный контекст"
+                rows={3}
+                value={description}
+                onChange={(event) => {
+                  setDescription(event.target.value)
+                  markDirty()
+                }}
             />
           </label>
 
-          <label className="form-field">
-            <span>Описание</span>
-            <textarea
-              maxLength={360}
-              placeholder="Необязательный контекст"
-              rows={3}
-              value={description}
-              onChange={(event) => {
-                setDescription(event.target.value)
-                markDirty()
-              }}
-            />
-          </label>
-
-          <label className="form-field">
-            <span>Дедлайн</span>
-            <input
-              type="datetime-local"
-              value={deadlineLocal}
-              onChange={(event) => {
-                setDeadlineLocal(event.target.value)
-                markDirty()
-              }}
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
-            <button
-              className={status === 'todo' ? 'segment segment-active' : 'segment'}
-              type="button"
-              onClick={() => {
-                setStatus('todo')
-                markDirty()
-              }}
-            >
-              В работе
-            </button>
-            <button
-              className={status === 'done' ? 'segment segment-active' : 'segment'}
-              type="button"
-              onClick={() => {
-                setStatus('done')
-                markDirty()
-              }}
-            >
-              <CheckCircle2 size={16} />
-              Готово
-            </button>
-          </div>
-
-          {formError || saveError ? (
-            <div className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-              {formError ?? saveError}
-            </div>
-          ) : null}
-
-          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-            {isEditing ? (
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
               <button
-                className="secondary-button text-red-200 hover:border-red-400/50 hover:text-red-100"
-                disabled={isSaving}
+                className={status === 'todo' ? 'segment segment-active' : 'segment'}
                 type="button"
-                onClick={handleDelete}
+                onClick={() => {
+                  setStatus('todo')
+                  markDirty()
+                }}
               >
-                <Trash2 size={17} />
-                Удалить
+                В работе
               </button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-3">
-              <button className="secondary-button" disabled={isSaving} type="button" onClick={requestClose}>
-                Отмена
-              </button>
-              <button className="primary-button" disabled={isSaving} type="submit">
-                <Save size={17} />
-                {isSaving ? 'Сохраняем...' : 'Сохранить'}
+              <button
+                className={status === 'done' ? 'segment segment-active' : 'segment'}
+                type="button"
+                onClick={() => {
+                  setStatus('done')
+                  markDirty()
+                }}
+              >
+                <CheckCircle2 size={16} />
+                Готово
               </button>
             </div>
+
+            {formError || saveError ? (
+              <div className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {formError ?? saveError}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between lg:flex-col-reverse lg:items-stretch">
+              {isEditing ? (
+                <button
+                  className="secondary-button justify-center text-red-200 hover:border-red-400/50 hover:text-red-100"
+                  disabled={isSaving}
+                  type="button"
+                  onClick={handleDelete}
+                >
+                  <Trash2 size={17} />
+                  Удалить
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-3 lg:flex-col">
+                <button className="secondary-button justify-center" disabled={isSaving} type="button" onClick={requestClose}>
+                  Отмена
+                </button>
+                <button className="primary-button justify-center" disabled={isSaving} type="submit">
+                  <Save size={17} />
+                  {isSaving ? 'Сохраняем...' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
           </div>
+
+          <DeadlinePicker
+            boardScope={editorScope}
+            cards={cards}
+            currentCardId={card?.id ?? null}
+            projectId={editorProjectId}
+            status={status}
+            userId={userId}
+            value={deadlineLocal}
+            onChange={setDeadlineLocal}
+            onTouched={markDirty}
+          />
         </form>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -111,6 +111,71 @@ button {
     @apply w-full rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3 text-white outline-none transition placeholder:text-white/[0.24] focus:border-red-300/50 focus:bg-white/[0.07] focus:shadow-[0_0_0_4px_rgb(255_70_61_/_0.08)];
   }
 
+  .deadline-picker {
+    background:
+      radial-gradient(circle at 8% 0%, rgb(255 70 61 / 0.1), transparent 34%),
+      linear-gradient(145deg, rgb(255 255 255 / 0.045), rgb(255 255 255 / 0.018));
+  }
+
+  .deadline-picker-status,
+  .deadline-picker-preview {
+    border-color: color-mix(in srgb, var(--deadline-border) 34%, transparent);
+    background:
+      radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--deadline-border) 18%, transparent), transparent 42%),
+      rgb(0 0 0 / 0.18);
+    box-shadow: 0 0 26px color-mix(in srgb, var(--deadline-glow) 44%, transparent);
+  }
+
+  .deadline-preset-button {
+    @apply rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2.5 text-sm font-black text-white/[0.62] transition duration-200 hover:-translate-y-0.5 hover:border-red-300/[0.35] hover:bg-red-500/10 hover:text-white active:translate-y-0;
+  }
+
+  .deadline-picker-day {
+    @apply relative grid min-h-10 place-items-center rounded-2xl border border-white/[0.07] bg-white/[0.035] text-sm font-black text-white/[0.72] transition duration-200 hover:-translate-y-0.5 hover:border-white/[0.18] hover:bg-white/[0.07] hover:text-white active:translate-y-0;
+  }
+
+  .deadline-picker-day[style] {
+    border-color: color-mix(in srgb, var(--day-color) 34%, transparent);
+    background:
+      radial-gradient(circle at 50% 14%, color-mix(in srgb, var(--day-color) 20%, transparent), transparent 58%),
+      rgb(255 255 255 / 0.04);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+
+  .deadline-picker-day i {
+    @apply absolute bottom-1 right-1 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[9px] not-italic text-black;
+    background: var(--day-color, rgb(255 255 255 / 0.8));
+  }
+
+  .deadline-picker-day-muted {
+    @apply opacity-35;
+  }
+
+  .deadline-picker-day-selected {
+    @apply border-red-200/[0.65] bg-red-500/[0.16] text-white shadow-[0_0_22px_rgb(255_70_61_/_0.2),inset_0_0_0_1px_rgb(255_255_255_/_0.08)];
+  }
+
+  .deadline-time-button {
+    @apply rounded-2xl border border-white/10 bg-white/[0.045] px-2.5 py-2 text-left transition duration-200 hover:border-white/[0.18] hover:bg-white/[0.07];
+  }
+
+  .deadline-time-button span {
+    @apply block truncate text-[9px] font-black uppercase tracking-[0.08em] text-white/[0.35];
+  }
+
+  .deadline-time-button strong {
+    @apply mt-0.5 block text-sm font-black text-white/[0.72];
+  }
+
+  .deadline-time-button-active {
+    @apply border-red-300/[0.45] bg-red-500/[0.13] shadow-[0_0_18px_rgb(255_70_61_/_0.14)];
+  }
+
+  .deadline-time-input,
+  .deadline-quick-input {
+    @apply w-full rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-2.5 text-sm font-bold text-white outline-none transition placeholder:text-white/25 focus:border-red-300/45 focus:bg-white/[0.07] focus:shadow-[0_0_0_4px_rgb(255_70_61_/_0.08)];
+  }
+
   .sidebar-filter {
     @apply flex w-full items-center justify-between border-l-2 border-transparent px-6 py-2 text-left text-sm font-semibold text-white/[0.52] transition duration-200 hover:bg-white/[0.045] hover:text-white/[0.82];
   }
