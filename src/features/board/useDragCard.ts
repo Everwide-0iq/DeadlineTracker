@@ -105,9 +105,9 @@ export function useDragCard({ camera, card, enabled }: UseDragCardOptions) {
         return
       }
 
-      const target = event.target as HTMLElement
+      const target = event.target
 
-      if (target.closest('[data-card-action="true"]')) {
+      if (target instanceof Element && target.closest('[data-card-action="true"]')) {
         return
       }
 

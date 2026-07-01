@@ -275,7 +275,7 @@ button {
   isolation: isolate;
 }
 
-.app-shell > * {
+.app-shell > :not(.mobile-create-button) {
   position: relative;
   z-index: 1;
 }

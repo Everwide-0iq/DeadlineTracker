@@ -163,6 +163,23 @@ create index if not exists card_links_board_scope_idx on public.card_links (boar
 create index if not exists card_links_project_id_idx on public.card_links (project_id);
 create index if not exists card_links_created_by_idx on public.card_links (created_by);
 
+with duplicate_card_links as (
+  select
+    id,
+    row_number() over (
+      partition by from_card_id, from_side, to_card_id, to_side
+      order by created_at, id
+    ) as duplicate_rank
+  from public.card_links
+)
+delete from public.card_links
+using duplicate_card_links
+where public.card_links.id = duplicate_card_links.id
+  and duplicate_card_links.duplicate_rank > 1;
+
+create unique index if not exists card_links_unique_connection_idx
+on public.card_links (from_card_id, from_side, to_card_id, to_side);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql

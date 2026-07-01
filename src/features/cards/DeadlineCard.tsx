@@ -76,9 +76,9 @@ function DeadlineCardComponent({
         return
       }
 
-      const target = event.target as HTMLElement | null
+      const target = event.target
 
-      if (target?.closest('[data-card-action="true"]')) {
+      if (target instanceof Element && target.closest('[data-card-action="true"]')) {
         return
       }
 
@@ -117,9 +117,9 @@ function DeadlineCardComponent({
   }
 
   const handleCardClick = (event: MouseEvent<HTMLElement>) => {
-    const target = event.target as HTMLElement
+    const target = event.target
 
-    if (target.closest('[data-card-action="true"]')) {
+    if (target instanceof Element && target.closest('[data-card-action="true"]')) {
       return
     }
 

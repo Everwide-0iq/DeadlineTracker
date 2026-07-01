@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '../components/sidebar/Sidebar.tsx'
 import { DesktopBoard } from '../features/board/DesktopBoard.tsx'
 import { getBoardCenterPosition } from '../features/board/board.utils.ts'
@@ -7,14 +7,12 @@ import { useBoardCamera } from '../features/board/useBoardCamera.ts'
 import { useAuthStore } from '../features/auth/auth.store.ts'
 import { useCardLinkStore } from '../features/cardLinks/cardLink.store.ts'
 import { useCardStore } from '../features/cards/card.store.ts'
-import { CardEditor } from '../features/cards/CardEditor.tsx'
 import { DesktopCardList } from '../features/cards/DesktopCardList.tsx'
 import { MobileCardList } from '../features/cards/MobileCardList.tsx'
 import type { BoardScope, Card } from '../features/cards/card.types.ts'
 import { filterCards, getFilterCounts, sortCardsForMobile } from '../features/cards/card.utils.ts'
 import { formatCountdown } from '../features/cards/countdown.ts'
 import { getDeadlineVisualState } from '../features/cards/deadlineColor.ts'
-import { ProjectEditor } from '../features/projects/ProjectEditor.tsx'
 import { useProjectStore } from '../features/projects/project.store.ts'
 import {
   defaultProjectId,
@@ -23,6 +21,24 @@ import {
   type ProjectMoveDirection,
 } from '../features/projects/project.types.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
+import { readStorageValue, writeStorageValue } from '../lib/storage.ts'
+
+const CardEditor = lazy(() =>
+  import('../features/cards/CardEditor.tsx').then((module) => ({ default: module.CardEditor })),
+)
+const ProjectEditor = lazy(() =>
+  import('../features/projects/ProjectEditor.tsx').then((module) => ({ default: module.ProjectEditor })),
+)
+
+function ModalFallback() {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-5 text-white backdrop-blur-sm">
+      <div className="mission-state-card rounded-3xl border border-white/10 bg-black/55 px-6 py-5 text-sm font-semibold text-white/60 shadow-glow">
+        Загружаем редактор...
+      </div>
+    </div>
+  )
+}
 
 function getProjectDeadlineSummaries(cards: Card[], now: number) {
   const nearestByProject = cards.reduce<Record<string, Card>>((acc, card) => {
@@ -66,15 +82,15 @@ function getProjectDeadlineSummaries(cards: Card[], now: number) {
 export function BoardPage() {
   const { camera, resetCamera, setCamera, zoomBy } = useBoardCamera()
   const [desktopViewMode, setDesktopViewMode] = useState<DesktopViewMode>(() => {
-    const stored = window.localStorage.getItem('fireboard.desktopViewMode')
+    const stored = readStorageValue('fireboard.desktopViewMode')
     return stored === 'list' ? 'list' : 'board'
   })
   const [activeBoardScope, setActiveBoardScope] = useState<BoardScope>(() => {
-    const stored = window.localStorage.getItem('fireboard.activeBoardScope')
+    const stored = readStorageValue('fireboard.activeBoardScope')
     return stored === 'personal' ? 'personal' : 'shared'
   })
   const [activeProjectId, setActiveProjectId] = useState(() => {
-    return window.localStorage.getItem('fireboard.activeProjectId') ?? defaultProjectId
+    return readStorageValue('fireboard.activeProjectId') ?? defaultProjectId
   })
   const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false)
   const cards = useCardStore((state) => state.cards)
@@ -84,6 +100,7 @@ export function BoardPage() {
   const loadCards = useCardStore((state) => state.loadCards)
   const now = useCardStore((state) => state.now)
   const openCreateEditor = useCardStore((state) => state.openCreateEditor)
+  const editor = useCardStore((state) => state.editor)
   const selectedCardId = useCardStore((state) => state.selectedCardId)
   const setFilter = useCardStore((state) => state.setFilter)
   const subscribeRealtime = useCardStore((state) => state.subscribeRealtime)
@@ -125,15 +142,15 @@ export function BoardPage() {
   }, [loadLinks, subscribeLinkRealtime])
 
   useEffect(() => {
-    window.localStorage.setItem('fireboard.desktopViewMode', desktopViewMode)
+    writeStorageValue('fireboard.desktopViewMode', desktopViewMode)
   }, [desktopViewMode])
 
   useEffect(() => {
-    window.localStorage.setItem('fireboard.activeBoardScope', activeBoardScope)
+    writeStorageValue('fireboard.activeBoardScope', activeBoardScope)
   }, [activeBoardScope])
 
   useEffect(() => {
-    window.localStorage.setItem('fireboard.activeProjectId', activeProjectId)
+    writeStorageValue('fireboard.activeProjectId', activeProjectId)
   }, [activeProjectId])
 
   useEffect(() => {
@@ -276,12 +293,16 @@ export function BoardPage() {
           onLogout={handleLogout}
           onRetry={handleRetry}
         />
-        <CardEditor />
-        <ProjectEditor
-          isOpen={isProjectEditorOpen}
-          onClose={() => setIsProjectEditorOpen(false)}
-          onCreate={handleCreateProject}
-        />
+        <Suspense fallback={<ModalFallback />}>
+          {editor ? <CardEditor /> : null}
+          {isProjectEditorOpen ? (
+            <ProjectEditor
+              isOpen={isProjectEditorOpen}
+              onClose={() => setIsProjectEditorOpen(false)}
+              onCreate={handleCreateProject}
+            />
+          ) : null}
+        </Suspense>
       </>
     )
   }
@@ -337,12 +358,16 @@ export function BoardPage() {
           onRetry={handleRetry}
         />
       )}
-      <CardEditor />
-      <ProjectEditor
-        isOpen={isProjectEditorOpen}
-        onClose={() => setIsProjectEditorOpen(false)}
-        onCreate={handleCreateProject}
-      />
+      <Suspense fallback={<ModalFallback />}>
+        {editor ? <CardEditor /> : null}
+        {isProjectEditorOpen ? (
+          <ProjectEditor
+            isOpen={isProjectEditorOpen}
+            onClose={() => setIsProjectEditorOpen(false)}
+            onCreate={handleCreateProject}
+          />
+        ) : null}
+      </Suspense>
     </div>
   )
 }

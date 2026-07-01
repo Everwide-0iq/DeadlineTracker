@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
 
 export type BoardCamera = {
   x: number
@@ -24,7 +25,7 @@ function readStoredCamera(): BoardCamera {
   }
 
   try {
-    const raw = window.localStorage.getItem(storageKey)
+    const raw = readStorageValue(storageKey)
 
     if (!raw) {
       return defaultCamera
@@ -51,7 +52,7 @@ function readStoredCamera(): BoardCamera {
 }
 
 function persistCamera(camera: BoardCamera) {
-  window.localStorage.setItem(storageKey, JSON.stringify(camera))
+  writeStorageValue(storageKey, JSON.stringify(camera))
 }
 
 export function useBoardCamera() {

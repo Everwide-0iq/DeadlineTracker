@@ -56,6 +56,15 @@ const upsertLink = (links: CardLink[], link: CardLink) => {
   return next
 }
 
+const findMatchingLink = (links: CardLink[], input: CreateCardLinkInput) =>
+  links.find(
+    (link) =>
+      link.fromCardId === input.fromCardId &&
+      link.fromSide === input.fromSide &&
+      link.toCardId === input.toCardId &&
+      link.toSide === input.toSide,
+  ) ?? null
+
 export const useCardLinkStore = create<CardLinkState>((set, get) => ({
   error: null,
   hasLoaded: false,
@@ -67,6 +76,13 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
   createLink: async (input, userId) => {
     if (input.fromCardId === input.toCardId) {
       return null
+    }
+
+    const existingLink = findMatchingLink(get().links, input)
+
+    if (existingLink) {
+      set({ saveError: null, selectedLinkId: existingLink.id })
+      return existingLink
     }
 
     set({ saveError: null })

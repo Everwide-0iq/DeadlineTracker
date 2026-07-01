@@ -311,9 +311,10 @@ export function DesktopBoard({
       return
     }
 
-    const target = event.target as HTMLElement
+    const target = event.target
+    const targetElement = target instanceof Element ? target : null
 
-    if (target.closest('[data-card-root="true"]')) {
+    if (targetElement?.closest('[data-card-root="true"]')) {
       return
     }
 
@@ -399,15 +400,31 @@ export function DesktopBoard({
         pointer: getWorldPointFromClient(event.clientX, event.clientY),
       })
 
-      const handleMove = (moveEvent: globalThis.PointerEvent) => {
+      let frameId: number | null = null
+      let pendingPointer = getWorldPointFromClient(event.clientX, event.clientY)
+
+      const flushDraftLink = () => {
+        frameId = null
         setDraftLink({
           fromCardId: card.id,
           fromSide: side,
-          pointer: getWorldPointFromClient(moveEvent.clientX, moveEvent.clientY),
+          pointer: pendingPointer,
         })
       }
 
-      const handleUp = (upEvent: globalThis.PointerEvent) => {
+      const scheduleDraftLink = (pointer: { x: number; y: number }) => {
+        pendingPointer = pointer
+
+        if (frameId === null) {
+          frameId = window.requestAnimationFrame(flushDraftLink)
+        }
+      }
+
+      function handleMove(moveEvent: globalThis.PointerEvent) {
+        scheduleDraftLink(getWorldPointFromClient(moveEvent.clientX, moveEvent.clientY))
+      }
+
+      function handleUp(upEvent: globalThis.PointerEvent) {
         const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY) as HTMLElement | null
         const handle = target?.closest('[data-card-link-handle="true"]') as HTMLElement | null
         const targetCardId = handle?.dataset.cardId ?? null
@@ -439,17 +456,28 @@ export function DesktopBoard({
         ).catch(() => undefined)
       }
 
+      function handleCancel() {
+        removeListeners()
+        setDraftLink(null)
+      }
+
       function removeListeners() {
         window.removeEventListener('pointermove', handleMove)
         window.removeEventListener('pointerup', handleUp)
-        window.removeEventListener('pointercancel', handleUp)
+        window.removeEventListener('pointercancel', handleCancel)
+
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId)
+          frameId = null
+        }
+
         linkDraftCleanupRef.current = null
       }
 
       linkDraftCleanupRef.current = removeListeners
       window.addEventListener('pointermove', handleMove)
       window.addEventListener('pointerup', handleUp)
-      window.addEventListener('pointercancel', handleUp)
+      window.addEventListener('pointercancel', handleCancel)
     },
     [boardScope, cardById, createLink, getWorldPointFromClient, mode, selectCard, selectLink, userId],
   )

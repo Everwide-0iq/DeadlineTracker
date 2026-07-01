@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
 import type { BoardScope, Card, CardStatus } from './card.types.ts'
 import { toDateTimeLocalValue } from './card.utils.ts'
@@ -120,7 +121,7 @@ function readCustomTimePresets() {
   }
 
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(customTimePresetStorageKey) ?? '[]')
+    const parsed = JSON.parse(readStorageValue(customTimePresetStorageKey) ?? '[]')
     return Array.isArray(parsed) ? getCleanCustomTimePresets(parsed) : []
   } catch {
     return []
@@ -133,7 +134,7 @@ function saveCustomTimePresets(values: string[]) {
   }
 
   try {
-    window.localStorage.setItem(customTimePresetStorageKey, JSON.stringify(values))
+    writeStorageValue(customTimePresetStorageKey, JSON.stringify(values))
   } catch {
     // Local storage can be blocked by browser privacy settings; presets remain usable in memory.
   }
