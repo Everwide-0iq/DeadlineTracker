@@ -4,6 +4,7 @@ import { env } from './env.ts'
 export type CardStatus = 'todo' | 'done'
 export type BoardScope = 'personal' | 'shared'
 export type CardLinkSide = 'top' | 'right' | 'bottom' | 'left'
+export type Json = boolean | null | number | string | Json[] | { [key: string]: Json | undefined }
 
 export type Database = {
   public: {
@@ -119,6 +120,49 @@ export type Database = {
           sort_order?: number
           created_by?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      activity_events: {
+        Row: {
+          id: string
+          action: string
+          entity_type: string
+          entity_id: string
+          entity_title: string
+          board_scope: BoardScope
+          project_id: string | null
+          card_id: string | null
+          actor_id: string | null
+          actor_label: string
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          action: string
+          entity_type: string
+          entity_id: string
+          entity_title?: string
+          board_scope?: BoardScope
+          project_id?: string | null
+          card_id?: string | null
+          actor_id?: string | null
+          actor_label?: string
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          action?: string
+          entity_type?: string
+          entity_id?: string
+          entity_title?: string
+          board_scope?: BoardScope
+          project_id?: string | null
+          card_id?: string | null
+          actor_id?: string | null
+          actor_label?: string
+          metadata?: Json
         }
         Relationships: []
       }

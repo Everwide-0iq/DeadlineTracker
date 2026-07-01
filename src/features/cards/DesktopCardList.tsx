@@ -1,10 +1,12 @@
 import { AlertTriangle, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useCardStore } from './card.store.ts'
 import type { BoardScope, Card } from './card.types.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
+import { useCompletionAnimation } from './useCompletionAnimation.ts'
 
 type DesktopCardListProps = {
   boardScope: BoardScope
@@ -14,6 +16,7 @@ type DesktopCardListProps = {
   now: number
   onCreate: () => void
   onRetry: () => void
+  viewKey: string
 }
 
 type RowStyle = CSSProperties & Record<`--${string}`, string | number>
@@ -27,8 +30,10 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
   const deleteCard = useCardStore((state) => state.deleteCard)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const updateCard = useCardStore((state) => state.updateCard)
+  const confirm = useFeedbackStore((state) => state.confirm)
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
   const countdown = formatCountdown(card.deadlineAt, card.status, now)
+  const isCompleting = useCompletionAnimation(card.status === 'done')
   const style: RowStyle = {
     '--deadline-bg': visual.backgroundColor,
     '--deadline-border': visual.borderColor,
@@ -37,7 +42,14 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
   }
 
   const handleDelete = async () => {
-    if (!window.confirm('Удалить эту карточку дедлайна?')) {
+    const confirmed = await confirm({
+      confirmLabel: 'Удалить',
+      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
+      title: 'Удалить карточку?',
+      tone: 'danger',
+    })
+
+    if (!confirmed) {
       return
     }
 
@@ -49,6 +61,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
       className={cn(
         'deadline-list-row group grid grid-cols-[minmax(0,1fr)_190px_250px] items-center gap-5 rounded-2xl border px-5 py-4 transition duration-200',
         card.status === 'done' && 'opacity-65 saturate-50',
+        isCompleting && 'deadline-list-row-completed',
       )}
       style={style}
     >
@@ -122,6 +135,7 @@ export function DesktopCardList({
   now,
   onCreate,
   onRetry,
+  viewKey,
 }: DesktopCardListProps) {
   return (
     <main className="relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b]/95 shadow-2xl">
@@ -180,7 +194,7 @@ export function DesktopCardList({
           ) : null}
 
           {!isLoading && !error && cards.length > 0 ? (
-            <section className="space-y-3">
+            <section className="deadline-list-transition space-y-3" key={viewKey}>
               {cards.map((card) => (
                 <DeadlineListRow card={card} key={card.id} now={now} />
               ))}

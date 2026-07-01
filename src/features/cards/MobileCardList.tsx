@@ -1,11 +1,13 @@
 import { CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound } from 'lucide-react'
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useCardStore } from './card.store.ts'
 import type { BoardFilter, BoardScope, Card, FilterCounts } from './card.types.ts'
 import { boardFilters } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
+import { useCompletionAnimation } from './useCompletionAnimation.ts'
 import { ProjectList } from '../projects/ProjectList.tsx'
 import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../projects/project.types.ts'
 
@@ -43,8 +45,10 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
   const deleteCard = useCardStore((state) => state.deleteCard)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const updateCard = useCardStore((state) => state.updateCard)
+  const confirm = useFeedbackStore((state) => state.confirm)
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
   const countdown = formatCountdown(card.deadlineAt, card.status, now)
+  const isCompleting = useCompletionAnimation(card.status === 'done')
   const style: CardStyle = {
     '--deadline-bg': visual.backgroundColor,
     '--deadline-border': visual.borderColor,
@@ -53,7 +57,14 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
   }
 
   const handleDelete = async () => {
-    if (!window.confirm('Удалить эту карточку дедлайна?')) {
+    const confirmed = await confirm({
+      confirmLabel: 'Удалить',
+      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
+      title: 'Удалить карточку?',
+      tone: 'danger',
+    })
+
+    if (!confirmed) {
       return
     }
 
@@ -65,6 +76,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
       className={cn(
         'deadline-card relative rounded-[18px] border p-4',
         card.status === 'done' && 'deadline-card-done',
+        isCompleting && 'deadline-card-completed',
       )}
       style={style}
     >
@@ -264,7 +276,7 @@ export function MobileCardList({
           <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--accent)] shadow-[0_0_18px_rgb(255_255_255_/_0.16)]">
             <Plus size={21} strokeWidth={3} />
           </span>
-          <span>{boardScope === 'personal' ? 'Новая задача' : 'Новая карточка'}</span>
+          <span className="whitespace-nowrap">{boardScope === 'personal' ? 'Новая задача' : 'Новая карточка'}</span>
         </button>
       ) : null}
     </main>

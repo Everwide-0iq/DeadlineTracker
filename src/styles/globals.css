@@ -835,6 +835,514 @@ button {
   transform: translateY(-1px);
 }
 
+.board-content-transition,
+.deadline-list-transition {
+  animation: boardContentSwitch 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.deadline-card-event-pulse::before {
+  position: absolute;
+  z-index: 0;
+  inset: -10px;
+  border: 1px solid color-mix(in srgb, var(--deadline-border) 48%, transparent);
+  border-radius: 24px;
+  pointer-events: none;
+  content: "";
+  opacity: 0;
+  box-shadow:
+    0 0 34px color-mix(in srgb, var(--deadline-glow) 82%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--deadline-border) 18%, transparent);
+  animation: eventPulse 1.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.deadline-card-completed {
+  animation: completionCollapse 860ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.deadline-card-completed::after,
+.deadline-list-row-completed::after {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(110deg, transparent 0 28%, rgba(255, 255, 255, 0.18) 46%, transparent 64% 100%),
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--success) 12%, transparent), transparent 62%);
+  opacity: 0;
+  animation: completionSweep 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.deadline-list-row-completed {
+  position: relative;
+  overflow: hidden;
+  animation: listCompletionCollapse 820ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.activity-pulse-log {
+  position: fixed;
+  right: 22px;
+  bottom: clamp(112px, 20vh, 184px);
+  z-index: 42;
+  width: min(360px, calc(100vw - 360px));
+  min-width: 300px;
+  pointer-events: none;
+}
+
+.activity-log-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  margin-left: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 70, 61, 0.12), transparent 38%),
+    rgba(5, 7, 11, 0.76);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 0 14px;
+  pointer-events: auto;
+  text-transform: uppercase;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.activity-log-trigger:hover,
+.activity-log-trigger-hot {
+  border-color: rgba(255, 117, 109, 0.44);
+  background:
+    radial-gradient(circle at 22% 8%, rgba(255, 70, 61, 0.2), transparent 44%),
+    rgba(14, 8, 11, 0.86);
+  color: white;
+  transform: translateY(-1px);
+}
+
+.activity-log-trigger strong {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 18px rgba(255, 70, 61, 0.5);
+  color: white;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.activity-log-panel {
+  position: absolute;
+  right: 0;
+  bottom: 54px;
+  width: 100%;
+  max-height: min(420px, calc(100vh - 250px));
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 70, 61, 0.15), transparent 34%),
+    linear-gradient(145deg, rgba(12, 14, 20, 0.96), rgba(4, 5, 9, 0.92));
+  box-shadow:
+    0 24px 74px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 16px;
+  pointer-events: auto;
+  backdrop-filter: blur(20px);
+  animation: activityPanelIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.activity-log-muted {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 14px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.activity-event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 10px;
+  animation: activityEventIn 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.activity-event-row[data-tone="success"] {
+  border-color: rgba(99, 217, 95, 0.18);
+  background: rgba(99, 217, 95, 0.055);
+}
+
+.activity-event-row[data-tone="danger"] {
+  border-color: rgba(255, 70, 61, 0.18);
+  background: rgba(255, 70, 61, 0.055);
+}
+
+.activity-event-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.activity-event-row strong {
+  display: block;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.activity-event-row small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.feedback-toast-stack {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 90;
+  display: grid;
+  width: min(390px, calc(100vw - 28px));
+  gap: 10px;
+  pointer-events: none;
+}
+
+.feedback-toast {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.07), transparent 34%),
+    rgba(7, 8, 13, 0.9);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: white;
+  padding: 12px;
+  pointer-events: auto;
+  backdrop-filter: blur(18px);
+  animation: toastIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.feedback-toast[data-tone="success"] {
+  border-color: rgba(99, 217, 95, 0.22);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.36),
+    0 0 34px rgba(99, 217, 95, 0.12);
+}
+
+.feedback-toast[data-tone="danger"] {
+  border-color: rgba(255, 70, 61, 0.24);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.36),
+    0 0 34px rgba(255, 70, 61, 0.13);
+}
+
+.feedback-toast-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--accent);
+}
+
+.feedback-toast[data-tone="success"] .feedback-toast-icon {
+  color: var(--success);
+}
+
+.feedback-toast h3 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.feedback-toast p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.feedback-toast button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.36);
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.feedback-toast button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: white;
+}
+
+.feedback-toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), rgba(255, 255, 255, 0.2));
+  transform-origin: left center;
+  animation: toastProgress 4.2s linear both;
+}
+
+.feedback-toast[data-tone="success"] .feedback-toast-progress {
+  background: linear-gradient(90deg, var(--success), rgba(255, 255, 255, 0.2));
+}
+
+.feedback-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 70, 61, 0.11), transparent 32%),
+    rgba(0, 0, 0, 0.58);
+  padding: 18px;
+  backdrop-filter: blur(8px);
+  animation: confirmBackdropIn 160ms ease both;
+}
+
+.feedback-confirm {
+  display: flex;
+  width: min(520px, 100%);
+  gap: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 70, 61, 0.16), transparent 38%),
+    linear-gradient(145deg, rgba(13, 14, 20, 0.97), rgba(5, 6, 10, 0.96));
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.54),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  padding: 18px;
+  color: white;
+  animation: confirmIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.feedback-confirm-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255, 117, 109, 0.35);
+  border-radius: 18px;
+  background: rgba(255, 70, 61, 0.11);
+  color: var(--accent);
+  box-shadow: 0 0 28px rgba(255, 70, 61, 0.16);
+}
+
+.feedback-confirm[data-tone="success"] .feedback-confirm-mark {
+  border-color: rgba(99, 217, 95, 0.34);
+  background: rgba(99, 217, 95, 0.1);
+  color: var(--success);
+  box-shadow: 0 0 28px rgba(99, 217, 95, 0.14);
+}
+
+.feedback-confirm-kicker {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.feedback-confirm h2 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.feedback-confirm p:not(.feedback-confirm-kicker) {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+@keyframes boardContentSwitch {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.992);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes eventPulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  24% {
+    opacity: 0.86;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes completionCollapse {
+  0% {
+    transform: perspective(900px) scale(1);
+  }
+  44% {
+    transform: perspective(900px) translate3d(0, -2px, 0) scale(1.018);
+    filter: saturate(1.16);
+  }
+  100% {
+    transform: perspective(900px) scale(0.985);
+    filter: saturate(0.55);
+  }
+}
+
+@keyframes listCompletionCollapse {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  48% {
+    transform: translateY(-2px) scale(1.008);
+    filter: saturate(1.12);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: saturate(0.55);
+  }
+}
+
+@keyframes completionSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-70%);
+  }
+  35% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(70%);
+  }
+}
+
+@keyframes activityPanelIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes activityEventIn {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, -6px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes toastProgress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes confirmBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes confirmIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -2,6 +2,7 @@ import { CalendarClock, CheckCircle2, Save, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuthStore } from '../auth/auth.store.ts'
+import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useProjectStore } from '../projects/project.store.ts'
 import { useCardStore } from './card.store.ts'
 import type { CardStatus } from './card.types.ts'
@@ -22,6 +23,7 @@ export function CardEditor() {
   const editor = useCardStore((state) => state.editor)
   const saveError = useCardStore((state) => state.saveError)
   const updateCard = useCardStore((state) => state.updateCard)
+  const confirm = useFeedbackStore((state) => state.confirm)
   const userId = useAuthStore((state) => state.user?.id ?? null)
   const projects = useProjectStore((state) => state.projects)
   const card = useMemo(
@@ -83,12 +85,46 @@ export function CardEditor() {
     }
   }
 
-  const requestClose = () => {
-    if (dirty && !window.confirm('Отменить несохранённые изменения карточки?')) {
-      return
+  const requestClose = async () => {
+    if (dirty) {
+      const confirmed = await confirm({
+        confirmLabel: 'Закрыть',
+        description: 'Изменения в карточке не будут сохранены.',
+        title: 'Отменить изменения?',
+        tone: 'info',
+      })
+
+      if (!confirmed) {
+        return
+      }
     }
 
     closeEditor()
+  }
+
+  const handleDelete = async () => {
+    if (!card) {
+      return
+    }
+
+    const confirmed = await confirm({
+      confirmLabel: 'Удалить',
+      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
+      title: 'Удалить карточку?',
+      tone: 'danger',
+    })
+
+    if (!confirmed) {
+      return
+    }
+
+    setIsSaving(true)
+    await useCardStore
+      .getState()
+      .deleteCard(card.id)
+      .then(() => closeEditor())
+      .catch(() => undefined)
+      .finally(() => setIsSaving(false))
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -156,20 +192,6 @@ export function CardEditor() {
     }
   }
 
-  const handleDelete = async () => {
-    if (!card || !window.confirm('Удалить эту карточку дедлайна?')) {
-      return
-    }
-
-    setIsSaving(true)
-    await useCardStore
-      .getState()
-      .deleteCard(card.id)
-      .then(() => closeEditor())
-      .catch(() => undefined)
-      .finally(() => setIsSaving(false))
-  }
-
   return createPortal(
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/55 p-0 backdrop-blur-sm lg:place-items-center lg:p-3">
       <section className="max-h-[calc(100vh-1rem)] w-full max-w-6xl overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#090b10]/95 p-5 shadow-[0_0_70px_rgb(255_65_65_/_0.17)] lg:max-h-[calc(100vh-1.5rem)] lg:rounded-[28px] lg:p-4">
@@ -186,7 +208,7 @@ export function CardEditor() {
                 : `Командный проект${editorProjectName ? `: ${editorProjectName}` : ', видно всем участникам'}`}
             </p>
           </div>
-          <button aria-label="Закрыть редактор" className="icon-button" type="button" onClick={requestClose}>
+          <button aria-label="Закрыть редактор" className="icon-button" type="button" onClick={() => void requestClose()}>
             <X size={19} />
           </button>
         </div>
@@ -270,7 +292,7 @@ export function CardEditor() {
                 <span />
               )}
               <div className="flex gap-3 lg:flex-col">
-                <button className="secondary-button justify-center" disabled={isSaving} type="button" onClick={requestClose}>
+                <button className="secondary-button justify-center" disabled={isSaving} type="button" onClick={() => void requestClose()}>
                   Отмена
                 </button>
                 <button className="primary-button justify-center" disabled={isSaving} type="submit">

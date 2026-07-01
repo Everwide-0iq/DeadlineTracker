@@ -5,11 +5,13 @@ import { useDragCard } from '../board/useDragCard.ts'
 import type { BoardCamera } from '../board/useBoardCamera.ts'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import type { CardLinkSide } from '../cardLinks/cardLink.types.ts'
+import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useCardStore } from './card.store.ts'
 import type { Card } from './card.types.ts'
 import { getCardRenderSize } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
+import { useCompletionAnimation } from './useCompletionAnimation.ts'
 
 type DeadlineCardProps = {
   camera: BoardCamera
@@ -17,6 +19,7 @@ type DeadlineCardProps = {
   canConnect?: boolean
   card: Card
   isConnecting?: boolean
+  isPulsing?: boolean
   isSelected: boolean
   onStartConnection?: (
     card: Card,
@@ -39,6 +42,7 @@ function DeadlineCardComponent({
   canDrag,
   card,
   isConnecting = false,
+  isPulsing = false,
   isSelected,
   onStartConnection,
 }: DeadlineCardProps) {
@@ -50,10 +54,12 @@ function DeadlineCardComponent({
   const selectCard = useCardStore((state) => state.selectCard)
   const updateCard = useCardStore((state) => state.updateCard)
   const selectLink = useCardLinkStore((state) => state.selectLink)
+  const confirm = useFeedbackStore((state) => state.confirm)
   const dragPointerDown = useDragCard({ camera, card, enabled: canDrag })
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
   const countdown = formatCountdown(card.deadlineAt, card.status, now)
   const renderSize = getCardRenderSize(card)
+  const isCompleting = useCompletionAnimation(card.status === 'done')
 
   const cardStyle: CardStyle = {
     '--deadline-bg': visual.backgroundColor,
@@ -95,7 +101,14 @@ function DeadlineCardComponent({
     setIsMenuOpen(false)
     setMenuPosition(null)
 
-    if (!window.confirm('Удалить эту карточку дедлайна?')) {
+    const confirmed = await confirm({
+      confirmLabel: 'Удалить',
+      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
+      title: 'Удалить карточку?',
+      tone: 'danger',
+    })
+
+    if (!confirmed) {
       return
     }
 
@@ -162,7 +175,9 @@ function DeadlineCardComponent({
       className={cn(
         'deadline-card group absolute z-[12] select-none overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
         card.status === 'done' && 'deadline-card-done',
+        isCompleting && 'deadline-card-completed',
         isConnecting && 'deadline-card-connecting',
+        isPulsing && 'deadline-card-event-pulse',
         isSelected && 'deadline-card-selected',
         canDrag && 'cursor-grab active:cursor-grabbing',
       )}

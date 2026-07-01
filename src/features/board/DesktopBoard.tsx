@@ -17,6 +17,7 @@ import { DeadlineCard } from '../cards/DeadlineCard.tsx'
 import type { BoardScope, Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
+import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
 import { BoardControls, type BoardMode } from './BoardControls.tsx'
 import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
@@ -27,6 +28,7 @@ import { useBoardCollaboration, type BoardCursor, type BoardMember } from './use
 import type { BoardCamera } from './useBoardCamera.ts'
 
 type DesktopBoardProps = {
+  activityPulseCardId: string | null
   camera: BoardCamera
   boardScope: BoardScope
   cards: Card[]
@@ -41,6 +43,7 @@ type DesktopBoardProps = {
   setCamera: (next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => void
   userEmail: string | null
   userId: string | null
+  viewKey: string
   zoomBy: (factor: number) => void
 }
 
@@ -169,6 +172,7 @@ function PresenceCluster({
 }
 
 export function DesktopBoard({
+  activityPulseCardId,
   camera,
   boardScope,
   cards,
@@ -183,6 +187,7 @@ export function DesktopBoard({
   setCamera,
   userEmail,
   userId,
+  viewKey,
   zoomBy,
 }: DesktopBoardProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -201,6 +206,7 @@ export function DesktopBoard({
   const saveError = useCardStore((state) => state.saveError)
   const realtimeStatus = useCardStore((state) => state.realtimeStatus)
   const selectCard = useCardStore((state) => state.selectCard)
+  const confirm = useFeedbackStore((state) => state.confirm)
   const { members, remoteCursors, self, sendCursor } = useBoardCollaboration({
     enabled: boardScope === 'shared',
     userEmail,
@@ -259,7 +265,16 @@ export function DesktopBoard({
 
       if (selectedLinkId) {
         event.preventDefault()
-        void deleteLink(selectedLinkId).catch(() => undefined)
+        void confirm({
+          confirmLabel: 'Удалить связь',
+          description: 'Визуальная связь между карточками будет удалена.',
+          title: 'Удалить связь?',
+          tone: 'danger',
+        }).then((confirmed) => {
+          if (confirmed) {
+            void deleteLink(selectedLinkId).catch(() => undefined)
+          }
+        })
         return
       }
 
@@ -275,17 +290,22 @@ export function DesktopBoard({
 
       event.preventDefault()
 
-      if (!window.confirm(`Удалить карточку "${selectedCard.title}"?`)) {
-        return
-      }
-
-      void deleteCard(selectedCard.id).catch(() => undefined)
+      void confirm({
+        confirmLabel: 'Удалить',
+        description: `Карточка "${selectedCard.title}" исчезнет с текущей доски.`,
+        title: 'Удалить карточку?',
+        tone: 'danger',
+      }).then((confirmed) => {
+        if (confirmed) {
+          void deleteCard(selectedCard.id).catch(() => undefined)
+        }
+      })
     }
 
     window.addEventListener('keydown', handleDeleteKey)
 
     return () => window.removeEventListener('keydown', handleDeleteKey)
-  }, [cards, deleteCard, deleteLink, editor, selectedCardId, selectedLinkId])
+  }, [cards, confirm, deleteCard, deleteLink, editor, selectedCardId, selectedLinkId])
 
   const zoomAtPoint = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
@@ -498,6 +518,22 @@ export function DesktopBoard({
     [camera.x, camera.y, camera.zoom, sendCursor],
   )
 
+  const handleDeleteLink = useCallback(
+    (id: string) => {
+      void confirm({
+        confirmLabel: 'Удалить связь',
+        description: 'Визуальная связь между карточками будет удалена.',
+        title: 'Удалить связь?',
+        tone: 'danger',
+      }).then((confirmed) => {
+        if (confirmed) {
+          void deleteLink(id).catch(() => undefined)
+        }
+      })
+    },
+    [confirm, deleteLink],
+  )
+
   return (
     <main
       className="desktop-board-scene relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b] shadow-2xl"
@@ -523,38 +559,39 @@ export function DesktopBoard({
         >
           <MagneticGuides camera={camera} dragGuide={dragGuide} viewportSize={viewportSize} />
 
-          {cards.map((card) => (
-            <CardUnderlight card={card} key={`light-${card.id}`} now={now} />
-          ))}
+          <div className="board-content-transition" key={viewKey}>
+            {cards.map((card) => (
+              <CardUnderlight card={card} key={`light-${card.id}`} now={now} />
+            ))}
 
-          <CardLinkLayer
-            cards={cards}
-            draftLink={draftLink}
-            links={links}
-            now={now}
-            selectedLinkId={selectedLinkId}
-            onDeleteLink={(id) => {
-              void deleteLink(id).catch(() => undefined)
-            }}
-            onSelectLink={(id) => {
-              selectCard(null)
-              selectLink(id)
-            }}
-          />
+            <CardLinkLayer
+              cards={cards}
+              draftLink={draftLink}
+              links={links}
+              now={now}
+              selectedLinkId={selectedLinkId}
+              onDeleteLink={handleDeleteLink}
+              onSelectLink={(id) => {
+                selectCard(null)
+                selectLink(id)
+              }}
+            />
 
-          {cards.map((card) => (
-            <div data-card-root="true" key={card.id}>
-              <DeadlineCard
-                camera={camera}
-                canConnect={mode === 'select'}
-                canDrag={mode === 'select'}
-                card={card}
-                isConnecting={Boolean(draftLink)}
-                isSelected={selectedCardId === card.id}
-                onStartConnection={handleStartConnection}
-              />
-            </div>
-          ))}
+            {cards.map((card) => (
+              <div data-card-root="true" key={card.id}>
+                <DeadlineCard
+                  camera={camera}
+                  canConnect={mode === 'select'}
+                  canDrag={mode === 'select'}
+                  card={card}
+                  isConnecting={Boolean(draftLink)}
+                  isPulsing={activityPulseCardId === card.id}
+                  isSelected={selectedCardId === card.id}
+                  onStartConnection={handleStartConnection}
+                />
+              </div>
+            ))}
+          </div>
 
           {remoteCursors.map((cursor) => (
             <RemoteCursor cursor={cursor} key={cursor.clientId} />

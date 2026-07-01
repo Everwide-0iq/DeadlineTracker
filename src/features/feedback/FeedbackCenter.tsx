@@ -1,0 +1,101 @@
+import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react'
+import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { cn } from '../../lib/cn.ts'
+import { useFeedbackStore, type FeedbackTone } from './feedback.store.ts'
+
+const toneIcon: Record<FeedbackTone, typeof Info> = {
+  danger: AlertTriangle,
+  info: Info,
+  success: CheckCircle2,
+}
+
+export function FeedbackCenter() {
+  const confirmRequest = useFeedbackStore((state) => state.confirmRequest)
+  const dismissToast = useFeedbackStore((state) => state.dismissToast)
+  const resolveConfirm = useFeedbackStore((state) => state.resolveConfirm)
+  const toasts = useFeedbackStore((state) => state.toasts)
+
+  useEffect(() => {
+    if (!confirmRequest) {
+      return undefined
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        resolveConfirm(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [confirmRequest, resolveConfirm])
+
+  return createPortal(
+    <>
+      <div className="feedback-toast-stack">
+        {toasts.map((toast) => {
+          const Icon = toneIcon[toast.tone]
+
+          return (
+            <article className="feedback-toast" data-tone={toast.tone} key={toast.id}>
+              <div className="feedback-toast-icon">
+                <Icon size={17} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3>{toast.title}</h3>
+                {toast.description ? <p>{toast.description}</p> : null}
+              </div>
+              <button aria-label="Закрыть уведомление" type="button" onClick={() => dismissToast(toast.id)}>
+                <X size={15} />
+              </button>
+              <span className="feedback-toast-progress" />
+            </article>
+          )
+        })}
+      </div>
+
+      {confirmRequest ? (
+        <div className="feedback-confirm-backdrop" role="presentation">
+          <section
+            aria-describedby={confirmRequest.description ? `${confirmRequest.id}-description` : undefined}
+            aria-modal="true"
+            className="feedback-confirm"
+            data-tone={confirmRequest.tone}
+            role="dialog"
+          >
+            <div className="feedback-confirm-mark">
+              {(() => {
+                const Icon = toneIcon[confirmRequest.tone]
+                return <Icon size={22} />
+              })()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="feedback-confirm-kicker">Подтверждение</p>
+              <h2>{confirmRequest.title}</h2>
+              {confirmRequest.description ? (
+                <p id={`${confirmRequest.id}-description`}>{confirmRequest.description}</p>
+              ) : null}
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button className="secondary-button justify-center" type="button" onClick={() => resolveConfirm(false)}>
+                  {confirmRequest.cancelLabel}
+                </button>
+                <button
+                  className={cn(
+                    'primary-button justify-center',
+                    confirmRequest.tone === 'success' && 'border-emerald-300/50 bg-emerald-500/15 hover:bg-emerald-500/22',
+                  )}
+                  type="button"
+                  onClick={() => resolveConfirm(true)}
+                >
+                  {confirmRequest.confirmLabel}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>,
+    document.body,
+  )
+}

@@ -1,5 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '../components/sidebar/Sidebar.tsx'
+import { ActivityPulseLog } from '../features/activity/ActivityPulseLog.tsx'
+import { getActivityToast, getActivityTone } from '../features/activity/activity.copy.ts'
+import { useActivityStore } from '../features/activity/activity.store.ts'
 import { DesktopBoard } from '../features/board/DesktopBoard.tsx'
 import { getBoardCenterPosition } from '../features/board/board.utils.ts'
 import type { DesktopViewMode } from '../features/board/board.types.ts'
@@ -13,6 +16,7 @@ import type { BoardScope, Card } from '../features/cards/card.types.ts'
 import { filterCards, getFilterCounts, sortCardsForMobile } from '../features/cards/card.utils.ts'
 import { formatCountdown } from '../features/cards/countdown.ts'
 import { getDeadlineVisualState } from '../features/cards/deadlineColor.ts'
+import { useFeedbackStore } from '../features/feedback/feedback.store.ts'
 import { useProjectStore } from '../features/projects/project.store.ts'
 import {
   defaultProjectId,
@@ -29,6 +33,8 @@ const CardEditor = lazy(() =>
 const ProjectEditor = lazy(() =>
   import('../features/projects/ProjectEditor.tsx').then((module) => ({ default: module.ProjectEditor })),
 )
+
+const quietActivityActions = new Set(['card_moved', 'card_updated', 'project_updated'])
 
 function ModalFallback() {
   return (
@@ -115,9 +121,15 @@ export function BoardPage() {
   const projectError = useProjectStore((state) => state.error)
   const projects = useProjectStore((state) => state.projects)
   const subscribeProjectRealtime = useProjectStore((state) => state.subscribeRealtime)
+  const activityPulseCardId = useActivityStore((state) => state.pulseCardId)
+  const latestActivityEvent = useActivityStore((state) => state.latestRealtimeEvent)
+  const loadActivity = useActivityStore((state) => state.loadActivity)
+  const subscribeActivityRealtime = useActivityStore((state) => state.subscribeRealtime)
   const logout = useAuthStore((state) => state.logout)
   const userEmail = useAuthStore((state) => state.user?.email ?? null)
   const userId = useAuthStore((state) => state.user?.id ?? null)
+  const confirm = useFeedbackStore((state) => state.confirm)
+  const pushToast = useFeedbackStore((state) => state.pushToast)
   const isDesktop = useMediaQuery('(min-width: 1024px)')
 
   useEffect(() => {
@@ -140,6 +152,30 @@ export function BoardPage() {
 
     return unsubscribe
   }, [loadLinks, subscribeLinkRealtime])
+
+  useEffect(() => {
+    void loadActivity()
+    const unsubscribe = subscribeActivityRealtime()
+
+    return unsubscribe
+  }, [loadActivity, subscribeActivityRealtime])
+
+  useEffect(() => {
+    if (!latestActivityEvent) {
+      return
+    }
+
+    if (quietActivityActions.has(latestActivityEvent.action)) {
+      return
+    }
+
+    const toast = getActivityToast(latestActivityEvent, userId)
+    pushToast({
+      description: toast.description,
+      title: toast.title,
+      tone: getActivityTone(latestActivityEvent),
+    })
+  }, [latestActivityEvent, pushToast, userId])
 
   useEffect(() => {
     writeStorageValue('fireboard.desktopViewMode', desktopViewMode)
@@ -206,6 +242,7 @@ export function BoardPage() {
     [activeBoardScope, activeProjectId, links, userId, visibleCardIds],
   )
   const mobileCards = useMemo(() => sortCardsForMobile(visibleCards, now), [now, visibleCards])
+  const viewKey = `${activeBoardScope}:${activeBoardScope === 'shared' ? activeProjectId : 'personal'}:${filter}`
 
   const openCreateAtCenter = useCallback(() => {
     if (isDesktop) {
@@ -234,11 +271,14 @@ export function BoardPage() {
 
   const handleDeleteProject = useCallback(
     async (project: Project) => {
-      if (
-        !window.confirm(
-          `Удалить проект "${project.name}" и все карточки внутри? Это действие нельзя отменить.`,
-        )
-      ) {
+      const confirmed = await confirm({
+        confirmLabel: 'Удалить проект',
+        description: `Проект "${project.name}" и все карточки внутри исчезнут у всей команды.`,
+        title: 'Удалить проект?',
+        tone: 'danger',
+      })
+
+      if (!confirmed) {
         return
       }
 
@@ -248,7 +288,7 @@ export function BoardPage() {
         setActiveProjectId(defaultProjectId)
       }
     },
-    [activeProjectId, deleteProject],
+    [activeProjectId, confirm, deleteProject],
   )
 
   const handleMoveProject = useCallback(
@@ -263,10 +303,11 @@ export function BoardPage() {
   }, [logout])
 
   const handleRetry = useCallback(() => {
+    void loadActivity()
     void loadCards()
     void loadLinks()
     void loadProjects()
-  }, [loadCards, loadLinks, loadProjects])
+  }, [loadActivity, loadCards, loadLinks, loadProjects])
 
   if (!isDesktop) {
     return (
@@ -308,66 +349,72 @@ export function BoardPage() {
   }
 
   return (
-    <div className="app-shell flex h-screen gap-3 overflow-hidden bg-[var(--background)] p-3 text-white">
-      <Sidebar
-        activeFilter={filter}
-        activeBoardScope={activeBoardScope}
-        activeProjectId={activeProjectId}
-        counts={counts}
-        projects={projects}
-        projectCardCounts={projectCardCounts}
-        projectDeadlines={projectDeadlines}
-        onBoardScopeChange={setActiveBoardScope}
-        onCreate={openCreateAtCenter}
-        onCreateProject={() => setIsProjectEditorOpen(true)}
-        onDeleteProject={handleDeleteProject}
-        onFilterChange={setFilter}
-        onLogout={handleLogout}
-        onMoveProject={handleMoveProject}
-        onProjectChange={setActiveProjectId}
-        onViewModeChange={setDesktopViewMode}
-        userEmail={userEmail}
-        viewMode={desktopViewMode}
-      />
-      {desktopViewMode === 'board' ? (
-        <DesktopBoard
-          camera={camera}
-          boardScope={activeBoardScope}
-          cards={visibleCards}
-          links={visibleLinks}
-          error={boardError}
-          isLoading={isLoading}
-          now={now}
-          onCreateAtCenter={openCreateAtCenter}
-          onRetry={handleRetry}
-          resetCamera={resetCamera}
-          selectedCardId={selectedCardId}
-          setCamera={setCamera}
-          userEmail={userEmail}
-          userId={userId}
-          zoomBy={zoomBy}
-        />
-      ) : (
-        <DesktopCardList
-          cards={mobileCards}
-          boardScope={activeBoardScope}
-          error={boardError}
-          isLoading={isLoading}
-          now={now}
+    <>
+      <div className="app-shell flex h-screen gap-3 overflow-hidden bg-[var(--background)] p-3 text-white">
+        <Sidebar
+          activeFilter={filter}
+          activeBoardScope={activeBoardScope}
+          activeProjectId={activeProjectId}
+          counts={counts}
+          projects={projects}
+          projectCardCounts={projectCardCounts}
+          projectDeadlines={projectDeadlines}
+          onBoardScopeChange={setActiveBoardScope}
           onCreate={openCreateAtCenter}
-          onRetry={handleRetry}
+          onCreateProject={() => setIsProjectEditorOpen(true)}
+          onDeleteProject={handleDeleteProject}
+          onFilterChange={setFilter}
+          onLogout={handleLogout}
+          onMoveProject={handleMoveProject}
+          onProjectChange={setActiveProjectId}
+          onViewModeChange={setDesktopViewMode}
+          userEmail={userEmail}
+          viewMode={desktopViewMode}
         />
-      )}
-      <Suspense fallback={<ModalFallback />}>
-        {editor ? <CardEditor /> : null}
-        {isProjectEditorOpen ? (
-          <ProjectEditor
-            isOpen={isProjectEditorOpen}
-            onClose={() => setIsProjectEditorOpen(false)}
-            onCreate={handleCreateProject}
+        {desktopViewMode === 'board' ? (
+          <DesktopBoard
+            camera={camera}
+            activityPulseCardId={activityPulseCardId}
+            boardScope={activeBoardScope}
+            cards={visibleCards}
+            links={visibleLinks}
+            error={boardError}
+            isLoading={isLoading}
+            now={now}
+            onCreateAtCenter={openCreateAtCenter}
+            onRetry={handleRetry}
+            resetCamera={resetCamera}
+            selectedCardId={selectedCardId}
+            setCamera={setCamera}
+            userEmail={userEmail}
+            userId={userId}
+            viewKey={viewKey}
+            zoomBy={zoomBy}
           />
-        ) : null}
-      </Suspense>
-    </div>
+        ) : (
+          <DesktopCardList
+            cards={mobileCards}
+            boardScope={activeBoardScope}
+            error={boardError}
+            isLoading={isLoading}
+            now={now}
+            onCreate={openCreateAtCenter}
+            onRetry={handleRetry}
+            viewKey={viewKey}
+          />
+        )}
+        <Suspense fallback={<ModalFallback />}>
+          {editor ? <CardEditor /> : null}
+          {isProjectEditorOpen ? (
+            <ProjectEditor
+              isOpen={isProjectEditorOpen}
+              onClose={() => setIsProjectEditorOpen(false)}
+              onCreate={handleCreateProject}
+            />
+          ) : null}
+        </Suspense>
+      </div>
+      <ActivityPulseLog activeProjectId={activeProjectId} boardScope={activeBoardScope} userId={userId} />
+    </>
   )
 }
