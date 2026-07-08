@@ -8,28 +8,6 @@ export const languageLabels: Record<Language, string> = {
 }
 
 const ru = {
-  activity: {
-    action: {
-      card_completed: { detail: 'закрыл карточку', short: 'Карточка закрыта' },
-      card_created: { detail: 'создал карточку', short: 'Новая карточка' },
-      card_deadline_changed: { detail: 'перенёс дедлайн', short: 'Дедлайн перенесён' },
-      card_deleted: { detail: 'удалил карточку', short: 'Карточка удалена' },
-      card_moved: { detail: 'переместил карточку', short: 'Карточка перемещена' },
-      card_reopened: { detail: 'вернул карточку в работу', short: 'Карточка снова в работе' },
-      card_updated: { detail: 'обновил карточку', short: 'Карточка обновлена' },
-      link_created: { detail: 'создал связь', short: 'Связь создана' },
-      link_deleted: { detail: 'удалил связь', short: 'Связь удалена' },
-      project_created: { detail: 'создал проект', short: 'Новый проект' },
-      project_deleted: { detail: 'удалил проект', short: 'Проект удалён' },
-      project_updated: { detail: 'обновил проект', short: 'Проект обновлён' },
-    },
-    actorYou: 'Ты',
-    empty: 'Здесь появятся последние действия команды.',
-    journal: 'Журнал',
-    loading: 'Синхронизируем события...',
-    title: 'Активность',
-    unknownActor: 'Участник',
-  },
   app: {
     broken: 'Что-то сломалось',
     brokenDescription: 'Интерфейс поймал неожиданную ошибку. Перезагрузка обычно возвращает доску в рабочее состояние.',
@@ -58,6 +36,7 @@ const ru = {
     deadlineList: 'Список дедлайнов',
     listEmptyDescription: 'В списке удобно быстро проверять ближайшие и просроченные задачи.',
     loading: 'Загружаем доску...',
+    memberFallback: 'Участник',
     minimap: 'Миникарта доски',
     online: 'онлайн',
     personalList: 'Личный список',
@@ -87,6 +66,35 @@ const ru = {
     noDescription: 'Без описания',
     statusDone: 'Готово',
     statusTodo: 'В работе',
+  },
+  boardText: {
+    color: 'Цвет',
+    content: 'Текст',
+    contentPlaceholder: 'Заголовок зоны, заметка или пояснение',
+    contentRequired: 'Напиши текст, который нужно разместить на доске.',
+    createTitle: 'Новый текст',
+    defaultContent: 'Новая заметка',
+    delete: 'Удалить текст',
+    deleteDescription: (content: string) => `Текст "${content.slice(0, 72)}" исчезнет с текущей доски.`,
+    deleteTitle: 'Удалить текст?',
+    edit: 'Редактировать',
+    editTitle: 'Редактирование текста',
+    font: 'Шрифт',
+    fonts: {
+      display: 'Акцентный',
+      mono: 'Моно',
+      serif: 'Книжный',
+      system: 'Системный',
+    },
+    kicker: 'Текстовый слой',
+    label: 'Текст на доске',
+    newText: 'Добавить текст',
+    preview: 'Превью',
+    resize: 'Изменить ширину текстового блока',
+    save: 'Сохранить текст',
+    saving: 'Сохраняем...',
+    selectColor: (color: string) => `Выбрать цвет ${color}`,
+    size: 'Размер',
   },
   cardEditor: {
     addDeadline: 'Добавить дедлайн',
@@ -176,11 +184,13 @@ const ru = {
     },
   },
   errors: {
-    activityGeneric: 'Не удалось загрузить журнал активности.',
-    activityMissingTable:
-      'Таблица public.activity_events не найдена. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.',
     authInvalid: 'Неверный email или пароль.',
     authUnexpected: 'Неожиданная ошибка авторизации.',
+    boardTextsGeneric: 'Не удалось выполнить операцию с текстом на доске.',
+    boardTextsMissingTable:
+      'Таблица public.board_texts не найдена. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.',
+    boardTextsMissingWidth:
+      'В таблице public.board_texts нет колонки w. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.',
     cardsGeneric: 'Не удалось выполнить операцию с карточками.',
     cardsMissingProject:
       'В таблице public.cards не найден столбец project_id. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.',
@@ -292,28 +302,6 @@ const ru = {
 }
 
 const en = {
-  activity: {
-    action: {
-      card_completed: { detail: 'completed a card', short: 'Card completed' },
-      card_created: { detail: 'created a card', short: 'New card' },
-      card_deadline_changed: { detail: 'changed a deadline', short: 'Deadline changed' },
-      card_deleted: { detail: 'deleted a card', short: 'Card deleted' },
-      card_moved: { detail: 'moved a card', short: 'Card moved' },
-      card_reopened: { detail: 'reopened a card', short: 'Card reopened' },
-      card_updated: { detail: 'updated a card', short: 'Card updated' },
-      link_created: { detail: 'created a link', short: 'Link created' },
-      link_deleted: { detail: 'deleted a link', short: 'Link deleted' },
-      project_created: { detail: 'created a project', short: 'New project' },
-      project_deleted: { detail: 'deleted a project', short: 'Project deleted' },
-      project_updated: { detail: 'updated a project', short: 'Project updated' },
-    },
-    actorYou: 'You',
-    empty: 'Recent team activity will appear here.',
-    journal: 'Log',
-    loading: 'Syncing events...',
-    title: 'Activity',
-    unknownActor: 'Member',
-  },
   app: {
     broken: 'Something broke',
     brokenDescription: 'The interface caught an unexpected error. Reloading usually brings the board back.',
@@ -342,6 +330,7 @@ const en = {
     deadlineList: 'Deadline list',
     listEmptyDescription: 'The list is great for quickly checking nearby and overdue work.',
     loading: 'Loading board...',
+    memberFallback: 'Member',
     minimap: 'Board mini map',
     online: 'online',
     personalList: 'Personal list',
@@ -371,6 +360,35 @@ const en = {
     noDescription: 'No description',
     statusDone: 'Done',
     statusTodo: 'In progress',
+  },
+  boardText: {
+    color: 'Color',
+    content: 'Text',
+    contentPlaceholder: 'Zone title, note, or explanation',
+    contentRequired: 'Write the text you want to place on the board.',
+    createTitle: 'New text',
+    defaultContent: 'New note',
+    delete: 'Delete text',
+    deleteDescription: (content: string) => `Text "${content.slice(0, 72)}" will disappear from the current board.`,
+    deleteTitle: 'Delete text?',
+    edit: 'Edit',
+    editTitle: 'Edit text',
+    font: 'Font',
+    fonts: {
+      display: 'Display',
+      mono: 'Mono',
+      serif: 'Serif',
+      system: 'System',
+    },
+    kicker: 'Text layer',
+    label: 'Board text',
+    newText: 'Add text',
+    preview: 'Preview',
+    resize: 'Resize text block',
+    save: 'Save text',
+    saving: 'Saving...',
+    selectColor: (color: string) => `Select color ${color}`,
+    size: 'Size',
   },
   cardEditor: {
     addDeadline: 'Add deadline',
@@ -460,11 +478,13 @@ const en = {
     },
   },
   errors: {
-    activityGeneric: 'Could not load the activity log.',
-    activityMissingTable:
-      'Table public.activity_events was not found. Run the latest supabase/migrations/0001_initial_schema.sql migration.',
     authInvalid: 'Invalid email or password.',
     authUnexpected: 'Unexpected authorization error.',
+    boardTextsGeneric: 'Could not complete the board text operation.',
+    boardTextsMissingTable:
+      'Table public.board_texts was not found. Run the latest supabase/migrations/0001_initial_schema.sql migration.',
+    boardTextsMissingWidth:
+      'Column w is missing in public.board_texts. Run the latest supabase/migrations/0001_initial_schema.sql migration.',
     cardsGeneric: 'Could not complete the card operation.',
     cardsMissingProject:
       'Column project_id was not found in public.cards. Run the latest supabase/migrations/0001_initial_schema.sql migration in Supabase SQL Editor.',

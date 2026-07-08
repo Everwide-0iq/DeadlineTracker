@@ -12,6 +12,9 @@ import {
 } from 'react'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import type { CardLink, CardLinkSide } from '../cardLinks/cardLink.types.ts'
+import { BoardTextItem } from '../boardTexts/BoardTextItem.tsx'
+import { useBoardTextStore } from '../boardTexts/boardText.store.ts'
+import type { BoardText } from '../boardTexts/boardText.types.ts'
 import { useCardStore } from '../cards/card.store.ts'
 import { DeadlineCard } from '../cards/DeadlineCard.tsx'
 import type { BoardScope, Card } from '../cards/card.types.ts'
@@ -21,7 +24,7 @@ import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
-import { BoardControls, type BoardMode } from './BoardControls.tsx'
+import { BoardControls } from './BoardControls.tsx'
 import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
 import type { DragGuide } from './dragGuide.types.ts'
 import { HeatHorizon } from './HeatHorizon.tsx'
@@ -30,17 +33,16 @@ import { useBoardCollaboration, type BoardCursor, type BoardMember } from './use
 import type { BoardCamera } from './useBoardCamera.ts'
 
 type DesktopBoardProps = {
-  activityPulseCardId: string | null
   camera: BoardCamera
   boardScope: BoardScope
   cards: Card[]
   links: CardLink[]
+  texts: BoardText[]
   error: string | null
   isLoading: boolean
   now: number
   onCreateAtCenter: () => void
   onRetry: () => void
-  resetCamera: () => void
   selectedCardId: string | null
   setCamera: (next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => void
   userEmail: string | null
@@ -169,17 +171,16 @@ function PresenceCluster({
 }
 
 export function DesktopBoard({
-  activityPulseCardId,
   camera,
   boardScope,
   cards,
   links,
+  texts,
   error,
   isLoading,
   now,
   onCreateAtCenter,
   onRetry,
-  resetCamera,
   selectedCardId,
   setCamera,
   userEmail,
@@ -189,7 +190,6 @@ export function DesktopBoard({
 }: DesktopBoardProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const linkDraftCleanupRef = useRef<(() => void) | null>(null)
-  const [mode, setMode] = useState<BoardMode>('select')
   const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
   const createLink = useCardLinkStore((state) => state.createLink)
@@ -197,6 +197,10 @@ export function DesktopBoard({
   const linkSaveError = useCardLinkStore((state) => state.saveError)
   const selectedLinkId = useCardLinkStore((state) => state.selectedLinkId)
   const selectLink = useCardLinkStore((state) => state.selectLink)
+  const deleteText = useBoardTextStore((state) => state.deleteText)
+  const selectedTextId = useBoardTextStore((state) => state.selectedTextId)
+  const selectText = useBoardTextStore((state) => state.selectText)
+  const textSaveError = useBoardTextStore((state) => state.saveError)
   const deleteCard = useCardStore((state) => state.deleteCard)
   const dragGuide = useCardStore((state) => state.dragGuide)
   const editor = useCardStore((state) => state.editor)
@@ -208,7 +212,7 @@ export function DesktopBoard({
   const t = translations[language]
   const { members, remoteCursors, self, sendCursor } = useBoardCollaboration({
     enabled: boardScope === 'shared',
-    fallbackName: t.activity.unknownActor,
+    fallbackName: t.board.memberFallback,
     userEmail,
     userId,
   })
@@ -263,6 +267,27 @@ export function DesktopBoard({
         return
       }
 
+      if (selectedTextId) {
+        const selectedText = texts.find((text) => text.id === selectedTextId)
+
+        if (!selectedText) {
+          return
+        }
+
+        event.preventDefault()
+        void confirm({
+          confirmLabel: t.boardText.delete,
+          description: t.boardText.deleteDescription(selectedText.content),
+          title: t.boardText.deleteTitle,
+          tone: 'danger',
+        }).then((confirmed) => {
+          if (confirmed) {
+            void deleteText(selectedText.id).catch(() => undefined)
+          }
+        })
+        return
+      }
+
       if (selectedLinkId) {
         event.preventDefault()
         void confirm({
@@ -305,7 +330,19 @@ export function DesktopBoard({
     window.addEventListener('keydown', handleDeleteKey)
 
     return () => window.removeEventListener('keydown', handleDeleteKey)
-  }, [cards, confirm, deleteCard, deleteLink, editor, selectedCardId, selectedLinkId, t])
+  }, [
+    cards,
+    confirm,
+    deleteCard,
+    deleteLink,
+    deleteText,
+    editor,
+    selectedCardId,
+    selectedLinkId,
+    selectedTextId,
+    t,
+    texts,
+  ])
 
   const zoomAtPoint = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
@@ -338,13 +375,14 @@ export function DesktopBoard({
       return
     }
 
-    if (mode !== 'pan' && target !== event.currentTarget) {
+    if (target !== event.currentTarget) {
       return
     }
 
     event.preventDefault()
     selectCard(null)
     selectLink(null)
+    selectText(null)
 
     const startClientX = event.clientX
     const startClientY = event.clientY
@@ -404,7 +442,7 @@ export function DesktopBoard({
 
   const handleStartConnection = useCallback(
     (card: Card, side: CardLinkSide, event: PointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0 || event.pointerType === 'touch' || mode !== 'select') {
+      if (event.button !== 0 || event.pointerType === 'touch') {
         return
       }
 
@@ -412,6 +450,7 @@ export function DesktopBoard({
       event.stopPropagation()
       selectCard(null)
       selectLink(null)
+      selectText(null)
       linkDraftCleanupRef.current?.()
 
       setDraftLink({
@@ -499,7 +538,7 @@ export function DesktopBoard({
       window.addEventListener('pointerup', handleUp)
       window.addEventListener('pointercancel', handleCancel)
     },
-    [boardScope, cardById, createLink, getWorldPointFromClient, mode, selectCard, selectLink, userId],
+    [boardScope, cardById, createLink, getWorldPointFromClient, selectCard, selectLink, selectText, userId],
   )
 
   const handleScenePointerMove = useCallback(
@@ -573,19 +612,23 @@ export function DesktopBoard({
               onDeleteLink={handleDeleteLink}
               onSelectLink={(id) => {
                 selectCard(null)
+                selectText(null)
                 selectLink(id)
               }}
             />
+
+            {texts.map((text) => (
+              <BoardTextItem camera={camera} isSelected={selectedTextId === text.id} key={text.id} text={text} />
+            ))}
 
             {cards.map((card) => (
               <div data-card-root="true" key={card.id}>
                 <DeadlineCard
                   camera={camera}
-                  canConnect={mode === 'select'}
-                  canDrag={mode === 'select'}
+                  canConnect
+                  canDrag
                   card={card}
                   isConnecting={Boolean(draftLink)}
-                  isPulsing={activityPulseCardId === card.id}
                   isSelected={selectedCardId === card.id}
                   onStartConnection={handleStartConnection}
                 />
@@ -602,9 +645,6 @@ export function DesktopBoard({
       <div className="pointer-events-none absolute left-5 top-5 z-20">
         <BoardControls
           camera={camera}
-          mode={mode}
-          onModeChange={setMode}
-          onReset={resetCamera}
           onZoomIn={() => zoomBy(1.1)}
           onZoomOut={() => zoomBy(0.9)}
         />
@@ -646,7 +686,7 @@ export function DesktopBoard({
         </div>
       ) : null}
 
-      {!isLoading && !error && cards.length === 0 ? (
+      {!isLoading && !error && cards.length === 0 && texts.length === 0 ? (
         <div className="absolute inset-0 z-10 grid place-items-center p-6">
           <div className="mission-state-card rounded-3xl border border-white/10 bg-black/35 p-7 text-center text-white shadow-2xl backdrop-blur-xl">
             <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 text-[var(--accent)] shadow-glow">
@@ -673,9 +713,9 @@ export function DesktopBoard({
         {t.board.sync}: {t.board.realtime[realtimeStatus]}
       </div>
 
-      {saveError || linkSaveError ? (
+      {saveError || linkSaveError || textSaveError ? (
         <div className="absolute bottom-5 left-5 z-20 max-w-md rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100 backdrop-blur-xl">
-          {saveError ?? linkSaveError}
+          {saveError ?? linkSaveError ?? textSaveError}
         </div>
       ) : null}
     </main>

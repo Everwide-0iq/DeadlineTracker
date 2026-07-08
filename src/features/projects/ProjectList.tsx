@@ -115,8 +115,8 @@ export function ProjectList({
   }
 
   return (
-    <section className="mb-4 flex h-[clamp(160px,22vh,204px)] min-h-0 shrink-0 flex-col">
-      <div className="mb-3 flex items-center justify-between px-2">
+    <section className="mb-4 flex min-h-[132px] flex-1 flex-col">
+      <div className="mb-2 flex items-center justify-between px-2">
         <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/35">
           <FolderKanban size={15} />
           {t.project.projects}
@@ -126,7 +126,7 @@ export function ProjectList({
         </button>
       </div>
 
-      <div className="sidebar-scrollbar min-h-0 space-y-2 overflow-y-auto pr-1.5">
+      <div className="sidebar-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-1.5">
         {projects.map((project) => {
           const isActive = activeProjectId === project.id
           const canDelete = project.id !== defaultProjectId

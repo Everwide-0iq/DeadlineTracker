@@ -9,6 +9,7 @@ import {
   LockKeyhole,
   LogOut,
   Plus,
+  Type,
   UsersRound,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
@@ -33,6 +34,7 @@ type SidebarProps = {
   onBoardScopeChange: (scope: BoardScope) => void
   onCreate: () => void
   onCreateProject: () => void
+  onCreateText: () => void
   onDeleteProject: (project: Project) => void
   onFilterChange: (filter: BoardFilter) => void
   onLogout: () => void
@@ -62,6 +64,7 @@ export function Sidebar({
   onBoardScopeChange,
   onCreate,
   onCreateProject,
+  onCreateText,
   onDeleteProject,
   onFilterChange,
   onLogout,
@@ -76,7 +79,7 @@ export function Sidebar({
 
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-black/35 p-5 shadow-2xl backdrop-blur-xl">
-      <div className="mb-5 flex shrink-0 items-center gap-3 px-2 pt-3">
+      <div className="mb-4 flex shrink-0 items-center gap-3 px-2 pt-2">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
           <Flame size={30} fill="currentColor" />
         </div>
@@ -86,7 +89,7 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="mb-4 shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
+      <div className="mb-3 shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
         <div className="grid grid-cols-2 gap-1.5">
           <button
             className={cn('view-toggle-button', activeBoardScope === 'shared' && 'view-toggle-button-active')}
@@ -107,9 +110,18 @@ export function Sidebar({
         </div>
       </div>
 
-      <button className="primary-button mb-4 w-full shrink-0 justify-center py-3.5 text-base" type="button" onClick={onCreate}>
+      <button className="primary-button mb-3 w-full shrink-0 justify-center py-3 text-base" type="button" onClick={onCreate}>
         <Plus size={21} />
         {activeBoardScope === 'personal' ? t.sidebar.newPersonalTask : t.sidebar.newCard}
+      </button>
+
+      <button
+        className="secondary-button mb-3 w-full shrink-0 justify-center py-2.5 text-sm"
+        type="button"
+        onClick={onCreateText}
+      >
+        <Type size={18} />
+        {t.boardText.newText}
       </button>
 
       {activeBoardScope === 'shared' ? (
@@ -126,7 +138,7 @@ export function Sidebar({
         />
       ) : null}
 
-      <div className="mb-4 shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
+      <div className="mb-3 shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
         <div className="grid grid-cols-2 gap-1.5">
           <button
             className={cn('view-toggle-button', viewMode === 'board' && 'view-toggle-button-active')}
@@ -147,9 +159,9 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-3 shrink-0 px-2 text-xs font-bold uppercase tracking-[0.22em] text-white/35">{t.sidebar.filters}</div>
-        <nav className="sidebar-scrollbar -mx-5 min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-2">
+      <div className={cn('flex shrink-0 flex-col', activeBoardScope === 'personal' && 'mt-auto')}>
+        <div className="mb-2 shrink-0 px-2 text-xs font-bold uppercase tracking-[0.22em] text-white/35">{t.sidebar.filters}</div>
+        <nav className="-mx-5 space-y-0.5 pb-2">
           {boardFilters.map((filter) => {
             const Icon = filterIcons[filter.id]
 

@@ -72,7 +72,6 @@ export function useBoardCamera() {
     })
   }, [])
 
-  const resetCamera = useCallback(() => setCamera(defaultCamera), [setCamera])
   const zoomBy = useCallback(
     (factor: number) => setCamera((current) => ({ ...current, zoom: current.zoom * factor })),
     [setCamera],
@@ -80,9 +79,6 @@ export function useBoardCamera() {
 
   return {
     camera,
-    maxZoom,
-    minZoom,
-    resetCamera,
     setCamera,
     zoomBy,
   }

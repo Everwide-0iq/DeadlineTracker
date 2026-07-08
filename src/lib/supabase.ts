@@ -95,6 +95,52 @@ export type Database = {
         }
         Relationships: []
       }
+      board_texts: {
+        Row: {
+          id: string
+          content: string
+          board_scope: BoardScope
+          project_id: string | null
+          x: number
+          y: number
+          w: number
+          font_size: number
+          font_family: 'display' | 'mono' | 'serif' | 'system'
+          color: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          content?: string
+          board_scope?: BoardScope
+          project_id?: string | null
+          x?: number
+          y?: number
+          w?: number
+          font_size?: number
+          font_family?: 'display' | 'mono' | 'serif' | 'system'
+          color?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          board_scope?: BoardScope
+          project_id?: string | null
+          x?: number
+          y?: number
+          w?: number
+          font_size?: number
+          font_family?: 'display' | 'mono' | 'serif' | 'system'
+          color?: string
+          created_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           id: string
@@ -120,49 +166,6 @@ export type Database = {
           sort_order?: number
           created_by?: string | null
           updated_at?: string
-        }
-        Relationships: []
-      }
-      activity_events: {
-        Row: {
-          id: string
-          action: string
-          entity_type: string
-          entity_id: string
-          entity_title: string
-          board_scope: BoardScope
-          project_id: string | null
-          card_id: string | null
-          actor_id: string | null
-          actor_label: string
-          metadata: Json
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          action: string
-          entity_type: string
-          entity_id: string
-          entity_title?: string
-          board_scope?: BoardScope
-          project_id?: string | null
-          card_id?: string | null
-          actor_id?: string | null
-          actor_label?: string
-          metadata?: Json
-          created_at?: string
-        }
-        Update: {
-          action?: string
-          entity_type?: string
-          entity_id?: string
-          entity_title?: string
-          board_scope?: BoardScope
-          project_id?: string | null
-          card_id?: string | null
-          actor_id?: string | null
-          actor_label?: string
-          metadata?: Json
         }
         Relationships: []
       }

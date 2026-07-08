@@ -1,13 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Sidebar } from '../components/sidebar/Sidebar.tsx'
-import { ActivityPulseLog } from '../features/activity/ActivityPulseLog.tsx'
-import { getActivityToast, getActivityTone } from '../features/activity/activity.copy.ts'
-import { useActivityStore } from '../features/activity/activity.store.ts'
 import { DesktopBoard } from '../features/board/DesktopBoard.tsx'
 import { getBoardCenterPosition } from '../features/board/board.utils.ts'
 import type { DesktopViewMode } from '../features/board/board.types.ts'
 import { useBoardCamera } from '../features/board/useBoardCamera.ts'
 import { useAuthStore } from '../features/auth/auth.store.ts'
+import { useBoardTextStore } from '../features/boardTexts/boardText.store.ts'
 import { useCardLinkStore } from '../features/cardLinks/cardLink.store.ts'
 import { useCardStore } from '../features/cards/card.store.ts'
 import { DesktopCardList } from '../features/cards/DesktopCardList.tsx'
@@ -36,8 +34,9 @@ const CardEditor = lazy(() =>
 const ProjectEditor = lazy(() =>
   import('../features/projects/ProjectEditor.tsx').then((module) => ({ default: module.ProjectEditor })),
 )
-
-const quietActivityActions = new Set(['card_moved', 'card_updated', 'project_updated'])
+const BoardTextEditor = lazy(() =>
+  import('../features/boardTexts/BoardTextEditor.tsx').then((module) => ({ default: module.BoardTextEditor })),
+)
 
 function ModalFallback() {
   const language = useI18nStore((state) => state.language)
@@ -92,7 +91,7 @@ function getProjectDeadlineSummaries(cards: Card[], now: number, language: Langu
 }
 
 export function BoardPage() {
-  const { camera, resetCamera, setCamera, zoomBy } = useBoardCamera()
+  const { camera, setCamera, zoomBy } = useBoardCamera()
   const [desktopViewMode, setDesktopViewMode] = useState<DesktopViewMode>(() => {
     const stored = readStorageValue('fireboard.desktopViewMode')
     return stored === 'list' ? 'list' : 'board'
@@ -120,6 +119,12 @@ export function BoardPage() {
   const links = useCardLinkStore((state) => state.links)
   const loadLinks = useCardLinkStore((state) => state.loadLinks)
   const subscribeLinkRealtime = useCardLinkStore((state) => state.subscribeRealtime)
+  const textEditor = useBoardTextStore((state) => state.editor)
+  const textError = useBoardTextStore((state) => state.error)
+  const texts = useBoardTextStore((state) => state.texts)
+  const loadTexts = useBoardTextStore((state) => state.loadTexts)
+  const openCreateTextEditor = useBoardTextStore((state) => state.openCreateEditor)
+  const subscribeTextRealtime = useBoardTextStore((state) => state.subscribeRealtime)
   const createProject = useProjectStore((state) => state.createProject)
   const deleteProject = useProjectStore((state) => state.deleteProject)
   const loadProjects = useProjectStore((state) => state.loadProjects)
@@ -127,15 +132,10 @@ export function BoardPage() {
   const projectError = useProjectStore((state) => state.error)
   const projects = useProjectStore((state) => state.projects)
   const subscribeProjectRealtime = useProjectStore((state) => state.subscribeRealtime)
-  const activityPulseCardId = useActivityStore((state) => state.pulseCardId)
-  const latestActivityEvent = useActivityStore((state) => state.latestRealtimeEvent)
-  const loadActivity = useActivityStore((state) => state.loadActivity)
-  const subscribeActivityRealtime = useActivityStore((state) => state.subscribeRealtime)
   const logout = useAuthStore((state) => state.logout)
   const userEmail = useAuthStore((state) => state.user?.email ?? null)
   const userId = useAuthStore((state) => state.user?.id ?? null)
   const confirm = useFeedbackStore((state) => state.confirm)
-  const pushToast = useFeedbackStore((state) => state.pushToast)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
   const isDesktop = useMediaQuery('(min-width: 1024px)')
@@ -162,28 +162,15 @@ export function BoardPage() {
   }, [loadLinks, subscribeLinkRealtime])
 
   useEffect(() => {
-    void loadActivity()
-    const unsubscribe = subscribeActivityRealtime()
+    if (!isDesktop) {
+      return undefined
+    }
+
+    void loadTexts()
+    const unsubscribe = subscribeTextRealtime()
 
     return unsubscribe
-  }, [loadActivity, subscribeActivityRealtime])
-
-  useEffect(() => {
-    if (!latestActivityEvent) {
-      return
-    }
-
-    if (quietActivityActions.has(latestActivityEvent.action)) {
-      return
-    }
-
-    const toast = getActivityToast(latestActivityEvent, userId, language)
-    pushToast({
-      description: toast.description,
-      title: toast.title,
-      tone: getActivityTone(latestActivityEvent),
-    })
-  }, [language, latestActivityEvent, pushToast, userId])
+  }, [isDesktop, loadTexts, subscribeTextRealtime])
 
   useEffect(() => {
     writeStorageValue('fireboard.desktopViewMode', desktopViewMode)
@@ -221,7 +208,10 @@ export function BoardPage() {
     () => getProjectDeadlineSummaries(sharedCards, now, language),
     [language, now, sharedCards],
   )
-  const boardError = activeBoardScope === 'shared' ? error ?? projectError ?? linkError : error ?? linkError
+  const boardError =
+    activeBoardScope === 'shared'
+      ? error ?? projectError ?? linkError ?? (isDesktop ? textError : null)
+      : error ?? linkError ?? (isDesktop ? textError : null)
   const scopedCards = useMemo(
     () =>
       cards.filter((card) =>
@@ -249,6 +239,15 @@ export function BoardPage() {
       }),
     [activeBoardScope, activeProjectId, links, userId, visibleCardIds],
   )
+  const visibleTexts = useMemo(
+    () =>
+      texts.filter((text) =>
+        activeBoardScope === 'personal'
+          ? text.boardScope === 'personal' && text.createdBy === userId
+          : text.boardScope === 'shared' && text.projectId === activeProjectId,
+      ),
+    [activeBoardScope, activeProjectId, texts, userId],
+  )
   const mobileCards = useMemo(() => sortCardsForMobile(visibleCards, now), [now, visibleCards])
   const viewKey = `${activeBoardScope}:${activeBoardScope === 'shared' ? activeProjectId : 'personal'}:${filter}`
 
@@ -266,6 +265,17 @@ export function BoardPage() {
 
     openCreateEditor(0, 0, activeBoardScope, activeBoardScope === 'shared' ? activeProjectId : null)
   }, [activeBoardScope, activeProjectId, camera, isDesktop, openCreateEditor])
+
+  const openCreateTextAtCenter = useCallback(() => {
+    setDesktopViewMode('board')
+    const position = getBoardCenterPosition(camera)
+    openCreateTextEditor(
+      Math.round(position.x),
+      Math.round(position.y),
+      activeBoardScope,
+      activeBoardScope === 'shared' ? activeProjectId : null,
+    )
+  }, [activeBoardScope, activeProjectId, camera, openCreateTextEditor])
 
   const handleCreateProject = useCallback(
     async (input: { color: string; name: string }) => {
@@ -311,11 +321,13 @@ export function BoardPage() {
   }, [logout])
 
   const handleRetry = useCallback(() => {
-    void loadActivity()
     void loadCards()
     void loadLinks()
     void loadProjects()
-  }, [loadActivity, loadCards, loadLinks, loadProjects])
+    if (isDesktop) {
+      void loadTexts()
+    }
+  }, [isDesktop, loadCards, loadLinks, loadProjects, loadTexts])
 
   if (!isDesktop) {
     return (
@@ -370,6 +382,7 @@ export function BoardPage() {
           onBoardScopeChange={setActiveBoardScope}
           onCreate={openCreateAtCenter}
           onCreateProject={() => setIsProjectEditorOpen(true)}
+          onCreateText={openCreateTextAtCenter}
           onDeleteProject={handleDeleteProject}
           onFilterChange={setFilter}
           onLogout={handleLogout}
@@ -382,16 +395,15 @@ export function BoardPage() {
         {desktopViewMode === 'board' ? (
           <DesktopBoard
             camera={camera}
-            activityPulseCardId={activityPulseCardId}
             boardScope={activeBoardScope}
             cards={visibleCards}
             links={visibleLinks}
+            texts={visibleTexts}
             error={boardError}
             isLoading={isLoading}
             now={now}
             onCreateAtCenter={openCreateAtCenter}
             onRetry={handleRetry}
-            resetCamera={resetCamera}
             selectedCardId={selectedCardId}
             setCamera={setCamera}
             userEmail={userEmail}
@@ -413,6 +425,7 @@ export function BoardPage() {
         )}
         <Suspense fallback={<ModalFallback />}>
           {editor ? <CardEditor /> : null}
+          {textEditor ? <BoardTextEditor /> : null}
           {isProjectEditorOpen ? (
             <ProjectEditor
               isOpen={isProjectEditorOpen}
@@ -422,7 +435,6 @@ export function BoardPage() {
           ) : null}
         </Suspense>
       </div>
-      <ActivityPulseLog activeProjectId={activeProjectId} boardScope={activeBoardScope} userId={userId} />
     </>
   )
 }

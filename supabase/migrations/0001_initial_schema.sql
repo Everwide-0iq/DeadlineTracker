@@ -148,6 +148,120 @@ where board_scope is null;
 alter table public.card_links
 alter column board_scope set not null;
 
+create table if not exists public.board_texts (
+  id uuid primary key default gen_random_uuid(),
+  content text not null default 'Text',
+  board_scope text not null default 'shared' check (board_scope in ('shared', 'personal')),
+  project_id uuid references public.projects(id) on delete cascade,
+  x double precision not null default 0,
+  y double precision not null default 0,
+  w double precision not null default 360,
+  font_size integer not null default 36 check (font_size between 18 and 86),
+  font_family text not null default 'display' check (font_family in ('display', 'mono', 'serif', 'system')),
+  color text not null default '#f7f7f8' check (color ~ '^#[0-9A-Fa-f]{6}$'),
+  created_by uuid default auth.uid() references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint board_texts_content_length_check check (char_length(btrim(content)) between 1 and 520),
+  constraint board_texts_scope_check check (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and project_id is not null)
+  )
+);
+
+alter table public.board_texts
+add column if not exists board_scope text not null default 'shared';
+
+alter table public.board_texts
+add column if not exists project_id uuid references public.projects(id) on delete cascade;
+
+alter table public.board_texts
+add column if not exists font_size integer not null default 36;
+
+alter table public.board_texts
+add column if not exists font_family text not null default 'display';
+
+alter table public.board_texts
+add column if not exists color text not null default '#f7f7f8';
+
+alter table public.board_texts
+add column if not exists w double precision not null default 360;
+
+alter table public.board_texts
+alter column board_scope set default 'shared';
+
+update public.board_texts
+set board_scope = 'shared'
+where board_scope is null;
+
+alter table public.board_texts
+alter column board_scope set not null;
+
+update public.board_texts
+set project_id = '00000000-0000-0000-0000-000000000001'
+where board_scope = 'shared' and project_id is null;
+
+update public.board_texts
+set project_id = null
+where board_scope = 'personal';
+
+do $$
+begin
+  alter table public.board_texts
+  add constraint board_texts_content_length_check check (char_length(btrim(content)) between 1 and 520);
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter table public.board_texts
+  add constraint board_texts_width_check check (w between 140 and 1400);
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter table public.board_texts
+  add constraint board_texts_font_size_check check (font_size between 18 and 86);
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter table public.board_texts
+  add constraint board_texts_font_family_check check (font_family in ('display', 'mono', 'serif', 'system'));
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter table public.board_texts
+  add constraint board_texts_color_hex_check check (color ~ '^#[0-9A-Fa-f]{6}$');
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter table public.board_texts
+  add constraint board_texts_scope_check check (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and project_id is not null)
+  );
+exception
+  when duplicate_object then null;
+end;
+$$;
+
 create index if not exists projects_created_at_idx on public.projects (created_at);
 create index if not exists projects_created_by_idx on public.projects (created_by);
 create index if not exists projects_sort_order_idx on public.projects (sort_order);
@@ -162,6 +276,10 @@ create index if not exists card_links_to_card_id_idx on public.card_links (to_ca
 create index if not exists card_links_board_scope_idx on public.card_links (board_scope);
 create index if not exists card_links_project_id_idx on public.card_links (project_id);
 create index if not exists card_links_created_by_idx on public.card_links (created_by);
+create index if not exists board_texts_board_scope_idx on public.board_texts (board_scope);
+create index if not exists board_texts_project_id_idx on public.board_texts (project_id);
+create index if not exists board_texts_created_by_idx on public.board_texts (created_by);
+create index if not exists board_texts_created_at_idx on public.board_texts (created_at);
 
 with duplicate_card_links as (
   select
@@ -179,54 +297,6 @@ where public.card_links.id = duplicate_card_links.id
 
 create unique index if not exists card_links_unique_connection_idx
 on public.card_links (from_card_id, from_side, to_card_id, to_side);
-
-create table if not exists public.activity_events (
-  id uuid primary key default gen_random_uuid(),
-  action text not null check (
-    action in (
-      'card_created',
-      'card_updated',
-      'card_deadline_changed',
-      'card_completed',
-      'card_reopened',
-      'card_moved',
-      'card_deleted',
-      'project_created',
-      'project_updated',
-      'project_deleted',
-      'link_created',
-      'link_deleted'
-    )
-  ),
-  entity_type text not null check (entity_type in ('card', 'project', 'link')),
-  entity_id uuid not null,
-  entity_title text not null default '',
-  board_scope text not null default 'shared' check (board_scope in ('shared', 'personal')),
-  project_id uuid,
-  card_id uuid,
-  actor_id uuid,
-  actor_label text not null default 'Участник',
-  metadata jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
-);
-
-alter table public.activity_events
-add column if not exists project_id uuid;
-
-alter table public.activity_events
-add column if not exists card_id uuid;
-
-alter table public.activity_events
-add column if not exists actor_label text not null default 'Участник';
-
-alter table public.activity_events
-add column if not exists metadata jsonb not null default '{}'::jsonb;
-
-create index if not exists activity_events_created_at_idx on public.activity_events (created_at desc);
-create index if not exists activity_events_board_scope_idx on public.activity_events (board_scope);
-create index if not exists activity_events_project_id_idx on public.activity_events (project_id);
-create index if not exists activity_events_card_id_idx on public.activity_events (card_id);
-create index if not exists activity_events_actor_id_idx on public.activity_events (actor_id);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -246,19 +316,6 @@ begin
   new.created_by = old.created_by;
   new.board_scope = old.board_scope;
   return new;
-end;
-$$;
-
-create or replace function public.get_activity_actor_label()
-returns text
-language plpgsql
-stable
-as $$
-declare
-  raw_email text;
-begin
-  raw_email := auth.jwt() ->> 'email';
-  return coalesce(nullif(split_part(raw_email, '@', 1), ''), 'Участник');
 end;
 $$;
 
@@ -321,220 +378,15 @@ begin
 end;
 $$;
 
-create or replace function public.log_card_activity()
+create or replace function public.protect_board_text_ownership()
 returns trigger
 language plpgsql
-security definer
-set search_path = public
 as $$
-declare
-  next_action text;
-  next_title text;
-  next_scope text;
-  next_project_id uuid;
-  next_card_id uuid;
-  next_entity_id uuid;
-  next_metadata jsonb;
 begin
-  if tg_op = 'INSERT' then
-    next_action := 'card_created';
-    next_title := new.title;
-    next_scope := new.board_scope;
-    next_project_id := new.project_id;
-    next_card_id := new.id;
-    next_entity_id := new.id;
-    next_metadata := jsonb_build_object('title', new.title);
-  elsif tg_op = 'DELETE' then
-    next_action := 'card_deleted';
-    next_title := old.title;
-    next_scope := old.board_scope;
-    next_project_id := old.project_id;
-    next_card_id := old.id;
-    next_entity_id := old.id;
-    next_metadata := jsonb_build_object('title', old.title);
-  elsif tg_op = 'UPDATE' then
-    if old.status is distinct from new.status then
-      next_action := case when new.status = 'done' then 'card_completed' else 'card_reopened' end;
-    elsif old.deadline_at is distinct from new.deadline_at then
-      next_action := 'card_deadline_changed';
-    elsif old.title is distinct from new.title
-      or old.description is distinct from new.description
-      or old.w is distinct from new.w
-      or old.h is distinct from new.h then
-      next_action := 'card_updated';
-    else
-      return new;
-    end if;
-
-    next_title := new.title;
-    next_scope := new.board_scope;
-    next_project_id := new.project_id;
-    next_card_id := new.id;
-    next_entity_id := new.id;
-    next_metadata := jsonb_build_object(
-      'title',
-      new.title,
-      'oldTitle',
-      old.title,
-      'oldStatus',
-      old.status,
-      'newStatus',
-      new.status
-    );
-  end if;
-
-  begin
-    insert into public.activity_events (
-      action,
-      actor_id,
-      actor_label,
-      board_scope,
-      card_id,
-      entity_id,
-      entity_title,
-      entity_type,
-      metadata,
-      project_id
-    )
-    values (
-      next_action,
-      auth.uid(),
-      public.get_activity_actor_label(),
-      next_scope,
-      next_card_id,
-      next_entity_id,
-      next_title,
-      'card',
-      next_metadata,
-      next_project_id
-    );
-  exception
-    when others then null;
-  end;
-
-  return coalesce(new, old);
-end;
-$$;
-
-create or replace function public.log_project_activity()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  next_action text;
-  next_id uuid;
-  next_title text;
-begin
-  if tg_op = 'INSERT' then
-    next_action := 'project_created';
-    next_id := new.id;
-    next_title := new.name;
-  elsif tg_op = 'DELETE' then
-    next_action := 'project_deleted';
-    next_id := old.id;
-    next_title := old.name;
-  elsif tg_op = 'UPDATE' then
-    if old.name is not distinct from new.name and old.color is not distinct from new.color then
-      return new;
-    end if;
-
-    next_action := 'project_updated';
-    next_id := new.id;
-    next_title := new.name;
-  end if;
-
-  begin
-    insert into public.activity_events (
-      action,
-      actor_id,
-      actor_label,
-      board_scope,
-      entity_id,
-      entity_title,
-      entity_type,
-      metadata,
-      project_id
-    )
-    values (
-      next_action,
-      auth.uid(),
-      public.get_activity_actor_label(),
-      'shared',
-      next_id,
-      next_title,
-      'project',
-      jsonb_build_object('name', next_title),
-      next_id
-    );
-  exception
-    when others then null;
-  end;
-
-  return coalesce(new, old);
-end;
-$$;
-
-create or replace function public.log_card_link_activity()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  next_action text;
-  next_id uuid;
-  next_scope text;
-  next_project_id uuid;
-  next_card_id uuid;
-begin
-  if tg_op = 'INSERT' then
-    next_action := 'link_created';
-    next_id := new.id;
-    next_scope := new.board_scope;
-    next_project_id := new.project_id;
-    next_card_id := new.from_card_id;
-  elsif tg_op = 'DELETE' then
-    next_action := 'link_deleted';
-    next_id := old.id;
-    next_scope := old.board_scope;
-    next_project_id := old.project_id;
-    next_card_id := old.from_card_id;
-  else
-    return new;
-  end if;
-
-  begin
-    insert into public.activity_events (
-      action,
-      actor_id,
-      actor_label,
-      board_scope,
-      card_id,
-      entity_id,
-      entity_title,
-      entity_type,
-      metadata,
-      project_id
-    )
-    values (
-      next_action,
-      auth.uid(),
-      public.get_activity_actor_label(),
-      next_scope,
-      next_card_id,
-      next_id,
-      'Связь карточек',
-      'link',
-      jsonb_build_object('cardId', next_card_id),
-      next_project_id
-    );
-  exception
-    when others then null;
-  end;
-
-  return coalesce(new, old);
+  new.created_by = old.created_by;
+  new.board_scope = old.board_scope;
+  new.project_id = old.project_id;
+  return new;
 end;
 $$;
 
@@ -549,6 +401,12 @@ create trigger protect_card_links_ownership
 before update on public.card_links
 for each row
 execute function public.protect_card_link_ownership();
+
+drop trigger if exists protect_board_texts_ownership on public.board_texts;
+create trigger protect_board_texts_ownership
+before update on public.board_texts
+for each row
+execute function public.protect_board_text_ownership();
 
 drop trigger if exists validate_card_links_scope on public.card_links;
 create trigger validate_card_links_scope
@@ -574,28 +432,26 @@ before update on public.card_links
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists set_board_texts_updated_at on public.board_texts;
+create trigger set_board_texts_updated_at
+before update on public.board_texts
+for each row
+execute function public.set_updated_at();
+
 drop trigger if exists log_cards_activity on public.cards;
-create trigger log_cards_activity
-after insert or update or delete on public.cards
-for each row
-execute function public.log_card_activity();
-
 drop trigger if exists log_projects_activity on public.projects;
-create trigger log_projects_activity
-after insert or update or delete on public.projects
-for each row
-execute function public.log_project_activity();
-
 drop trigger if exists log_card_links_activity on public.card_links;
-create trigger log_card_links_activity
-after insert or delete on public.card_links
-for each row
-execute function public.log_card_link_activity();
+
+drop function if exists public.log_card_activity() cascade;
+drop function if exists public.log_project_activity() cascade;
+drop function if exists public.log_card_link_activity() cascade;
+drop function if exists public.get_activity_actor_label() cascade;
+drop table if exists public.activity_events cascade;
 
 alter table public.projects enable row level security;
 alter table public.cards enable row level security;
 alter table public.card_links enable row level security;
-alter table public.activity_events enable row level security;
+alter table public.board_texts enable row level security;
 
 drop policy if exists "projects_select_authenticated" on public.projects;
 create policy "projects_select_authenticated"
@@ -709,12 +565,44 @@ for delete
 to authenticated
 using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
 
-drop policy if exists "activity_events_select_authenticated" on public.activity_events;
-create policy "activity_events_select_authenticated"
-on public.activity_events
+drop policy if exists "board_texts_select_authenticated" on public.board_texts;
+create policy "board_texts_select_authenticated"
+on public.board_texts
 for select
 to authenticated
-using (board_scope = 'shared' or (board_scope = 'personal' and actor_id = auth.uid()));
+using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
+
+drop policy if exists "board_texts_insert_authenticated" on public.board_texts;
+create policy "board_texts_insert_authenticated"
+on public.board_texts
+for insert
+to authenticated
+with check (
+  auth.role() = 'authenticated'
+  and created_by = auth.uid()
+  and (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and project_id is not null)
+  )
+);
+
+drop policy if exists "board_texts_update_authenticated" on public.board_texts;
+create policy "board_texts_update_authenticated"
+on public.board_texts
+for update
+to authenticated
+using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()))
+with check (
+  (board_scope = 'shared' and project_id is not null)
+  or (board_scope = 'personal' and created_by = auth.uid() and project_id is null)
+);
+
+drop policy if exists "board_texts_delete_authenticated" on public.board_texts;
+create policy "board_texts_delete_authenticated"
+on public.board_texts
+for delete
+to authenticated
+using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
 
 do $$
 begin
@@ -745,7 +633,7 @@ $$;
 
 do $$
 begin
-  alter publication supabase_realtime add table public.activity_events;
+  alter publication supabase_realtime add table public.board_texts;
 exception
   when duplicate_object then null;
   when undefined_object then null;

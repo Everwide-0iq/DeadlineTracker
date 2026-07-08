@@ -2,6 +2,7 @@ import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2 } from 'luc
 import { memo, useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useDragCard } from '../board/useDragCard.ts'
+import { useBoardTextStore } from '../boardTexts/boardText.store.ts'
 import type { BoardCamera } from '../board/useBoardCamera.ts'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import type { CardLinkSide } from '../cardLinks/cardLink.types.ts'
@@ -21,7 +22,6 @@ type DeadlineCardProps = {
   canConnect?: boolean
   card: Card
   isConnecting?: boolean
-  isPulsing?: boolean
   isSelected: boolean
   onStartConnection?: (
     card: Card,
@@ -44,7 +44,6 @@ function DeadlineCardComponent({
   canDrag,
   card,
   isConnecting = false,
-  isPulsing = false,
   isSelected,
   onStartConnection,
 }: DeadlineCardProps) {
@@ -56,6 +55,7 @@ function DeadlineCardComponent({
   const selectCard = useCardStore((state) => state.selectCard)
   const updateCard = useCardStore((state) => state.updateCard)
   const selectLink = useCardLinkStore((state) => state.selectLink)
+  const selectText = useBoardTextStore((state) => state.selectText)
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
@@ -141,12 +141,14 @@ function DeadlineCardComponent({
     }
 
     selectLink(null)
+    selectText(null)
     selectCard(card.id)
   }
 
   const handleContextMenu = (event: MouseEvent<HTMLElement>) => {
     event.preventDefault()
     selectLink(null)
+    selectText(null)
     selectCard(card.id)
 
     const rect = event.currentTarget.getBoundingClientRect()
@@ -181,7 +183,6 @@ function DeadlineCardComponent({
         card.status === 'done' && 'deadline-card-done',
         isCompleting && 'deadline-card-completed',
         isConnecting && 'deadline-card-connecting',
-        isPulsing && 'deadline-card-event-pulse',
         isSelected && 'deadline-card-selected',
         canDrag && 'cursor-grab active:cursor-grabbing',
       )}
