@@ -18,6 +18,8 @@ import type { BoardScope, Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
 import { BoardControls, type BoardMode } from './BoardControls.tsx'
 import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
@@ -51,16 +53,9 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 type UnderlightStyle = CSSProperties & Record<`--${string}`, string | number>
 type SceneStyle = CSSProperties & Record<`--${string}`, string | number>
 
-const realtimeLabels = {
-  closed: 'отключена',
-  connecting: 'подключаемся',
-  error: 'ошибка',
-  idle: 'ожидание',
-  online: 'онлайн',
-} as const
-
 const CardUnderlight = memo(function CardUnderlight({ card, now }: { card: Card; now: number }) {
-  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
+  const language = useI18nStore((state) => state.language)
+  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)
   const horizontalBleed = Math.max(42, renderSize.w * 0.18)
   const verticalBleed = Math.max(36, renderSize.h * 0.28)
@@ -147,13 +142,15 @@ function PresenceCluster({
   members: BoardMember[]
   self: BoardMember
 }) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const visibleMembers = [self, ...members].slice(0, 4)
 
   return (
     <aside className="presence-cluster absolute right-6 top-[178px] z-20 rounded-2xl border border-white/10 bg-black/35 px-3 py-2 text-white backdrop-blur-xl">
       <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/42">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgb(52_211_153_/_0.8)]" />
-        {members.length + 1} онлайн
+        {members.length + 1} {t.board.online}
       </div>
       <div className="flex items-center">
         {visibleMembers.map((member) => (
@@ -207,8 +204,11 @@ export function DesktopBoard({
   const realtimeStatus = useCardStore((state) => state.realtimeStatus)
   const selectCard = useCardStore((state) => state.selectCard)
   const confirm = useFeedbackStore((state) => state.confirm)
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const { members, remoteCursors, self, sendCursor } = useBoardCollaboration({
     enabled: boardScope === 'shared',
+    fallbackName: t.activity.unknownActor,
     userEmail,
     userId,
   })
@@ -266,9 +266,9 @@ export function DesktopBoard({
       if (selectedLinkId) {
         event.preventDefault()
         void confirm({
-          confirmLabel: 'Удалить связь',
-          description: 'Визуальная связь между карточками будет удалена.',
-          title: 'Удалить связь?',
+          confirmLabel: t.link.delete,
+          description: t.link.deleteDescription,
+          title: t.link.deleteTitle,
           tone: 'danger',
         }).then((confirmed) => {
           if (confirmed) {
@@ -291,9 +291,9 @@ export function DesktopBoard({
       event.preventDefault()
 
       void confirm({
-        confirmLabel: 'Удалить',
-        description: `Карточка "${selectedCard.title}" исчезнет с текущей доски.`,
-        title: 'Удалить карточку?',
+        confirmLabel: t.card.delete,
+        description: t.card.deleteDescription(selectedCard.title),
+        title: t.card.deleteTitle,
         tone: 'danger',
       }).then((confirmed) => {
         if (confirmed) {
@@ -305,7 +305,7 @@ export function DesktopBoard({
     window.addEventListener('keydown', handleDeleteKey)
 
     return () => window.removeEventListener('keydown', handleDeleteKey)
-  }, [cards, confirm, deleteCard, deleteLink, editor, selectedCardId, selectedLinkId])
+  }, [cards, confirm, deleteCard, deleteLink, editor, selectedCardId, selectedLinkId, t])
 
   const zoomAtPoint = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
@@ -521,9 +521,9 @@ export function DesktopBoard({
   const handleDeleteLink = useCallback(
     (id: string) => {
       void confirm({
-        confirmLabel: 'Удалить связь',
-        description: 'Визуальная связь между карточками будет удалена.',
-        title: 'Удалить связь?',
+        confirmLabel: t.link.delete,
+        description: t.link.deleteDescription,
+        title: t.link.deleteTitle,
         tone: 'danger',
       }).then((confirmed) => {
         if (confirmed) {
@@ -531,7 +531,7 @@ export function DesktopBoard({
         }
       })
     },
-    [confirm, deleteLink],
+    [confirm, deleteLink, t.link],
   )
 
   return (
@@ -628,7 +628,7 @@ export function DesktopBoard({
             <div className="mb-3 h-2 w-52 overflow-hidden rounded-full bg-white/10">
               <div className="h-full w-1/2 animate-[scan_1.2s_ease-in-out_infinite] rounded-full bg-[var(--accent)]" />
             </div>
-            <p className="text-sm text-white/60">Загружаем доску...</p>
+            <p className="text-sm text-white/60">{t.board.loading}</p>
           </div>
         </div>
       ) : null}
@@ -637,10 +637,10 @@ export function DesktopBoard({
         <div className="absolute inset-0 z-30 grid place-items-center bg-black/35 p-6 backdrop-blur-sm">
           <div className="mission-state-card max-w-md rounded-3xl border border-red-400/30 bg-red-500/10 p-6 text-center text-red-50 shadow-glow">
             <AlertTriangle className="mx-auto mb-3 text-red-300" />
-            <h2 className="mb-2 text-xl font-bold">Не удалось загрузить карточки</h2>
+            <h2 className="mb-2 text-xl font-bold">{t.board.failedCards}</h2>
             <p className="mb-5 text-sm leading-6 text-red-100/75">{error}</p>
             <button className="primary-button mx-auto" type="button" onClick={onRetry}>
-              Повторить
+              {t.common.retry}
             </button>
           </div>
         </div>
@@ -653,16 +653,16 @@ export function DesktopBoard({
               <Plus size={26} />
             </div>
             <h2 className="mb-2 text-2xl font-black">
-              {boardScope === 'personal' ? 'Добавь первую личную задачу.' : 'Добавь первую карточку дедлайна.'}
+              {boardScope === 'personal' ? t.board.addFirstPersonal : t.board.addFirstCard}
             </h2>
             <p className="mb-5 max-w-sm text-sm leading-6 text-white/55">
               {boardScope === 'personal'
-                ? 'Это приватный canvas для личных дел, планов и дедлайнов вне командной работы.'
-                : 'Общие карточки будут появляться здесь в реальном времени после подключения Supabase.'}
+                ? t.board.personalEmptyDescription
+                : t.board.cardEmptyDescription}
             </p>
             <button className="primary-button mx-auto" type="button" onClick={onCreateAtCenter}>
               <Plus size={18} />
-              Создать карточку
+              {t.common.createCard}
             </button>
           </div>
         </div>
@@ -670,7 +670,7 @@ export function DesktopBoard({
 
       <div className="absolute bottom-5 right-5 z-20 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-xs uppercase tracking-[0.14em] text-white/45 backdrop-blur-xl">
         <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_14px_rgb(52_211_153_/_0.9)]" />
-        Синхронизация: {realtimeLabels[realtimeStatus]}
+        {t.board.sync}: {t.board.realtime[realtimeStatus]}
       </div>
 
       {saveError || linkSaveError ? (

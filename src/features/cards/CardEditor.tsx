@@ -3,7 +3,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { useProjectStore } from '../projects/project.store.ts'
+import { getProjectDisplayName } from '../projects/project.utils.ts'
 import { useCardStore } from './card.store.ts'
 import type { CardStatus } from './card.types.ts'
 import { DeadlinePicker } from './DeadlinePicker.tsx'
@@ -24,6 +27,8 @@ export function CardEditor() {
   const saveError = useCardStore((state) => state.saveError)
   const updateCard = useCardStore((state) => state.updateCard)
   const confirm = useFeedbackStore((state) => state.confirm)
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const userId = useAuthStore((state) => state.user?.id ?? null)
   const projects = useProjectStore((state) => state.projects)
   const card = useMemo(
@@ -33,8 +38,8 @@ export function CardEditor() {
   const editorProjectId =
     editor?.mode === 'edit' ? card?.projectId ?? null : editor?.mode === 'create' ? editor.projectId : null
   const editorProjectName = useMemo(
-    () => projects.find((project) => project.id === editorProjectId)?.name ?? null,
-    [editorProjectId, projects],
+    () => getProjectDisplayName(projects.find((project) => project.id === editorProjectId), t),
+    [editorProjectId, projects, t],
   )
   const [deadlineLocal, setDeadlineLocal] = useState('')
   const [description, setDescription] = useState('')
@@ -88,9 +93,9 @@ export function CardEditor() {
   const requestClose = async () => {
     if (dirty) {
       const confirmed = await confirm({
-        confirmLabel: 'Закрыть',
-        description: 'Изменения в карточке не будут сохранены.',
-        title: 'Отменить изменения?',
+        confirmLabel: t.common.close,
+        description: t.cardEditor.cancelUnsavedDescription,
+        title: t.cardEditor.cancelUnsavedTitle,
         tone: 'info',
       })
 
@@ -108,9 +113,9 @@ export function CardEditor() {
     }
 
     const confirmed = await confirm({
-      confirmLabel: 'Удалить',
-      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
-      title: 'Удалить карточку?',
+      confirmLabel: t.card.delete,
+      description: t.card.deleteDescription(card.title),
+      title: t.card.deleteTitle,
       tone: 'danger',
     })
 
@@ -135,7 +140,7 @@ export function CardEditor() {
     const trimmedTitle = title.trim()
 
     if (!trimmedTitle) {
-      setFormError('Название обязательно.')
+      setFormError(t.cardEditor.titleRequired)
       return
     }
 
@@ -144,7 +149,7 @@ export function CardEditor() {
     try {
       deadlineAt = fromDateTimeLocalValue(deadlineLocal)
     } catch {
-      setFormError('Дата дедлайна некорректна.')
+      setFormError(t.cardEditor.deadlineInvalid)
       return
     }
 
@@ -199,16 +204,16 @@ export function CardEditor() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
               <CalendarClock size={17} />
-              {isEditing ? 'Редактирование' : 'Новая карточка'}
+              {isEditing ? t.cardEditor.edit : t.sidebar.newCard}
             </div>
-            <h2 className="text-2xl font-black text-white">{isEditing ? 'Настроить дедлайн' : 'Добавить дедлайн'}</h2>
+            <h2 className="text-2xl font-black text-white">{isEditing ? t.cardEditor.setupDeadline : t.cardEditor.addDeadline}</h2>
             <p className="mt-1 text-sm text-white/40 lg:hidden xl:block">
               {editorScope === 'personal'
-                ? 'Личная доска, видишь только ты'
-                : `Командный проект${editorProjectName ? `: ${editorProjectName}` : ', видно всем участникам'}`}
+                ? t.cardEditor.personalScope
+                : t.cardEditor.projectScope(editorProjectName)}
             </p>
           </div>
-          <button aria-label="Закрыть редактор" className="icon-button" type="button" onClick={() => void requestClose()}>
+          <button aria-label={t.cardEditor.close} className="icon-button" type="button" onClick={() => void requestClose()}>
             <X size={19} />
           </button>
         </div>
@@ -219,11 +224,11 @@ export function CardEditor() {
         >
           <div className="space-y-4">
             <label className="form-field">
-              <span>Название</span>
+              <span>{t.cardEditor.titleLabel}</span>
               <input
                 autoFocus
                 maxLength={120}
-                placeholder="Билд игры к пятнице"
+                placeholder={t.cardEditor.titlePlaceholder}
                 type="text"
                 value={title}
                 onChange={(event) => {
@@ -234,10 +239,10 @@ export function CardEditor() {
             </label>
 
             <label className="form-field">
-              <span>Описание</span>
+              <span>{t.cardEditor.descriptionLabel}</span>
               <textarea
                 maxLength={360}
-                placeholder="Необязательный контекст"
+                placeholder={t.cardEditor.contextPlaceholder}
                 rows={3}
                 value={description}
                 onChange={(event) => {
@@ -256,7 +261,7 @@ export function CardEditor() {
                   markDirty()
                 }}
               >
-                В работе
+                {t.card.statusTodo}
               </button>
               <button
                 className={status === 'done' ? 'segment segment-active' : 'segment'}
@@ -267,7 +272,7 @@ export function CardEditor() {
                 }}
               >
                 <CheckCircle2 size={16} />
-                Готово
+                {t.card.statusDone}
               </button>
             </div>
 
@@ -286,18 +291,18 @@ export function CardEditor() {
                   onClick={handleDelete}
                 >
                   <Trash2 size={17} />
-                  Удалить
+                  {t.card.delete}
                 </button>
               ) : (
                 <span />
               )}
               <div className="flex gap-3 lg:flex-col">
                 <button className="secondary-button justify-center" disabled={isSaving} type="button" onClick={() => void requestClose()}>
-                  Отмена
+                  {t.common.cancel}
                 </button>
                 <button className="primary-button justify-center" disabled={isSaving} type="submit">
                   <Save size={17} />
-                  {isSaving ? 'Сохраняем...' : 'Сохранить'}
+                  {isSaving ? t.cardEditor.saving : t.cardEditor.save}
                 </button>
               </div>
             </div>

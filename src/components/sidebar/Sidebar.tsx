@@ -15,6 +15,9 @@ import type { ComponentType } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { boardFilters } from '../../features/cards/card.utils.ts'
 import type { BoardFilter, BoardScope, FilterCounts } from '../../features/cards/card.types.ts'
+import { LanguageToggle } from '../../features/i18n/LanguageToggle.tsx'
+import { useI18nStore } from '../../features/i18n/i18n.store.ts'
+import { translations } from '../../features/i18n/translations.ts'
 import type { DesktopViewMode } from '../../features/board/board.types.ts'
 import { ProjectList } from '../../features/projects/ProjectList.tsx'
 import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../../features/projects/project.types.ts'
@@ -68,15 +71,18 @@ export function Sidebar({
   userEmail,
   viewMode,
 }: SidebarProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
+
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-black/35 p-5 shadow-2xl backdrop-blur-xl">
       <div className="mb-5 flex shrink-0 items-center gap-3 px-2 pt-3">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
           <Flame size={30} fill="currentColor" />
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-3xl font-black tracking-normal text-white">Fireboard</h1>
-          <p className="mt-1 max-w-40 truncate text-xs text-white/35">{userEmail ?? 'Общая доска'}</p>
+          <p className="mt-1 max-w-40 truncate text-xs text-white/35">{userEmail ?? t.sidebar.sharedBoard}</p>
         </div>
       </div>
 
@@ -88,7 +94,7 @@ export function Sidebar({
             onClick={() => onBoardScopeChange('shared')}
           >
             <UsersRound size={17} />
-            Команда
+            {t.sidebar.team}
           </button>
           <button
             className={cn('view-toggle-button', activeBoardScope === 'personal' && 'view-toggle-button-active')}
@@ -96,14 +102,14 @@ export function Sidebar({
             onClick={() => onBoardScopeChange('personal')}
           >
             <LockKeyhole size={17} />
-            Личное
+            {t.sidebar.personal}
           </button>
         </div>
       </div>
 
       <button className="primary-button mb-4 w-full shrink-0 justify-center py-3.5 text-base" type="button" onClick={onCreate}>
         <Plus size={21} />
-        {activeBoardScope === 'personal' ? 'Личная задача' : 'Новая карточка'}
+        {activeBoardScope === 'personal' ? t.sidebar.newPersonalTask : t.sidebar.newCard}
       </button>
 
       {activeBoardScope === 'shared' ? (
@@ -128,7 +134,7 @@ export function Sidebar({
             onClick={() => onViewModeChange('board')}
           >
             <Grid2X2 size={17} />
-            Доска
+            {t.sidebar.board}
           </button>
           <button
             className={cn('view-toggle-button', viewMode === 'list' && 'view-toggle-button-active')}
@@ -136,13 +142,13 @@ export function Sidebar({
             onClick={() => onViewModeChange('list')}
           >
             <List size={18} />
-            Список
+            {t.sidebar.list}
           </button>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="mb-3 shrink-0 px-2 text-xs font-bold uppercase tracking-[0.22em] text-white/35">Фильтры</div>
+        <div className="mb-3 shrink-0 px-2 text-xs font-bold uppercase tracking-[0.22em] text-white/35">{t.sidebar.filters}</div>
         <nav className="sidebar-scrollbar -mx-5 min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-2">
           {boardFilters.map((filter) => {
             const Icon = filterIcons[filter.id]
@@ -156,7 +162,7 @@ export function Sidebar({
               >
                 <span className="flex items-center gap-3">
                   <Icon size={18} />
-                  {filter.label}
+                  {t.filters[filter.id]}
                 </span>
                 <span className="tabular-nums text-white/45">{counts[filter.id]}</span>
               </button>
@@ -164,8 +170,9 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="flex shrink-0 justify-end border-t border-white/[0.07] px-2 pt-3">
-          <button aria-label="Выйти" className="icon-button" type="button" onClick={onLogout}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.07] px-2 pt-3">
+          <LanguageToggle className="h-10" />
+          <button aria-label={t.sidebar.logout} className="icon-button" type="button" onClick={onLogout}>
             <LogOut size={20} />
           </button>
         </div>

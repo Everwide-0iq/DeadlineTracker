@@ -362,8 +362,6 @@ begin
       or old.w is distinct from new.w
       or old.h is distinct from new.h then
       next_action := 'card_updated';
-    elsif old.x is distinct from new.x or old.y is distinct from new.y then
-      next_action := 'card_moved';
     else
       return new;
     end if;

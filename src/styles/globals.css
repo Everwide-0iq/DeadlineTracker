@@ -268,6 +268,22 @@ button {
   .view-toggle-button-active {
     @apply bg-red-500/[0.15] text-red-50 shadow-[inset_0_0_0_1px_rgb(255_92_84_/_0.25),0_0_18px_rgb(255_70_61_/_0.14)];
   }
+
+  .language-toggle {
+    @apply inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl border border-white/10 bg-white/[0.045] px-3 text-xs font-black uppercase tracking-[0.08em] text-white/40 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.05)] backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:border-red-300/35 hover:bg-red-500/10 hover:text-white active:translate-y-0;
+  }
+
+  .language-toggle-floating {
+    @apply absolute right-5 top-5 z-20 bg-black/45;
+  }
+
+  .language-toggle i {
+    @apply h-4 w-px bg-white/10;
+  }
+
+  .language-toggle-active {
+    @apply rounded-full bg-red-500/[0.16] px-2 py-1 text-red-50 shadow-[0_0_16px_rgb(255_70_61_/_0.16)];
+  }
 }
 
 .app-shell {

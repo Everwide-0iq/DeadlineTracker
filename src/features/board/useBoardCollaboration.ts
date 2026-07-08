@@ -21,6 +21,7 @@ export type BoardCursor = BoardMember & {
 
 type UseBoardCollaborationOptions = {
   enabled: boolean
+  fallbackName: string
   userEmail: string | null
   userId: string | null
 }
@@ -36,12 +37,12 @@ const createClientId = () => {
   return `client-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-const getName = (email: string | null) => {
+const getName = (email: string | null, fallbackName: string) => {
   if (!email) {
-    return 'Участник'
+    return fallbackName
   }
 
-  return email.split('@')[0] || 'Участник'
+  return email.split('@')[0] || fallbackName
 }
 
 const getColor = (seed: string) => {
@@ -75,7 +76,12 @@ const isCursor = (value: unknown): value is BoardCursor =>
   typeof (value as Record<string, unknown>).x === 'number' &&
   typeof (value as Record<string, unknown>).y === 'number'
 
-export function useBoardCollaboration({ enabled, userEmail, userId }: UseBoardCollaborationOptions) {
+export function useBoardCollaboration({
+  enabled,
+  fallbackName,
+  userEmail,
+  userId,
+}: UseBoardCollaborationOptions) {
   const clientId = useMemo(createClientId, [])
   const channelRef = useRef<BoardChannel | null>(null)
   const lastCursorAtRef = useRef(0)
@@ -86,11 +92,11 @@ export function useBoardCollaboration({ enabled, userEmail, userId }: UseBoardCo
       clientId,
       color: getColor(userEmail ?? userId ?? clientId),
       email: userEmail ?? 'unknown@fireboard.local',
-      name: getName(userEmail),
+      name: getName(userEmail, fallbackName),
       onlineAt: new Date().toISOString(),
       userId,
     }),
-    [clientId, userEmail, userId],
+    [clientId, fallbackName, userEmail, userId],
   )
 
   useEffect(() => {

@@ -17,6 +17,9 @@ import { filterCards, getFilterCounts, sortCardsForMobile } from '../features/ca
 import { formatCountdown } from '../features/cards/countdown.ts'
 import { getDeadlineVisualState } from '../features/cards/deadlineColor.ts'
 import { useFeedbackStore } from '../features/feedback/feedback.store.ts'
+import type { Language } from '../features/i18n/i18n.types.ts'
+import { useI18nStore } from '../features/i18n/i18n.store.ts'
+import { translations } from '../features/i18n/translations.ts'
 import { useProjectStore } from '../features/projects/project.store.ts'
 import {
   defaultProjectId,
@@ -37,16 +40,19 @@ const ProjectEditor = lazy(() =>
 const quietActivityActions = new Set(['card_moved', 'card_updated', 'project_updated'])
 
 function ModalFallback() {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-5 text-white backdrop-blur-sm">
       <div className="mission-state-card rounded-3xl border border-white/10 bg-black/55 px-6 py-5 text-sm font-semibold text-white/60 shadow-glow">
-        Загружаем редактор...
+        {t.app.loadingEditor}
       </div>
     </div>
   )
 }
 
-function getProjectDeadlineSummaries(cards: Card[], now: number) {
+function getProjectDeadlineSummaries(cards: Card[], now: number, language: Language) {
   const nearestByProject = cards.reduce<Record<string, Card>>((acc, card) => {
     if (card.status === 'done') {
       return acc
@@ -70,13 +76,13 @@ function getProjectDeadlineSummaries(cards: Card[], now: number) {
 
   return Object.fromEntries(
     Object.entries(nearestByProject).map<[string, ProjectDeadlineSummary]>(([projectId, card]) => {
-      const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
+      const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
 
       return [
         projectId,
         {
           color: visual.textColor,
-          countdown: formatCountdown(card.deadlineAt, card.status, now),
+          countdown: formatCountdown(card.deadlineAt, card.status, now, language),
           label: visual.label,
           title: card.title,
         },
@@ -130,6 +136,8 @@ export function BoardPage() {
   const userId = useAuthStore((state) => state.user?.id ?? null)
   const confirm = useFeedbackStore((state) => state.confirm)
   const pushToast = useFeedbackStore((state) => state.pushToast)
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const isDesktop = useMediaQuery('(min-width: 1024px)')
 
   useEffect(() => {
@@ -169,13 +177,13 @@ export function BoardPage() {
       return
     }
 
-    const toast = getActivityToast(latestActivityEvent, userId)
+    const toast = getActivityToast(latestActivityEvent, userId, language)
     pushToast({
       description: toast.description,
       title: toast.title,
       tone: getActivityTone(latestActivityEvent),
     })
-  }, [latestActivityEvent, pushToast, userId])
+  }, [language, latestActivityEvent, pushToast, userId])
 
   useEffect(() => {
     writeStorageValue('fireboard.desktopViewMode', desktopViewMode)
@@ -210,8 +218,8 @@ export function BoardPage() {
     [sharedCards],
   )
   const projectDeadlines = useMemo(
-    () => getProjectDeadlineSummaries(sharedCards, now),
-    [now, sharedCards],
+    () => getProjectDeadlineSummaries(sharedCards, now, language),
+    [language, now, sharedCards],
   )
   const boardError = activeBoardScope === 'shared' ? error ?? projectError ?? linkError : error ?? linkError
   const scopedCards = useMemo(
@@ -272,9 +280,9 @@ export function BoardPage() {
   const handleDeleteProject = useCallback(
     async (project: Project) => {
       const confirmed = await confirm({
-        confirmLabel: 'Удалить проект',
-        description: `Проект "${project.name}" и все карточки внутри исчезнут у всей команды.`,
-        title: 'Удалить проект?',
+        confirmLabel: t.card.delete,
+        description: t.project.deleteDescription(project.name),
+        title: t.project.deleteTitle,
         tone: 'danger',
       })
 
@@ -288,7 +296,7 @@ export function BoardPage() {
         setActiveProjectId(defaultProjectId)
       }
     },
-    [activeProjectId, confirm, deleteProject],
+    [activeProjectId, confirm, deleteProject, t.card.delete, t.project],
   )
 
   const handleMoveProject = useCallback(

@@ -1,43 +1,34 @@
-import type { ActivityAction, ActivityEvent } from './activity.types.ts'
+import type { Language } from '../i18n/i18n.types.ts'
+import { translations } from '../i18n/translations.ts'
+import type { ActivityEvent } from './activity.types.ts'
 
-const actionLabels: Record<ActivityAction, { detail: string; short: string }> = {
-  card_completed: { detail: 'закрыл карточку', short: 'Карточка закрыта' },
-  card_created: { detail: 'создал карточку', short: 'Новая карточка' },
-  card_deadline_changed: { detail: 'перенёс дедлайн', short: 'Дедлайн перенесён' },
-  card_deleted: { detail: 'удалил карточку', short: 'Карточка удалена' },
-  card_moved: { detail: 'переместил карточку', short: 'Карточка перемещена' },
-  card_reopened: { detail: 'вернул карточку в работу', short: 'Карточка снова в работе' },
-  card_updated: { detail: 'обновил карточку', short: 'Карточка обновлена' },
-  link_created: { detail: 'создал связь', short: 'Связь создана' },
-  link_deleted: { detail: 'удалил связь', short: 'Связь удалена' },
-  project_created: { detail: 'создал проект', short: 'Новый проект' },
-  project_deleted: { detail: 'удалил проект', short: 'Проект удалён' },
-  project_updated: { detail: 'обновил проект', short: 'Проект обновлён' },
-}
+export function getActivityActor(event: ActivityEvent, userId: string | null, language: Language = 'ru') {
+  const t = translations[language]
 
-export function getActivityActor(event: ActivityEvent, userId: string | null) {
   if (event.actorId && event.actorId === userId) {
-    return 'Ты'
+    return t.activity.actorYou
   }
 
-  return event.actorLabel || 'Участник'
+  return event.actorLabel || t.activity.unknownActor
 }
 
-export function getActivitySentence(event: ActivityEvent, userId: string | null) {
-  const actor = getActivityActor(event, userId)
-  const action = actionLabels[event.action]
-  const title = event.entityTitle ? ` «${event.entityTitle}»` : ''
+export function getActivitySentence(event: ActivityEvent, userId: string | null, language: Language = 'ru') {
+  const t = translations[language]
+  const actor = getActivityActor(event, userId, language)
+  const action = t.activity.action[event.action]
+  const title = event.entityTitle ? ` "${event.entityTitle}"` : ''
 
   return `${actor} ${action.detail}${title}`
 }
 
-export function getActivityToast(event: ActivityEvent, userId: string | null) {
-  const action = actionLabels[event.action]
-  const actor = getActivityActor(event, userId)
+export function getActivityToast(event: ActivityEvent, userId: string | null, language: Language = 'ru') {
+  const t = translations[language]
+  const action = t.activity.action[event.action]
+  const actor = getActivityActor(event, userId, language)
 
   return {
-    description: getActivitySentence(event, userId),
-    title: actor === 'Ты' ? action.short : `${action.short}: ${actor}`,
+    description: getActivitySentence(event, userId, language),
+    title: actor === t.activity.actorYou ? action.short : `${action.short}: ${actor}`,
   }
 }
 

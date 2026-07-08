@@ -25,6 +25,9 @@ import {
 import { useMemo, useState, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
+import type { Language } from '../i18n/i18n.types.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
 import type { BoardScope, Card, CardStatus } from './card.types.ts'
 import { toDateTimeLocalValue } from './card.utils.ts'
@@ -63,34 +66,27 @@ type TimePreset = {
 
 const customTimePresetStorageKey = 'fireboard.customTimePresets.v1'
 const maxCustomTimePresets = 6
-const weekdayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
-
-const defaultTimePresets: TimePreset[] = [
-  { label: 'Утро', value: '09:00' },
-  { label: 'День', value: '12:00' },
-  { label: 'После обеда', value: '15:00' },
-  { label: 'Вечер', value: '18:00' },
-  { label: 'Ночь', value: '21:00' },
-]
-const defaultTimePresetValues = new Set(defaultTimePresets.map((preset) => preset.value))
+const defaultTimePresetValues = new Set(['09:00', '12:00', '15:00', '18:00', '21:00'])
 const timeValuePattern = /^([01]\d|2[0-3]):[0-5]\d$/
 
-const dayFormatter = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  weekday: 'short',
-})
-
-const monthFormatter = new Intl.DateTimeFormat('ru-RU', {
-  month: 'long',
-  year: 'numeric',
-})
-
-const fullDateFormatter = new Intl.DateTimeFormat('ru-RU', {
-  day: 'numeric',
-  month: 'long',
-  weekday: 'long',
-})
+const getLocale = (language: Language) => (language === 'ru' ? 'ru-RU' : 'en-US')
+const getDayFormatter = (language: Language) =>
+  new Intl.DateTimeFormat(getLocale(language), {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'short',
+  })
+const getMonthFormatter = (language: Language) =>
+  new Intl.DateTimeFormat(getLocale(language), {
+    month: 'long',
+    year: 'numeric',
+  })
+const getFullDateFormatter = (language: Language) =>
+  new Intl.DateTimeFormat(getLocale(language), {
+    day: 'numeric',
+    month: 'long',
+    weekday: 'long',
+  })
 
 const pad = (value: number) => value.toString().padStart(2, '0')
 
@@ -206,8 +202,9 @@ function getPresetDate(kind: string, selectedDate: Date) {
   }
 }
 
-function getDeadlineDayHeat(cards: Card[], now: number): DayHeat {
-  const states = cards.map((card) => getDeadlineVisualState(card.deadlineAt, card.status, now))
+function getDeadlineDayHeat(cards: Card[], now: number, language: Language): DayHeat {
+  const t = translations[language]
+  const states = cards.map((card) => getDeadlineVisualState(card.deadlineAt, card.status, now, language))
   const strongest = states.reduce(
     (best, state) => (getZoneHeat(state.zone) > getZoneHeat(best.zone) ? state : best),
     states[0],
@@ -217,7 +214,7 @@ function getDeadlineDayHeat(cards: Card[], now: number): DayHeat {
     color: strongest.borderColor,
     count: cards.length,
     heat: Math.min(cards.length + getZoneHeat(strongest.zone), 4),
-    label: `${cards.length} дедлайн${cards.length === 1 ? '' : 'а'}`,
+    label: t.deadline.dayHeat(cards.length),
   }
 }
 
@@ -237,7 +234,8 @@ function getZoneHeat(zone: DeadlineZone) {
   return 1
 }
 
-function parseQuickCommand(input: string, selectedDate: Date): ParsedQuickCommand | null {
+function parseQuickCommand(input: string, selectedDate: Date, language: Language): ParsedQuickCommand | null {
+  const t = translations[language].deadlinePicker
   const text = input.trim().toLowerCase()
 
   if (!text) {
@@ -245,15 +243,15 @@ function parseQuickCommand(input: string, selectedDate: Date): ParsedQuickComman
   }
 
   const now = new Date()
-  const timeMatch = text.match(/(?:^|\s)(?:в\s*)?([01]?\d|2[0-3]):([0-5]\d)(?:\s|$)/)
-  const hourOnlyMatch = text.match(/(?:^|\s)в\s+([01]?\d|2[0-3])(?:\s|$)/)
+  const timeMatch = text.match(/(?:^|\s)(?:(?:в|at)\s*)?([01]?\d|2[0-3]):([0-5]\d)(?:\s|$)/)
+  const hourOnlyMatch = text.match(/(?:^|\s)(?:в|at)\s+([01]?\d|2[0-3])(?:\s|$)/)
   const timeKeyword = text.includes('утром')
     ? '09:00'
-    : text.includes('днем') || text.includes('днём')
+    : text.includes('днем') || text.includes('днём') || text.includes('noon')
       ? '12:00'
-      : text.includes('вечером')
+      : text.includes('вечером') || text.includes('evening')
         ? '18:00'
-        : text.includes('ночью')
+        : text.includes('ночью') || text.includes('night')
           ? '21:00'
           : null
   const resolvedTime = timeMatch
@@ -265,35 +263,35 @@ function parseQuickCommand(input: string, selectedDate: Date): ParsedQuickComman
         : null
 
   let date: Date | null = null
-  let label = 'Команда распознана'
+  let label = t.commandRecognized
 
-  const daysMatch = text.match(/через\s+(\d{1,2})\s+(?:день|дня|дней)/)
-  const weeksMatch = text.match(/через\s+(\d{1,2})\s+(?:неделю|недели|недель)/)
+  const daysMatch = text.match(/(?:через|in)\s+(\d{1,2})\s+(?:день|дня|дней|day|days)/)
+  const weeksMatch = text.match(/(?:через|in)\s+(\d{1,2})\s+(?:неделю|недели|недель|week|weeks)/)
 
-  if (text.includes('послезавтра')) {
+  if (text.includes('послезавтра') || text.includes('day after tomorrow')) {
     date = addDays(now, 2)
-    label = 'Послезавтра'
-  } else if (text.includes('завтра')) {
+    label = language === 'ru' ? 'Послезавтра' : 'Day after tomorrow'
+  } else if (text.includes('завтра') || text.includes('tomorrow')) {
     date = addDays(now, 1)
-    label = 'Завтра'
-  } else if (text.includes('сегодня')) {
+    label = t.presets.tomorrow
+  } else if (text.includes('сегодня') || text.includes('today')) {
     date = now
-    label = 'Сегодня'
+    label = t.presets.today
   } else if (daysMatch) {
     date = addDays(now, Number(daysMatch[1]))
-    label = `Через ${daysMatch[1]} дн.`
+    label = language === 'ru' ? `Через ${daysMatch[1]} дн.` : `In ${daysMatch[1]}d`
   } else if (weeksMatch) {
     date = addDays(now, Number(weeksMatch[1]) * 7)
-    label = `Через ${weeksMatch[1]} нед.`
+    label = language === 'ru' ? `Через ${weeksMatch[1]} нед.` : `In ${weeksMatch[1]}w`
   } else {
     const weekdays: Array<[RegExp, number, string]> = [
-      [/понедельник|пн/, 1, 'Понедельник'],
-      [/вторник|вт/, 2, 'Вторник'],
-      [/среду|среда|ср/, 3, 'Среда'],
-      [/четверг|чт/, 4, 'Четверг'],
-      [/пятницу|пятница|пт/, 5, 'Пятница'],
-      [/субботу|суббота|сб/, 6, 'Суббота'],
-      [/воскресенье|вс/, 0, 'Воскресенье'],
+      [/понедельник|пн|monday|mon/, 1, language === 'ru' ? 'Понедельник' : 'Monday'],
+      [/вторник|вт|tuesday|tue/, 2, language === 'ru' ? 'Вторник' : 'Tuesday'],
+      [/среду|среда|ср|wednesday|wed/, 3, language === 'ru' ? 'Среда' : 'Wednesday'],
+      [/четверг|чт|thursday|thu/, 4, language === 'ru' ? 'Четверг' : 'Thursday'],
+      [/пятницу|пятница|пт|friday|fri/, 5, language === 'ru' ? 'Пятница' : 'Friday'],
+      [/субботу|суббота|сб|saturday|sat/, 6, language === 'ru' ? 'Суббота' : 'Saturday'],
+      [/воскресенье|вс|sunday|sun/, 0, language === 'ru' ? 'Воскресенье' : 'Sunday'],
     ]
     const weekday = weekdays.find(([pattern]) => pattern.test(text))
 
@@ -305,7 +303,7 @@ function parseQuickCommand(input: string, selectedDate: Date): ParsedQuickComman
 
   if (!date && resolvedTime) {
     date = selectedDate
-    label = 'Время обновлено'
+    label = t.timeUpdated
   }
 
   if (!date) {
@@ -347,24 +345,33 @@ export function DeadlinePicker({
   onChange,
   onTouched,
 }: DeadlinePickerProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
+  const dayFormatter = useMemo(() => getDayFormatter(language), [language])
+  const monthFormatter = useMemo(() => getMonthFormatter(language), [language])
+  const fullDateFormatter = useMemo(() => getFullDateFormatter(language), [language])
   const selectedDate = parseLocalDateTime(value)
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(selectedDate))
   const [quickCommand, setQuickCommand] = useState('')
   const [quickFeedback, setQuickFeedback] = useState<string | null>(null)
   const [customTimePresets, setCustomTimePresets] = useState(readCustomTimePresets)
   const now = Date.now()
-  const visual = getDeadlineVisualState(selectedDate, status, now)
+  const visual = getDeadlineVisualState(selectedDate, status, now, language)
   const selectedTimeValue = getTimeValue(selectedDate)
   const timePresets = useMemo<TimePreset[]>(
     () => [
-      ...defaultTimePresets,
+      { label: t.deadlinePicker.timePresets.morning, value: '09:00' },
+      { label: t.deadlinePicker.timePresets.day, value: '12:00' },
+      { label: t.deadlinePicker.timePresets.afternoon, value: '15:00' },
+      { label: t.deadlinePicker.timePresets.evening, value: '18:00' },
+      { label: t.deadlinePicker.timePresets.night, value: '21:00' },
       ...customTimePresets.map((value) => ({
         custom: true,
-        label: 'Своё',
+        label: t.deadlinePicker.customTime,
         value,
       })),
     ],
-    [customTimePresets],
+    [customTimePresets, t.deadlinePicker],
   )
   const canAddSelectedTime =
     !defaultTimePresetValues.has(selectedTimeValue) &&
@@ -372,10 +379,10 @@ export function DeadlinePicker({
     customTimePresets.length < maxCustomTimePresets
   const addTimePresetTitle =
     defaultTimePresetValues.has(selectedTimeValue) || customTimePresets.includes(selectedTimeValue)
-      ? 'Это время уже есть в заготовках'
+      ? t.deadlinePicker.presetExists
       : customTimePresets.length >= maxCustomTimePresets
-        ? `Можно добавить до ${maxCustomTimePresets} своих заготовок`
-        : 'Добавить время в заготовки'
+        ? t.deadlinePicker.presetLimit(maxCustomTimePresets)
+        : t.deadlinePicker.addTimePreset
   const scopedCards = useMemo(
     () =>
       cards.filter((card) =>
@@ -391,9 +398,9 @@ export function DeadlinePicker({
     }, {})
 
     return Object.fromEntries(
-      Object.entries(grouped).map(([key, dayCards]) => [key, getDeadlineDayHeat(dayCards, now)]),
+      Object.entries(grouped).map(([key, dayCards]) => [key, getDeadlineDayHeat(dayCards, now, language)]),
     )
-  }, [now, scopedCards])
+  }, [language, now, scopedCards])
   const visibleDays = useMemo(
     () =>
       eachDayOfInterval({
@@ -420,10 +427,10 @@ export function DeadlinePicker({
   }
 
   const applyQuickCommand = () => {
-    const result = parseQuickCommand(quickCommand, selectedDate)
+    const result = parseQuickCommand(quickCommand, selectedDate, language)
 
     if (!result) {
-      setQuickFeedback('Не распознал команду. Попробуй: завтра 18:00, через 3 дня, в пятницу вечером.')
+      setQuickFeedback(t.deadlinePicker.quickUnknown)
       return
     }
 
@@ -454,13 +461,13 @@ export function DeadlinePicker({
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[var(--accent)]">
             <CalendarDays size={16} />
-            Дедлайн
+            {t.deadlinePicker.calendar}
           </div>
           <h3 className="text-xl font-black text-white">
             {fullDateFormatter.format(selectedDate)} · {getTimeValue(selectedDate)}
           </h3>
           <p className="mt-1 text-sm text-white/45">
-            {formatCountdown(selectedDate, status, now)} · {visual.label.toLowerCase()}
+            {formatCountdown(selectedDate, status, now, language)} · {visual.label.toLowerCase()}
           </p>
         </div>
         <div
@@ -473,7 +480,7 @@ export function DeadlinePicker({
             } as CSSProperties
           }
         >
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">Статус</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">{t.deadlinePicker.status}</p>
           <p className="text-sm font-black text-[var(--deadline-text)]">{visual.label}</p>
         </div>
       </div>
@@ -482,13 +489,13 @@ export function DeadlinePicker({
         <div className="min-w-0">
           <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              ['today', 'Сегодня'],
-              ['tomorrow', 'Завтра'],
-              ['friday', 'Пятница'],
-              ['weekend', 'Выходные'],
-              ['three-days', '+3 дня'],
-              ['week', '+Неделя'],
-              ['two-weeks', '+2 недели'],
+              ['today', t.deadlinePicker.presets.today],
+              ['tomorrow', t.deadlinePicker.presets.tomorrow],
+              ['friday', t.deadlinePicker.presets.friday],
+              ['weekend', t.deadlinePicker.presets.weekend],
+              ['three-days', t.deadlinePicker.presets.threeDays],
+              ['week', t.deadlinePicker.presets.week],
+              ['two-weeks', t.deadlinePicker.presets.twoWeeks],
             ].map(([kind, label]) => (
               <button
                 className="deadline-preset-button"
@@ -504,7 +511,7 @@ export function DeadlinePicker({
           <div className="rounded-3xl border border-white/10 bg-black/20 p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
               <button
-                aria-label="Предыдущий месяц"
+                aria-label={t.deadlinePicker.monthPrevious}
                 className="icon-button h-9 w-9"
                 type="button"
                 onClick={() => setVisibleMonth((month) => subMonths(month, 1))}
@@ -516,11 +523,11 @@ export function DeadlinePicker({
                   {monthFormatter.format(visibleMonth)}
                 </p>
                 <p className="text-xs text-white/35">
-                  {selectedDayHeat ? selectedDayHeat.label : 'Свободный день'}
+                  {selectedDayHeat ? selectedDayHeat.label : t.deadlinePicker.freeDay}
                 </p>
               </div>
               <button
-                aria-label="Следующий месяц"
+                aria-label={t.deadlinePicker.monthNext}
                 className="icon-button h-9 w-9"
                 type="button"
                 onClick={() => setVisibleMonth((month) => addMonths(month, 1))}
@@ -530,7 +537,7 @@ export function DeadlinePicker({
             </div>
 
             <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-[0.12em] text-white/35">
-              {weekdayLabels.map((day) => (
+              {t.deadlinePicker.weekdayLabels.map((day) => (
                 <span key={day}>{day}</span>
               ))}
             </div>
@@ -574,7 +581,7 @@ export function DeadlinePicker({
           <div className="rounded-3xl border border-white/10 bg-black/20 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-white/40">
               <Clock3 size={15} />
-              Время
+              {t.deadlinePicker.time}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {timePresets.map((preset) => (
@@ -593,7 +600,7 @@ export function DeadlinePicker({
                   </button>
                   {preset.custom ? (
                     <button
-                      aria-label={`Удалить заготовку ${preset.value}`}
+                      aria-label={t.deadlinePicker.removePreset(preset.value)}
                       className="deadline-time-remove"
                       type="button"
                       onClick={() => removeCustomTimePreset(preset.value)}
@@ -606,7 +613,7 @@ export function DeadlinePicker({
             </div>
             <label className="mt-3 block">
               <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-white/35">
-                Точно
+                {t.deadlinePicker.exact}
               </span>
               <div className="flex gap-2">
                 <input
@@ -616,7 +623,7 @@ export function DeadlinePicker({
                   onChange={(event) => commitDate(setTimeValue(selectedDate, event.target.value))}
                 />
                 <button
-                  aria-label="Добавить время в заготовки"
+                  aria-label={t.deadlinePicker.addTimePreset}
                   className="deadline-time-add-button"
                   disabled={!canAddSelectedTime}
                   title={addTimePresetTitle}
@@ -632,12 +639,12 @@ export function DeadlinePicker({
           <div className="rounded-3xl border border-white/10 bg-black/20 p-3">
             <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-white/40">
               <Keyboard size={15} />
-              Быстро
+              {t.deadlinePicker.quick}
             </div>
             <div className="flex gap-2">
               <input
                 className="deadline-quick-input"
-                placeholder="завтра 18:00"
+                placeholder={t.deadlinePicker.quickPlaceholder}
                 value={quickCommand}
                 onChange={(event) => {
                   setQuickCommand(event.target.value)
@@ -673,15 +680,15 @@ export function DeadlinePicker({
               </div>
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/35">
-                  Превью
+                  {t.deadlinePicker.preview}
                 </p>
-                <p className="font-black text-white">{formatCountdown(selectedDate, status, now)}</p>
+                <p className="font-black text-white">{formatCountdown(selectedDate, status, now, language)}</p>
               </div>
             </div>
             <p className="text-sm leading-5 text-white/55">
               {selectedDayCards.length > 0
-                ? `В этот день уже ${selectedDayCards.length} активн. дедлайн(а).`
-                : 'В этот день пока нет активных дедлайнов.'}
+                ? t.deadlinePicker.selectedBusyDay(selectedDayCards.length)
+                : t.deadlinePicker.noActiveDeadlines}
             </p>
           </div>
         </aside>

@@ -3,6 +3,8 @@ import type { CardLink, CardLinkSide } from '../cardLinks/cardLink.types.ts'
 import type { Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 
 export type DraftCardLink = {
   fromCardId: string
@@ -300,6 +302,8 @@ function CardLinkLayerComponent({
   onDeleteLink,
   onSelectLink,
 }: CardLinkLayerProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const cardById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards])
 
   const renderedLinks = useMemo(
@@ -312,8 +316,8 @@ function CardLinkLayerComponent({
           return []
         }
 
-        const sourceVisual = getDeadlineVisualState(sourceCard.deadlineAt, sourceCard.status, now)
-        const targetVisual = getDeadlineVisualState(targetCard.deadlineAt, targetCard.status, now)
+        const sourceVisual = getDeadlineVisualState(sourceCard.deadlineAt, sourceCard.status, now, language)
+        const targetVisual = getDeadlineVisualState(targetCard.deadlineAt, targetCard.status, now, language)
         const geometry = getLinkGeometry(sourceCard, link.fromSide, targetCard, link.toSide, cards)
 
         return [
@@ -325,7 +329,7 @@ function CardLinkLayerComponent({
           },
         ]
       }),
-    [cardById, cards, links, now],
+    [cardById, cards, language, links, now],
   )
 
   const draft = useMemo(() => {
@@ -339,13 +343,13 @@ function CardLinkLayerComponent({
       return null
     }
 
-    const sourceVisual = getDeadlineVisualState(sourceCard.deadlineAt, sourceCard.status, now)
+    const sourceVisual = getDeadlineVisualState(sourceCard.deadlineAt, sourceCard.status, now, language)
 
     return {
       color: sourceVisual.borderColor,
       geometry: getDraftGeometry(sourceCard, draftLink.fromSide, draftLink.pointer),
     }
-  }, [cardById, draftLink, now])
+  }, [cardById, draftLink, language, now])
 
   const selectedRenderedLink = renderedLinks.find(({ link }) => link.id === selectedLinkId)
 
@@ -446,7 +450,7 @@ function CardLinkLayerComponent({
           type="button"
           onClick={() => onDeleteLink(selectedRenderedLink.link.id)}
         >
-          Удалить связь
+          {t.link.delete}
         </button>
       ) : null}
     </>

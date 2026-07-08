@@ -1,6 +1,8 @@
 import { Clock3 } from 'lucide-react'
 import type { Card } from '../cards/card.types.ts'
 import { formatCountdown } from '../cards/countdown.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 
 type HeatHorizonProps = {
   cards: Card[]
@@ -9,7 +11,6 @@ type HeatHorizonProps = {
 
 type Segment = {
   count: number
-  label: string
   maxDays: number
   minDays: number
   tone: 'calm' | 'hot' | 'overdue' | 'warm'
@@ -18,15 +19,17 @@ type Segment = {
 const dayMs = 24 * 60 * 60 * 1000
 
 const segments: Array<Omit<Segment, 'count'>> = [
-  { label: 'Просрочено', maxDays: 0, minDays: Number.NEGATIVE_INFINITY, tone: 'overdue' },
-  { label: '48 часов', maxDays: 2, minDays: 0, tone: 'hot' },
-  { label: 'Неделя', maxDays: 7, minDays: 2, tone: 'warm' },
-  { label: 'Месяц', maxDays: 30, minDays: 7, tone: 'calm' },
+  { maxDays: 0, minDays: Number.NEGATIVE_INFINITY, tone: 'overdue' },
+  { maxDays: 2, minDays: 0, tone: 'hot' },
+  { maxDays: 7, minDays: 2, tone: 'warm' },
+  { maxDays: 30, minDays: 7, tone: 'calm' },
 ]
 
 const getDaysLeft = (card: Card, now: number) => (new Date(card.deadlineAt).getTime() - now) / dayMs
 
 export function HeatHorizon({ cards, now }: HeatHorizonProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const activeCards = cards
     .filter((card) => card.status !== 'done')
     .map((card) => ({ card, daysLeft: getDaysLeft(card, now) }))
@@ -47,25 +50,25 @@ export function HeatHorizon({ cards, now }: HeatHorizonProps) {
       <div className="mb-3 flex items-center justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/36">Heat Horizon</p>
-          <h3 className="text-sm font-black text-white/88">Ближайший фронт</h3>
+          <h3 className="text-sm font-black text-white/88">{t.heatHorizon.title}</h3>
         </div>
         {nearest ? (
           <div className="flex min-w-0 items-center gap-2 text-[var(--accent)]">
             <Clock3 size={16} />
             <span className="truncate text-sm font-black text-white">{nearest.title}</span>
-            <span className="shrink-0 text-sm font-black">{formatCountdown(nearest.deadlineAt, nearest.status, now)}</span>
+            <span className="shrink-0 text-sm font-black">{formatCountdown(nearest.deadlineAt, nearest.status, now, language)}</span>
           </div>
         ) : (
-          <span className="text-sm font-semibold text-white/40">Дедлайны спокойны</span>
+          <span className="text-sm font-semibold text-white/40">{t.heatHorizon.quiet}</span>
         )}
       </div>
 
       <div className="grid grid-cols-4 gap-2">
         {countedSegments.map((segment) => (
-          <div className="heat-horizon-segment" data-tone={segment.tone} key={segment.label}>
+          <div className="heat-horizon-segment" data-tone={segment.tone} key={segment.tone}>
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-white/48">
-                {segment.label}
+                {t.heatHorizon[segment.tone]}
               </span>
               <span className="text-xs font-black text-white/80">{segment.count}</span>
             </div>

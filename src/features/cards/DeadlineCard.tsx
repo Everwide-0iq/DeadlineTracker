@@ -6,6 +6,8 @@ import type { BoardCamera } from '../board/useBoardCamera.ts'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import type { CardLinkSide } from '../cardLinks/cardLink.types.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { useCardStore } from './card.store.ts'
 import type { Card } from './card.types.ts'
 import { getCardRenderSize } from './card.utils.ts'
@@ -55,9 +57,11 @@ function DeadlineCardComponent({
   const updateCard = useCardStore((state) => state.updateCard)
   const selectLink = useCardLinkStore((state) => state.selectLink)
   const confirm = useFeedbackStore((state) => state.confirm)
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const dragPointerDown = useDragCard({ camera, card, enabled: canDrag })
-  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
-  const countdown = formatCountdown(card.deadlineAt, card.status, now)
+  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
+  const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)
   const isCompleting = useCompletionAnimation(card.status === 'done')
 
@@ -102,9 +106,9 @@ function DeadlineCardComponent({
     setMenuPosition(null)
 
     const confirmed = await confirm({
-      confirmLabel: 'Удалить',
-      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
-      title: 'Удалить карточку?',
+      confirmLabel: t.card.delete,
+      description: t.card.deleteDescription(card.title),
+      title: t.card.deleteTitle,
       tone: 'danger',
     })
 
@@ -194,7 +198,7 @@ function DeadlineCardComponent({
       {canConnect
         ? linkSides.map((side) => (
             <button
-              aria-label={`Создать связь ${side}`}
+              aria-label={t.card.createConnection(side)}
               className={cn('card-link-handle', `card-link-handle-${side}`)}
               data-card-action="true"
               data-card-id={card.id}
@@ -215,7 +219,7 @@ function DeadlineCardComponent({
           </div>
           <div className="relative">
             <button
-              aria-label="Действия с карточкой"
+              aria-label={t.card.actions}
               className="icon-button h-9 w-9"
               data-card-action="true"
               type="button"
@@ -273,15 +277,15 @@ function DeadlineCardComponent({
         >
           <button className="menu-item" type="button" onClick={handleEdit}>
             <Pencil size={15} />
-            Редактировать
+            {t.card.edit}
           </button>
           <button className="menu-item" type="button" onClick={handleToggleDone}>
             <CheckCircle2 size={15} />
-            {card.status === 'done' ? 'Вернуть в работу' : 'Отметить готово'}
+            {card.status === 'done' ? t.card.backToWork : t.card.markDone}
           </button>
           <button className="menu-item menu-item-danger" type="button" onClick={handleDelete}>
             <Trash2 size={15} />
-            Удалить
+            {t.card.delete}
           </button>
         </div>
       ) : null}

@@ -16,9 +16,7 @@ const missingSupabaseEnv = [
 ].filter((value): value is string => value !== null)
 
 const invalidSupabaseEnv =
-  supabaseUrl && !isProbablyUrl(supabaseUrl)
-    ? ['VITE_SUPABASE_URL должен быть корректным URL.']
-    : []
+  supabaseUrl && !isProbablyUrl(supabaseUrl) ? ['VITE_SUPABASE_URL'] : []
 
 export const env = {
   supabaseUrl,
@@ -28,15 +26,21 @@ export const env = {
   isSupabaseConfigured: missingSupabaseEnv.length === 0 && invalidSupabaseEnv.length === 0,
 }
 
-export function getSupabaseEnvIssue() {
+export function getSupabaseEnvIssue(language: 'en' | 'ru' = 'ru') {
   if (env.isSupabaseConfigured) {
     return null
   }
 
   const missing = env.missingSupabaseEnv.length
-    ? `Не заполнено: ${env.missingSupabaseEnv.join(', ')}.`
+    ? language === 'ru'
+      ? `Не заполнено: ${env.missingSupabaseEnv.join(', ')}.`
+      : `Missing: ${env.missingSupabaseEnv.join(', ')}.`
     : ''
-  const invalid = env.invalidSupabaseEnv.join(' ')
+  const invalid = env.invalidSupabaseEnv.length
+    ? language === 'ru'
+      ? `${env.invalidSupabaseEnv.join(', ')} должен быть корректным URL.`
+      : `${env.invalidSupabaseEnv.join(', ')} must be a valid URL.`
+    : ''
 
   return [missing, invalid].filter(Boolean).join(' ')
 }

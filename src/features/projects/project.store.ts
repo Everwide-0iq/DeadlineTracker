@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createProject as createProjectApi,
   deleteProject as deleteProjectApi,
@@ -22,6 +23,8 @@ type ProjectState = {
 }
 
 const getMessage = (error: unknown) => {
+  const t = getCurrentTranslation()
+
   if (error instanceof Error) {
     return error.message
   }
@@ -32,11 +35,11 @@ const getMessage = (error: unknown) => {
     const message = typeof record.message === 'string' ? record.message : null
 
     if (code === 'PGRST205' || message?.includes("Could not find the table 'public.projects'")) {
-      return 'Таблица public.projects не найдена. Открой Supabase SQL Editor и выполни миграцию supabase/migrations/0001_initial_schema.sql.'
+      return t.errors.projectsMissingTable
     }
 
     if (message?.includes("Could not find the 'sort_order' column") || message?.includes('sort_order')) {
-      return 'В таблице public.projects нет колонки sort_order. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.'
+      return t.errors.projectsMissingSortOrder
     }
 
     if (message) {
@@ -44,7 +47,7 @@ const getMessage = (error: unknown) => {
     }
   }
 
-  return 'Не удалось выполнить операцию с проектами.'
+  return t.errors.projectsGeneric
 }
 
 const upsertProject = (projects: Project[], project: Project) => {
@@ -129,7 +132,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
   deleteProject: async (id) => {
     if (id === defaultProjectId) {
-      set({ error: 'Проект "Общее" нельзя удалить.' })
+      set({ error: getCurrentTranslation().errors.generalProjectDeleteForbidden })
       return
     }
 

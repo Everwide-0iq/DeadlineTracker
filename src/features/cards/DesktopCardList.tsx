@@ -2,6 +2,8 @@ import { AlertTriangle, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { useCardStore } from './card.store.ts'
 import type { BoardScope, Card } from './card.types.ts'
 import { formatCountdown } from './countdown.ts'
@@ -31,8 +33,10 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const updateCard = useCardStore((state) => state.updateCard)
   const confirm = useFeedbackStore((state) => state.confirm)
-  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
-  const countdown = formatCountdown(card.deadlineAt, card.status, now)
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
+  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
+  const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const isCompleting = useCompletionAnimation(card.status === 'done')
   const style: RowStyle = {
     '--deadline-bg': visual.backgroundColor,
@@ -43,9 +47,9 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
 
   const handleDelete = async () => {
     const confirmed = await confirm({
-      confirmLabel: 'Удалить',
-      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
-      title: 'Удалить карточку?',
+      confirmLabel: t.card.delete,
+      description: t.card.deleteDescription(card.title),
+      title: t.card.deleteTitle,
       tone: 'danger',
     })
 
@@ -79,7 +83,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
             {card.title}
           </h3>
           <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-white/42">
-            {card.description || 'Без описания'}
+            {card.description || t.card.noDescription}
           </p>
         </div>
       </div>
@@ -95,7 +99,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
           {visual.label}
         </span>
         <button
-          aria-label={card.status === 'done' ? 'Вернуть в работу' : 'Отметить готово'}
+          aria-label={card.status === 'done' ? t.card.backToWork : t.card.markDone}
           className="list-action-button"
           type="button"
           onClick={() =>
@@ -107,7 +111,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
           <CheckCircle2 size={18} />
         </button>
         <button
-          aria-label="Редактировать карточку"
+          aria-label={t.card.edit}
           className="list-action-button"
           type="button"
           onClick={() => openEditEditor(card.id)}
@@ -115,7 +119,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
           <MoreHorizontal size={18} />
         </button>
         <button
-          aria-label="Удалить карточку"
+          aria-label={t.card.delete}
           className="list-action-button text-red-200 hover:border-red-300/50 hover:bg-red-500/10"
           type="button"
           onClick={handleDelete}
@@ -137,38 +141,41 @@ export function DesktopCardList({
   onRetry,
   viewKey,
 }: DesktopCardListProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
+
   return (
     <main className="relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b]/95 shadow-2xl">
       <div className="relative z-10 flex h-full flex-col">
         <header className="flex items-center justify-between border-b border-white/10 px-7 py-5">
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-[0.18em] text-[var(--accent)]">
-              {boardScope === 'personal' ? 'Личный список' : 'Список дедлайнов'}
+              {boardScope === 'personal' ? t.board.personalList : t.board.deadlineList}
             </p>
             <h2 className="text-2xl font-black text-white">
-              {boardScope === 'personal' ? 'Личный обзор' : 'Быстрый обзор'}
+              {boardScope === 'personal' ? t.board.personalOverview : t.board.quickOverview}
             </h2>
           </div>
           <button className="primary-button" type="button" onClick={onCreate}>
             <Plus size={18} />
-            Создать карточку
+            {t.common.createCard}
           </button>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {isLoading ? (
             <div className="mission-state-card rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-white/60">
-              Загружаем доску...
+              {t.board.loading}
             </div>
           ) : null}
 
           {!isLoading && error ? (
             <div className="mission-state-card mx-auto mt-28 max-w-md rounded-3xl border border-red-400/30 bg-red-500/10 p-6 text-center text-red-50 shadow-glow">
               <AlertTriangle className="mx-auto mb-3 text-red-300" />
-              <h2 className="mb-2 text-xl font-bold">Не удалось загрузить карточки</h2>
+              <h2 className="mb-2 text-xl font-bold">{t.board.failedCards}</h2>
               <p className="mb-5 text-sm leading-6 text-red-100/75">{error}</p>
               <button className="primary-button mx-auto" type="button" onClick={onRetry}>
-                Повторить
+                {t.common.retry}
               </button>
             </div>
           ) : null}
@@ -179,16 +186,16 @@ export function DesktopCardList({
                 <Plus size={26} />
               </div>
               <h2 className="mb-2 text-2xl font-black">
-                {boardScope === 'personal' ? 'Добавь первую личную задачу.' : 'Добавь первую карточку дедлайна.'}
+                {boardScope === 'personal' ? t.board.addFirstPersonal : t.board.addFirstCard}
               </h2>
               <p className="mb-5 text-sm leading-6 text-white/50">
                 {boardScope === 'personal'
-                  ? 'Здесь удобно держать личные планы отдельно от командной доски.'
-                  : 'В списке удобно быстро проверять ближайшие и просроченные задачи.'}
+                  ? t.board.personalListEmptyDescription
+                  : t.board.listEmptyDescription}
               </p>
               <button className="primary-button mx-auto" type="button" onClick={onCreate}>
                 <Plus size={18} />
-                Создать карточку
+                {t.common.createCard}
               </button>
             </div>
           ) : null}

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import { fetchActivityEvents, subscribeToActivityEvents } from './activity.api.ts'
 import type { ActivityEvent } from './activity.types.ts'
 
@@ -20,8 +21,11 @@ type ActivityState = {
 }
 
 const maxEvents = 40
+const ignoredActivityActions = new Set(['card_moved'])
 
 const getMessage = (error: unknown) => {
+  const t = getCurrentTranslation()
+
   if (error instanceof Error) {
     return error.message
   }
@@ -31,7 +35,7 @@ const getMessage = (error: unknown) => {
     const message = typeof record.message === 'string' ? record.message : null
 
     if (message?.includes("Could not find the table 'public.activity_events'")) {
-      return 'Таблица public.activity_events не найдена. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.'
+      return t.errors.activityMissingTable
     }
 
     if (message) {
@@ -39,7 +43,7 @@ const getMessage = (error: unknown) => {
     }
   }
 
-  return 'Не удалось загрузить журнал активности.'
+  return t.errors.activityGeneric
 }
 
 const upsertEvent = (events: ActivityEvent[], event: ActivityEvent) => {
@@ -76,7 +80,12 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
 
     try {
       const events = await fetchActivityEvents()
-      set({ error: null, events, hasLoaded: true, isLoading: false })
+      set({
+        error: null,
+        events: events.filter((event) => !ignoredActivityActions.has(event.action)),
+        hasLoaded: true,
+        isLoading: false,
+      })
     } catch (error) {
       set({ error: getMessage(error), hasLoaded: true, isLoading: false })
     }
@@ -85,6 +94,10 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
   open: () => set({ isOpen: true, unreadCount: 0 }),
   subscribeRealtime: () =>
     subscribeToActivityEvents(({ event }) => {
+      if (ignoredActivityActions.has(event.action)) {
+        return
+      }
+
       const shouldCount = !get().isOpen
 
       set((state) => ({

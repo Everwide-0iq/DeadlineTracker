@@ -1,6 +1,8 @@
 import { Activity, CheckCircle2, Clock3, GitBranch, PanelRightClose, Sparkles } from 'lucide-react'
 import { cn } from '../../lib/cn.ts'
 import type { BoardScope } from '../cards/card.types.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
 import { getActivitySentence, getActivityTone } from './activity.copy.ts'
 import { useActivityStore } from './activity.store.ts'
@@ -15,38 +17,41 @@ type ActivityPulseLogProps = {
 const actionIcon: Partial<Record<ActivityAction, typeof Activity>> = {
   card_completed: CheckCircle2,
   card_created: Sparkles,
-  card_moved: Activity,
   card_reopened: Clock3,
   link_created: GitBranch,
 }
 
-function formatActivityTime(value: string) {
+function formatActivityTime(value: string, language: 'en' | 'ru') {
   const createdAt = new Date(value).getTime()
 
   if (Number.isNaN(createdAt)) {
-    return 'сейчас'
+    return language === 'ru' ? 'сейчас' : 'now'
   }
 
   const diffMinutes = Math.max(0, Math.floor((Date.now() - createdAt) / 60_000))
 
   if (diffMinutes < 1) {
-    return 'только что'
+    return language === 'ru' ? 'только что' : 'just now'
   }
 
   if (diffMinutes < 60) {
-    return `${diffMinutes} мин`
+    return language === 'ru' ? `${diffMinutes} мин` : `${diffMinutes}m`
   }
 
   const diffHours = Math.floor(diffMinutes / 60)
 
   if (diffHours < 24) {
-    return `${diffHours} ч`
+    return language === 'ru' ? `${diffHours} ч` : `${diffHours}h`
   }
 
-  return `${Math.floor(diffHours / 24)} д`
+  return language === 'ru' ? `${Math.floor(diffHours / 24)} д` : `${Math.floor(diffHours / 24)}d`
 }
 
 function isVisibleActivity(event: ActivityEvent, boardScope: BoardScope, activeProjectId: string) {
+  if (event.action === 'card_moved') {
+    return false
+  }
+
   if (boardScope === 'personal') {
     return event.boardScope === 'personal'
   }
@@ -55,6 +60,8 @@ function isVisibleActivity(event: ActivityEvent, boardScope: BoardScope, activeP
 }
 
 export function ActivityPulseLog({ activeProjectId, boardScope, userId }: ActivityPulseLogProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const close = useActivityStore((state) => state.close)
   const error = useActivityStore((state) => state.error)
   const events = useActivityStore((state) => state.events)
@@ -75,7 +82,7 @@ export function ActivityPulseLog({ activeProjectId, boardScope, userId }: Activi
         onClick={toggle}
       >
         <Activity size={18} />
-        <span>Журнал</span>
+        <span>{t.activity.journal}</span>
         {unreadCount > 0 ? <strong>{unreadCount}</strong> : null}
       </button>
 
@@ -86,17 +93,17 @@ export function ActivityPulseLog({ activeProjectId, boardScope, userId }: Activi
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--accent)]">
                 Pulse Log
               </p>
-              <h2 className="mt-1 text-lg font-black text-white">Активность</h2>
+              <h2 className="mt-1 text-lg font-black text-white">{t.activity.title}</h2>
             </div>
-            <button aria-label="Закрыть журнал" className="icon-button h-9 w-9" type="button" onClick={close}>
+            <button aria-label={t.common.close} className="icon-button h-9 w-9" type="button" onClick={close}>
               <PanelRightClose size={17} />
             </button>
           </div>
 
-          {isLoading ? <p className="activity-log-muted">Синхронизируем события...</p> : null}
+          {isLoading ? <p className="activity-log-muted">{t.activity.loading}</p> : null}
           {!isLoading && error ? <p className="activity-log-muted text-red-100/75">{error}</p> : null}
           {!isLoading && !error && visibleEvents.length === 0 ? (
-            <p className="activity-log-muted">Здесь появятся последние действия команды.</p>
+            <p className="activity-log-muted">{t.activity.empty}</p>
           ) : null}
 
           <div className="space-y-2">
@@ -110,8 +117,8 @@ export function ActivityPulseLog({ activeProjectId, boardScope, userId }: Activi
                     <Icon size={15} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <strong>{getActivitySentence(event, userId)}</strong>
-                    <small>{formatActivityTime(event.createdAt)}</small>
+                    <strong>{getActivitySentence(event, userId, language)}</strong>
+                    <small>{formatActivityTime(event.createdAt, language)}</small>
                   </span>
                 </article>
               )

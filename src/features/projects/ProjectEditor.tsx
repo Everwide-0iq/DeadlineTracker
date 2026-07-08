@@ -1,6 +1,8 @@
 import { FolderPlus, Save, X } from 'lucide-react'
 import { useState, type CSSProperties, type FormEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import type { Project } from './project.types.ts'
 
 type ProjectEditorProps = {
@@ -25,6 +27,8 @@ const projectColors = [
 const colorPattern = /^#[0-9a-fA-F]{6}$/
 
 export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const [color, setColor] = useState(projectColors[0])
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -49,12 +53,12 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
     const trimmedName = name.trim()
 
     if (!trimmedName) {
-      setError('Название проекта обязательно.')
+      setError(t.project.nameRequired)
       return
     }
 
     if (!colorPattern.test(color)) {
-      setError('Выбери корректный цвет проекта.')
+      setError(t.project.validColor)
       return
     }
 
@@ -64,7 +68,7 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
       await onCreate({ color, name: trimmedName })
       resetAndClose()
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Не удалось создать проект.')
+      setError(caughtError instanceof Error ? caughtError.message : t.project.createError)
       setIsSaving(false)
     }
   }
@@ -76,23 +80,23 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
               <FolderPlus size={17} />
-              Новый проект
+              {t.project.new}
             </div>
-            <h2 className="text-2xl font-black text-white">Пространство задач</h2>
-            <p className="mt-1 text-sm text-white/40">Командный проект будет виден всем участникам.</p>
+            <h2 className="text-2xl font-black text-white">{t.project.projectSpace}</h2>
+            <p className="mt-1 text-sm text-white/40">{t.project.teamVisible}</p>
           </div>
-          <button aria-label="Закрыть редактор проекта" className="icon-button" type="button" onClick={resetAndClose}>
+          <button aria-label={t.project.closeEditor} className="icon-button" type="button" onClick={resetAndClose}>
             <X size={19} />
           </button>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
           <label className="form-field">
-            <span>Название проекта</span>
+            <span>{t.project.name}</span>
             <input
               autoFocus
               maxLength={64}
-              placeholder="Новая игра"
+              placeholder={t.project.namePlaceholder}
               type="text"
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -100,11 +104,11 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
           </label>
 
           <div>
-            <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-white/[0.42]">Цвет</div>
+            <div className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-white/[0.42]">{t.project.color}</div>
             <div className="grid grid-cols-4 gap-2">
               {projectColors.map((projectColor) => (
                 <button
-                  aria-label={`Выбрать цвет ${projectColor}`}
+                  aria-label={t.project.selectColor(projectColor)}
                   className={cn(
                     'project-color-swatch',
                     color === projectColor && 'project-color-swatch-active',
@@ -129,8 +133,8 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
                 <span className="h-4 w-4 rounded-full bg-[var(--project-color)] shadow-[0_0_20px_var(--project-color)]" />
               </span>
               <div className="min-w-0">
-                <div className="truncate text-lg font-black text-white">{name.trim() || 'Новая игра'}</div>
-                <div className="text-sm text-white/40">Командный проект</div>
+                <div className="truncate text-lg font-black text-white">{name.trim() || t.project.previewFallback}</div>
+                <div className="text-sm text-white/40">{t.project.teamProject}</div>
               </div>
             </div>
           </div>
@@ -143,11 +147,11 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
 
           <div className="flex justify-end gap-3 pt-1">
             <button className="secondary-button" disabled={isSaving} type="button" onClick={resetAndClose}>
-              Отмена
+              {t.common.cancel}
             </button>
             <button className="primary-button" disabled={isSaving} type="submit">
               <Save size={17} />
-              {isSaving ? 'Создаём...' : 'Создать'}
+              {isSaving ? t.project.creating : t.project.createAction}
             </button>
           </div>
         </form>

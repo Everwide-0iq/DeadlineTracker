@@ -1,5 +1,6 @@
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { requireSupabase } from '../../lib/supabase.ts'
+import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import { defaultProjectId, type CreateProjectInput, type Project, type ProjectRow } from './project.types.ts'
 
 export type ProjectRealtimeEvent =
@@ -87,7 +88,7 @@ export async function updateProjectOrders(projects: Project[]) {
 
 export async function deleteProject(id: string) {
   if (id === defaultProjectId) {
-    throw new Error('Проект "Общее" нельзя удалить.')
+    throw new Error(getCurrentTranslation().errors.generalProjectDeleteForbidden)
   }
 
   const { error } = await requireSupabase().from('projects').delete().eq('id', id)

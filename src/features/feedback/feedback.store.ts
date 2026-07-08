@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 
 export type FeedbackTone = 'danger' | 'info' | 'success'
 
@@ -55,8 +56,8 @@ export const useFeedbackStore = create<FeedbackState>((set, get) => ({
 
       set({
         confirmRequest: {
-          cancelLabel: input.cancelLabel ?? 'Отмена',
-          confirmLabel: input.confirmLabel ?? 'Подтвердить',
+          cancelLabel: input.cancelLabel ?? getCurrentTranslation().common.cancel,
+          confirmLabel: input.confirmLabel ?? getCurrentTranslation().common.confirm,
           description: input.description,
           id: createId('confirm'),
           resolve,

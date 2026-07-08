@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { DragGuide } from '../board/dragGuide.types.ts'
+import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createCard as createCardApi,
   deleteCard as deleteCardApi,
@@ -53,6 +54,8 @@ type CardState = {
 }
 
 const getMessage = (error: unknown) => {
+  const t = getCurrentTranslation()
+
   if (error instanceof Error) {
     return error.message
   }
@@ -63,15 +66,15 @@ const getMessage = (error: unknown) => {
     const message = typeof record.message === 'string' ? record.message : null
 
     if (code === 'PGRST205' || message?.includes("Could not find the table 'public.cards'")) {
-      return 'Таблица public.cards не найдена. Открой Supabase SQL Editor и выполни миграцию supabase/migrations/0001_initial_schema.sql.'
+      return t.errors.cardsMissingTable
     }
 
     if (message?.includes("Could not find the 'board_scope' column")) {
-      return 'В таблице public.cards не найден столбец board_scope. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.'
+      return t.errors.cardsMissingScope
     }
 
     if (message?.includes("Could not find the 'project_id' column")) {
-      return 'В таблице public.cards не найден столбец project_id. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.'
+      return t.errors.cardsMissingProject
     }
 
     if (message) {
@@ -79,7 +82,7 @@ const getMessage = (error: unknown) => {
     }
   }
 
-  return 'Не удалось выполнить операцию с карточками.'
+  return t.errors.cardsGeneric
 }
 
 const upsertCard = (cards: Card[], card: Card) => {

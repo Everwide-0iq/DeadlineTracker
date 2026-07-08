@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createCardLink as createCardLinkApi,
   deleteCardLink as deleteCardLinkApi,
@@ -23,6 +24,8 @@ type CardLinkState = {
 }
 
 const getMessage = (error: unknown) => {
+  const t = getCurrentTranslation()
+
   if (error instanceof Error) {
     return error.message
   }
@@ -33,7 +36,7 @@ const getMessage = (error: unknown) => {
     const message = typeof record.message === 'string' ? record.message : null
 
     if (code === 'PGRST205' || message?.includes("Could not find the table 'public.card_links'")) {
-      return 'Таблица public.card_links не найдена. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.'
+      return t.errors.linksMissingTable
     }
 
     if (message) {
@@ -41,7 +44,7 @@ const getMessage = (error: unknown) => {
     }
   }
 
-  return 'Не удалось выполнить операцию со связями карточек.'
+  return t.errors.linksGeneric
 }
 
 const upsertLink = (links: CardLink[], link: CardLink) => {

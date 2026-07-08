@@ -1,7 +1,10 @@
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FolderKanban, Plus, Trash2 } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { defaultProjectId, type Project, type ProjectDeadlineSummary, type ProjectMoveDirection } from './project.types.ts'
+import { getProjectDisplayName } from './project.utils.ts'
 
 type ProjectListProps = {
   activeProjectId: string
@@ -34,14 +37,16 @@ export function ProjectList({
   projects,
   variant,
 }: ProjectListProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const movableProjects = projects.filter((project) => project.id !== defaultProjectId)
 
   if (variant === 'mobile') {
     return (
       <section className="mb-3">
         <div className="mb-2 flex items-center justify-between px-1">
-          <span className="text-xs font-black uppercase tracking-[0.18em] text-white/35">Проекты</span>
-          <button aria-label="Создать проект" className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}>
+          <span className="text-xs font-black uppercase tracking-[0.18em] text-white/35">{t.project.projects}</span>
+          <button aria-label={t.project.create} className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}>
             <Plus size={17} />
           </button>
         </div>
@@ -53,6 +58,7 @@ export function ProjectList({
             const movableIndex = movableProjects.findIndex((item) => item.id === project.id)
             const canMoveUp = movableIndex > 0
             const canMoveDown = movableIndex !== -1 && movableIndex < movableProjects.length - 1
+            const displayName = getProjectDisplayName(project, t) ?? project.name
 
             return (
               <div
@@ -62,7 +68,7 @@ export function ProjectList({
               >
                 <button className="flex min-w-0 items-center gap-2 px-3 py-2.5" type="button" onClick={() => onSelect(project.id)}>
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--project-color)] shadow-[0_0_12px_var(--project-color)]" />
-                  <span className="max-w-32 truncate">{project.name}</span>
+                  <span className="max-w-32 truncate">{displayName}</span>
                   <span
                     className={cn('rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/55', deadline && 'text-[var(--deadline-color)]')}
                     style={deadline ? ({ '--deadline-color': deadline.color } as ProjectStyle) : undefined}
@@ -73,7 +79,7 @@ export function ProjectList({
                 {isActive && canDelete ? (
                   <div className="mr-1 flex shrink-0 items-center gap-1">
                     <button
-                      aria-label={`Поднять проект ${project.name}`}
+                      aria-label={t.project.moveUp(displayName)}
                       className="project-order-button h-8 w-8 rounded-full"
                       disabled={!canMoveUp}
                       type="button"
@@ -82,7 +88,7 @@ export function ProjectList({
                       <ChevronLeft size={15} />
                     </button>
                     <button
-                      aria-label={`Опустить проект ${project.name}`}
+                      aria-label={t.project.moveDown(displayName)}
                       className="project-order-button h-8 w-8 rounded-full"
                       disabled={!canMoveDown}
                       type="button"
@@ -91,7 +97,7 @@ export function ProjectList({
                       <ChevronRight size={15} />
                     </button>
                     <button
-                      aria-label={`Удалить проект ${project.name}`}
+                      aria-label={t.project.delete(displayName)}
                       className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-white/45 transition hover:bg-red-500/15 hover:text-red-100"
                       type="button"
                       onClick={() => onDelete(project)}
@@ -113,9 +119,9 @@ export function ProjectList({
       <div className="mb-3 flex items-center justify-between px-2">
         <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/35">
           <FolderKanban size={15} />
-          Проекты
+          {t.project.projects}
         </div>
-        <button aria-label="Создать проект" className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}>
+        <button aria-label={t.project.create} className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}>
           <Plus size={17} />
         </button>
       </div>
@@ -128,6 +134,7 @@ export function ProjectList({
           const movableIndex = movableProjects.findIndex((item) => item.id === project.id)
           const canMoveUp = movableIndex > 0
           const canMoveDown = movableIndex !== -1 && movableIndex < movableProjects.length - 1
+          const displayName = getProjectDisplayName(project, t) ?? project.name
 
           return (
             <div
@@ -148,7 +155,7 @@ export function ProjectList({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="mb-1 flex min-w-0 items-center justify-between gap-2">
-                    <span className="truncate text-sm font-black text-white">{project.name}</span>
+                    <span className="truncate text-sm font-black text-white">{displayName}</span>
                     {deadline ? (
                       <span
                         className="project-deadline-pill shrink-0"
@@ -166,7 +173,7 @@ export function ProjectList({
                         <span className="truncate">{deadline.title}</span>
                       </>
                     ) : (
-                      <span>{counts[project.id] ?? 0} карточек</span>
+                      <span>{t.project.cardsCount(counts[project.id] ?? 0)}</span>
                     )}
                   </span>
                 </span>
@@ -175,20 +182,20 @@ export function ProjectList({
                 <div className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5 opacity-0 transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
                   <div className="flex flex-col gap-1">
                     <button
-                      aria-label={`Поднять проект ${project.name}`}
+                      aria-label={t.project.moveUp(displayName)}
                       className="project-order-button"
                       disabled={!canMoveUp}
-                      title="Поднять"
+                      title={t.project.moveUp(displayName)}
                       type="button"
                       onClick={() => onMove(project, 'up')}
                     >
                       <ChevronUp size={13} />
                     </button>
                     <button
-                      aria-label={`Опустить проект ${project.name}`}
+                      aria-label={t.project.moveDown(displayName)}
                       className="project-order-button"
                       disabled={!canMoveDown}
-                      title="Опустить"
+                      title={t.project.moveDown(displayName)}
                       type="button"
                       onClick={() => onMove(project, 'down')}
                     >
@@ -196,7 +203,7 @@ export function ProjectList({
                     </button>
                   </div>
                   <button
-                    aria-label={`Удалить проект ${project.name}`}
+                    aria-label={t.project.delete(displayName)}
                     className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/35 text-white/38 backdrop-blur-md transition hover:border-red-300/25 hover:bg-red-500/15 hover:text-red-100"
                     type="button"
                     onClick={() => onDelete(project)}

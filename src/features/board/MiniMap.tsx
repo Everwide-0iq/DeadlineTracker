@@ -2,6 +2,8 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import type { Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import type { BoardCamera } from './useBoardCamera.ts'
 
 type ViewportSize = {
@@ -87,6 +89,8 @@ function getMiniMapGeometry(cards: Card[], camera: BoardCamera, viewportSize: Vi
 }
 
 export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMapProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const geometry = getMiniMapGeometry(cards, camera, viewportSize)
 
   const toMapX = (worldX: number) => geometry.offsetX + (worldX - geometry.bounds.minX) * geometry.scale
@@ -148,7 +152,7 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
   return (
     <div className="pointer-events-auto absolute right-6 top-6 z-20 hidden rounded-2xl border border-white/10 bg-black/35 p-3 shadow-2xl backdrop-blur-xl xl:block">
       <div
-        aria-label="Миникарта доски"
+        aria-label={t.board.minimap}
         className="relative cursor-crosshair overflow-hidden rounded-xl border border-white/[0.08] bg-[#05080d]"
         onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
@@ -157,7 +161,7 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
         tabIndex={0}
       >
         {cards.map((card) => {
-          const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
+          const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
           const renderSize = getCardRenderSize(card)
           const left = toMapX(card.x)
           const top = toMapY(card.y)

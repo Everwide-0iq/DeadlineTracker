@@ -1,6 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js'
 import { create } from 'zustand'
 import { supabase } from '../../lib/supabase.ts'
+import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import { signInWithPassword, signOut } from './auth.api.ts'
 
 type AuthCleanup = () => void
@@ -18,9 +19,11 @@ type AuthState = {
 }
 
 const getMessage = (error: unknown) => {
+  const t = getCurrentTranslation()
+
   if (error instanceof Error) {
     if (error.message === 'Invalid login credentials') {
-      return 'Неверный email или пароль.'
+      return t.errors.authInvalid
     }
 
     return error.message
@@ -31,14 +34,14 @@ const getMessage = (error: unknown) => {
 
     if (typeof message === 'string') {
       if (message === 'Invalid login credentials') {
-        return 'Неверный email или пароль.'
+        return t.errors.authInvalid
       }
 
       return message
     }
   }
 
-  return 'Неожиданная ошибка авторизации.'
+  return t.errors.authUnexpected
 }
 
 export const useAuthStore = create<AuthState>((set) => ({

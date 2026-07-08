@@ -2,6 +2,8 @@ import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn.ts'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { useFeedbackStore, type FeedbackTone } from './feedback.store.ts'
 
 const toneIcon: Record<FeedbackTone, typeof Info> = {
@@ -11,6 +13,8 @@ const toneIcon: Record<FeedbackTone, typeof Info> = {
 }
 
 export function FeedbackCenter() {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
   const confirmRequest = useFeedbackStore((state) => state.confirmRequest)
   const dismissToast = useFeedbackStore((state) => state.dismissToast)
   const resolveConfirm = useFeedbackStore((state) => state.resolveConfirm)
@@ -46,7 +50,7 @@ export function FeedbackCenter() {
                 <h3>{toast.title}</h3>
                 {toast.description ? <p>{toast.description}</p> : null}
               </div>
-              <button aria-label="Закрыть уведомление" type="button" onClick={() => dismissToast(toast.id)}>
+              <button aria-label={t.feedback.closeToast} type="button" onClick={() => dismissToast(toast.id)}>
                 <X size={15} />
               </button>
               <span className="feedback-toast-progress" />
@@ -71,7 +75,7 @@ export function FeedbackCenter() {
               })()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="feedback-confirm-kicker">Подтверждение</p>
+              <p className="feedback-confirm-kicker">{t.feedback.confirmation}</p>
               <h2>{confirmRequest.title}</h2>
               {confirmRequest.description ? (
                 <p id={`${confirmRequest.id}-description`}>{confirmRequest.description}</p>

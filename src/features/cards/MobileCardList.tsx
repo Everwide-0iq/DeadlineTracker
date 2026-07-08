@@ -2,6 +2,9 @@ import { CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2,
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
+import { LanguageToggle } from '../i18n/LanguageToggle.tsx'
+import { useI18nStore } from '../i18n/i18n.store.ts'
+import { translations } from '../i18n/translations.ts'
 import { useCardStore } from './card.store.ts'
 import type { BoardFilter, BoardScope, Card, FilterCounts } from './card.types.ts'
 import { boardFilters } from './card.utils.ts'
@@ -46,8 +49,10 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const updateCard = useCardStore((state) => state.updateCard)
   const confirm = useFeedbackStore((state) => state.confirm)
-  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now)
-  const countdown = formatCountdown(card.deadlineAt, card.status, now)
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
+  const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
+  const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const isCompleting = useCompletionAnimation(card.status === 'done')
   const style: CardStyle = {
     '--deadline-bg': visual.backgroundColor,
@@ -58,9 +63,9 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
 
   const handleDelete = async () => {
     const confirmed = await confirm({
-      confirmLabel: 'Удалить',
-      description: `Карточка "${card.title}" исчезнет с текущей доски.`,
-      title: 'Удалить карточку?',
+      confirmLabel: t.card.delete,
+      description: t.card.deleteDescription(card.title),
+      title: t.card.deleteTitle,
       tone: 'danger',
     })
 
@@ -86,7 +91,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
             {card.status === 'done' ? <CheckCircle2 size={19} /> : <Flame size={19} />}
           </div>
           <button
-            aria-label="Редактировать карточку"
+            aria-label={t.card.edit}
             className="icon-button h-10 w-10"
             type="button"
             onClick={() => openEditEditor(card.id)}
@@ -125,11 +130,11 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
             onClick={() => updateCard(card.id, { status: card.status === 'done' ? 'todo' : 'done' }).catch(() => undefined)}
           >
             <CheckCircle2 size={17} />
-            {card.status === 'done' ? 'В работу' : 'Готово'}
+            {card.status === 'done' ? t.card.statusTodo : t.card.done}
           </button>
           <button className="secondary-button justify-center text-red-100" type="button" onClick={handleDelete}>
             <Trash2 size={17} />
-            Удалить
+            {t.card.delete}
           </button>
         </div>
       </div>
@@ -159,6 +164,9 @@ export function MobileCardList({
   onLogout,
   onRetry,
 }: MobileCardListProps) {
+  const language = useI18nStore((state) => state.language)
+  const t = translations[language]
+
   return (
     <main className="app-shell min-h-screen bg-[var(--background)] px-4 pb-44 pt-4 text-white">
       <header className="sticky top-0 z-20 -mx-4 mb-4 border-b border-white/10 bg-[var(--background)]/90 px-4 pb-4 pt-2 backdrop-blur-xl">
@@ -170,13 +178,16 @@ export function MobileCardList({
             <div>
               <h1 className="text-2xl font-black">Fireboard</h1>
               <p className="text-xs text-white/40">
-                {boardScope === 'personal' ? 'Личных задач' : 'Карточек'}: {counts.all}
+                {boardScope === 'personal' ? t.mobile.personalCards : t.mobile.cards}: {counts.all}
               </p>
             </div>
           </div>
-          <button aria-label="Выйти" className="icon-button h-11 w-11" type="button" onClick={onLogout}>
-            <LogOut size={19} />
-          </button>
+          <div className="flex items-center gap-2">
+            <LanguageToggle className="h-11 px-2" />
+            <button aria-label={t.sidebar.logout} className="icon-button h-11 w-11" type="button" onClick={onLogout}>
+              <LogOut size={19} />
+            </button>
+          </div>
         </div>
 
         <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
@@ -186,7 +197,7 @@ export function MobileCardList({
             onClick={() => onBoardScopeChange('shared')}
           >
             <UsersRound size={17} />
-            Команда
+            {t.sidebar.team}
           </button>
           <button
             className={cn('view-toggle-button', boardScope === 'personal' && 'view-toggle-button-active')}
@@ -194,7 +205,7 @@ export function MobileCardList({
             onClick={() => onBoardScopeChange('personal')}
           >
             <LockKeyhole size={17} />
-            Личное
+            {t.sidebar.personal}
           </button>
         </div>
 
@@ -220,7 +231,7 @@ export function MobileCardList({
               type="button"
               onClick={() => onFilterChange(item.id)}
             >
-              {item.label}
+              {t.filters[item.id]}
               <span>{counts[item.id]}</span>
             </button>
           ))}
@@ -229,16 +240,16 @@ export function MobileCardList({
 
       {isLoading ? (
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-white/60">
-          Загружаем доску...
+          {t.board.loading}
         </div>
       ) : null}
 
       {!isLoading && error ? (
         <div className="rounded-3xl border border-red-400/25 bg-red-500/10 p-5 text-red-50">
-          <h2 className="mb-2 text-xl font-bold">Не удалось загрузить карточки</h2>
+          <h2 className="mb-2 text-xl font-bold">{t.board.failedCards}</h2>
           <p className="mb-4 text-sm leading-6 text-red-100/75">{error}</p>
           <button className="primary-button" type="button" onClick={onRetry}>
-            Повторить
+            {t.common.retry}
           </button>
         </div>
       ) : null}
@@ -246,16 +257,16 @@ export function MobileCardList({
       {!isLoading && !error && cards.length === 0 ? (
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center">
           <h2 className="mb-2 text-2xl font-black">
-            {boardScope === 'personal' ? 'Добавь первую личную задачу.' : 'Добавь первую карточку дедлайна.'}
+            {boardScope === 'personal' ? t.board.addFirstPersonal : t.board.addFirstCard}
           </h2>
           <p className="mb-5 text-sm leading-6 text-white/50">
             {boardScope === 'personal'
-              ? 'Личные дела останутся отдельно от командной доски.'
-              : 'Создай общий дедлайн, и он синхронизируется на доске.'}
+              ? t.mobile.emptyPersonalDescription
+              : t.mobile.emptySharedDescription}
           </p>
           <button className="primary-button mx-auto" type="button" onClick={onCreate}>
             <Plus size={18} />
-            Создать карточку
+            {t.common.createCard}
           </button>
         </div>
       ) : null}
@@ -268,7 +279,7 @@ export function MobileCardList({
 
       {!isLoading && !error && cards.length > 0 ? (
         <button
-          aria-label={boardScope === 'personal' ? 'Создать личную задачу' : 'Создать карточку'}
+          aria-label={boardScope === 'personal' ? t.mobile.newTask : t.mobile.newCard}
           className="mobile-create-button fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2.5 rounded-full px-4 py-3 text-sm font-black text-white"
           type="button"
           onClick={onCreate}
@@ -276,7 +287,7 @@ export function MobileCardList({
           <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--accent)] shadow-[0_0_18px_rgb(255_255_255_/_0.16)]">
             <Plus size={21} strokeWidth={3} />
           </span>
-          <span className="whitespace-nowrap">{boardScope === 'personal' ? 'Новая задача' : 'Новая карточка'}</span>
+          <span className="whitespace-nowrap">{boardScope === 'personal' ? t.mobile.newTask : t.mobile.newCard}</span>
         </button>
       ) : null}
     </main>

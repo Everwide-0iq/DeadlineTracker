@@ -1,4 +1,6 @@
 import type { CardStatus } from './card.types.ts'
+import type { Language } from '../i18n/i18n.types.ts'
+import { translations } from '../i18n/translations.ts'
 
 export type DeadlineZone = 'done' | 'overdue' | 'critical' | 'soon' | 'important' | 'calm'
 
@@ -52,7 +54,10 @@ export function getDeadlineVisualState(
   deadlineAt: string | Date,
   status: CardStatus,
   now = Date.now(),
+  language: Language = 'ru',
 ): DeadlineVisualState {
+  const labels = translations[language].deadline.label
+
   if (status === 'done') {
     return {
       zone: 'done',
@@ -63,7 +68,7 @@ export function getDeadlineVisualState(
       textColor: 'hsl(220 12% 70%)',
       glowColor: 'hsl(220 10% 45% / 0.16)',
       progress: 0,
-      label: 'Готово',
+      label: labels.done,
       shouldPulse: false,
     }
   }
@@ -72,28 +77,28 @@ export function getDeadlineVisualState(
   const daysLeft = (deadlineTime - now) / dayMs
 
   if (Number.isNaN(daysLeft)) {
-    return colorSet(0, 0.5, 'overdue', 'Неверная дата')
+    return colorSet(0, 0.5, 'overdue', labels.invalid)
   }
 
   if (daysLeft < 0) {
     const overdueHeat = clamp(0.82 + Math.abs(daysLeft) / 10, 0.82, 1)
-    return { ...colorSet(0, overdueHeat, 'overdue', 'Просрочено'), daysLeft }
+    return { ...colorSet(0, overdueHeat, 'overdue', labels.overdue), daysLeft }
   }
 
   const heat = 1 - clamp(daysLeft / 14, 0, 1)
   const hue = daysLeft <= 7 ? lerp(3, 55, clamp(daysLeft / 7, 0, 1)) : lerp(72, 126, clamp((daysLeft - 7) / 14, 0, 1))
 
   if (daysLeft <= 2) {
-    return { ...colorSet(hue, Math.max(heat, 0.78), 'critical', 'Срочно'), daysLeft }
+    return { ...colorSet(hue, Math.max(heat, 0.78), 'critical', labels.critical), daysLeft }
   }
 
   if (daysLeft <= 4) {
-    return { ...colorSet(hue, Math.max(heat, 0.62), 'soon', 'Скоро'), daysLeft }
+    return { ...colorSet(hue, Math.max(heat, 0.62), 'soon', labels.soon), daysLeft }
   }
 
   if (daysLeft <= 7) {
-    return { ...colorSet(hue, Math.max(heat, 0.48), 'important', 'Важно'), daysLeft }
+    return { ...colorSet(hue, Math.max(heat, 0.48), 'important', labels.important), daysLeft }
   }
 
-  return { ...colorSet(hue, Math.max(heat, 0.24), 'calm', 'Спокойно'), daysLeft }
+  return { ...colorSet(hue, Math.max(heat, 0.24), 'calm', labels.calm), daysLeft }
 }

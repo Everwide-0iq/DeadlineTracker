@@ -1,12 +1,12 @@
 import { isThisWeek, isToday } from 'date-fns'
 import type { BoardFilter, Card, FilterCounts } from './card.types.ts'
 
-export const boardFilters: Array<{ id: BoardFilter; label: string }> = [
-  { id: 'all', label: 'Все' },
-  { id: 'today', label: 'Сегодня' },
-  { id: 'week', label: 'Эта неделя' },
-  { id: 'overdue', label: 'Просрочено' },
-  { id: 'done', label: 'Готово' },
+export const boardFilters: Array<{ id: BoardFilter }> = [
+  { id: 'all' },
+  { id: 'today' },
+  { id: 'week' },
+  { id: 'overdue' },
+  { id: 'done' },
 ]
 
 export const defaultCardSize = {
