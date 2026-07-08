@@ -1035,14 +1035,21 @@ button {
 }
 
 .board-text-preview {
-  min-height: 230px;
-  max-height: min(420px, 52vh);
+  display: flex;
+  height: clamp(230px, 38vh, 320px);
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
   overflow: hidden;
 }
 
 .board-text-preview-content {
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  width: 100%;
   max-width: 100%;
-  max-height: calc(min(420px, 52vh) - 56px);
   overflow-x: hidden;
   overflow-y: auto;
   overflow-wrap: anywhere;

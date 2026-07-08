@@ -98,7 +98,7 @@ export function BoardTextEditor() {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-5 text-white backdrop-blur-md">
       <form
-        className="board-text-editor w-full max-w-3xl rounded-[28px] border border-white/10 bg-[#06070c]/95 p-5 shadow-2xl"
+        className="board-text-editor w-[min(48rem,calc(100vw-2.5rem))] max-w-none rounded-[28px] border border-white/10 bg-[#06070c]/95 p-5 shadow-2xl"
         onSubmit={handleSubmit}
       >
         <header className="mb-4 flex items-start justify-between gap-4">
@@ -114,8 +114,8 @@ export function BoardTextEditor() {
           </button>
         </header>
 
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-4">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <div className="min-w-0 space-y-4">
             <label className="form-field">
               <span>{t.boardText.content}</span>
               <textarea
@@ -172,7 +172,7 @@ export function BoardTextEditor() {
             </section>
           </div>
 
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
               <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-white/42">
                 <Palette size={15} />
