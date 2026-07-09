@@ -10,6 +10,7 @@ import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import { useCardStore } from './card.store.ts'
+import { CardImageView } from './CardImageView.tsx'
 import type { Card } from './card.types.ts'
 import { getCardRenderSize } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
@@ -247,6 +248,16 @@ function DeadlineCardComponent({
           <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-6 text-white/55">
             {card.description}
           </p>
+        ) : null}
+
+        {card.imagePath ? (
+          <CardImageView
+            alt={t.cardImage.previewAlt(card.title)}
+            className="deadline-card-image mb-4"
+            height={card.imageHeight}
+            path={card.imagePath}
+            width={card.imageWidth}
+          />
         ) : null}
 
         <div className="mb-4 flex items-center gap-3 text-[var(--deadline-text)]">

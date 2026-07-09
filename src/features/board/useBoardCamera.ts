@@ -8,8 +8,8 @@ export type BoardCamera = {
 }
 
 const storageKey = 'fireboard.camera.v1'
-const minZoom = 0.45
-const maxZoom = 1.6
+const minZoom = 0.1
+const maxZoom = 2
 
 const defaultCamera: BoardCamera = {
   x: 120,

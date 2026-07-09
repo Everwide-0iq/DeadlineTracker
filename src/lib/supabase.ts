@@ -14,6 +14,10 @@ export type Database = {
           id: string
           title: string
           description: string | null
+          image_height: number | null
+          image_path: string | null
+          image_size: number | null
+          image_width: number | null
           deadline_at: string
           status: CardStatus
           board_scope: BoardScope
@@ -30,6 +34,10 @@ export type Database = {
           id?: string
           title: string
           description?: string | null
+          image_height?: number | null
+          image_path?: string | null
+          image_size?: number | null
+          image_width?: number | null
           deadline_at: string
           board_scope?: BoardScope
           project_id?: string | null
@@ -45,6 +53,10 @@ export type Database = {
         Update: {
           title?: string
           description?: string | null
+          image_height?: number | null
+          image_path?: string | null
+          image_size?: number | null
+          image_width?: number | null
           deadline_at?: string
           board_scope?: BoardScope
           project_id?: string | null

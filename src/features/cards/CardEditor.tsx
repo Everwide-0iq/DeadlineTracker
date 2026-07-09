@@ -1,5 +1,13 @@
-import { CalendarClock, CheckCircle2, Save, Trash2, X } from 'lucide-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { CalendarClock, CheckCircle2, ImagePlus, Loader2, Save, Trash2, UploadCloud, X } from 'lucide-react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -9,6 +17,15 @@ import { useProjectStore } from '../projects/project.store.ts'
 import { getProjectDisplayName } from '../projects/project.utils.ts'
 import { useCardStore } from './card.store.ts'
 import type { CardStatus } from './card.types.ts'
+import { CardImageView } from './CardImageView.tsx'
+import {
+  prepareCardImage,
+  removeCardImage,
+  revokePreparedCardImage,
+  uploadCardImage,
+  type CardImageMetadata,
+  type PreparedCardImage,
+} from './cardImage.api.ts'
 import { DeadlinePicker } from './DeadlinePicker.tsx'
 import {
   defaultCardSize,
@@ -45,9 +62,14 @@ export function CardEditor() {
   const [description, setDescription] = useState('')
   const [dirty, setDirty] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [imageError, setImageError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isPreparingImage, setIsPreparingImage] = useState(false)
+  const [pendingImage, setPendingImage] = useState<PreparedCardImage | null>(null)
+  const [removeExistingImage, setRemoveExistingImage] = useState(false)
   const [status, setStatus] = useState<CardStatus>('todo')
   const [title, setTitle] = useState('')
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!editor) {
@@ -56,7 +78,10 @@ export function CardEditor() {
 
     clearSaveError()
     setFormError(null)
+    setImageError(null)
     setDirty(false)
+    setPendingImage(null)
+    setRemoveExistingImage(false)
 
     if (editor.mode === 'edit' && card) {
       setTitle(card.title)
@@ -72,6 +97,8 @@ export function CardEditor() {
     setStatus('todo')
   }, [card, clearSaveError, editor])
 
+  useEffect(() => () => revokePreparedCardImage(pendingImage), [pendingImage])
+
   if (!editor) {
     return null
   }
@@ -83,6 +110,8 @@ export function CardEditor() {
   const isEditing = editor.mode === 'edit'
   const editorScope =
     isEditing && card ? card.boardScope : editor.mode === 'create' ? editor.boardScope : 'shared'
+  const existingImagePath = card?.imagePath ?? null
+  const visibleImagePath = pendingImage || removeExistingImage ? null : existingImagePath
 
   const markDirty = () => {
     if (!dirty) {
@@ -105,6 +134,74 @@ export function CardEditor() {
     }
 
     closeEditor()
+  }
+
+  const getImageErrorMessage = (error: unknown) => {
+    if (error instanceof Error) {
+      if (error.message === 'unsupported') {
+        return t.cardImage.unsupported
+      }
+
+      if (error.message === 'source-too-large') {
+        return t.cardImage.sourceTooLarge
+      }
+
+      if (error.message === 'compressed-too-large') {
+        return t.cardImage.compressedTooLarge
+      }
+    }
+
+    return t.cardImage.prepareFailed
+  }
+
+  const handleImageFile = async (file: File | null) => {
+    if (!file) {
+      return
+    }
+
+    setImageError(null)
+    setIsPreparingImage(true)
+
+    try {
+      const preparedImage = await prepareCardImage(file)
+      setPendingImage(preparedImage)
+      setRemoveExistingImage(false)
+      markDirty()
+    } catch (error) {
+      setImageError(getImageErrorMessage(error))
+    } finally {
+      setIsPreparingImage(false)
+
+      if (imageInputRef.current) {
+        imageInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleImagePaste = (event: ClipboardEvent<HTMLFormElement>) => {
+    const item = Array.from(event.clipboardData.items).find((clipboardItem) =>
+      clipboardItem.type.startsWith('image/'),
+    )
+    const file = item?.getAsFile() ?? null
+
+    if (!file) {
+      return
+    }
+
+    event.preventDefault()
+    void handleImageFile(file)
+  }
+
+  const handleImageDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    void handleImageFile(event.dataTransfer.files.item(0))
+  }
+
+  const handleRemoveImage = () => {
+    setPendingImage(null)
+    setImageError(null)
+    setRemoveExistingImage(Boolean(existingImagePath))
+    markDirty()
   }
 
   const handleDelete = async () => {
@@ -153,12 +250,48 @@ export function CardEditor() {
       return
     }
 
+    let uploadedImage: CardImageMetadata | null = null
+    const isImageChanging = Boolean(pendingImage || removeExistingImage)
+
     setIsSaving(true)
 
     try {
       const trimmedDescription = description.trim() || null
+      const nextCardId = isEditing && card ? card.id : crypto.randomUUID()
+
+      if (pendingImage) {
+        if (!userId) {
+          setFormError(t.cardImage.authRequired)
+          return
+        }
+
+        try {
+          uploadedImage = await uploadCardImage(nextCardId, userId, pendingImage)
+        } catch {
+          setFormError(t.cardImage.uploadFailed)
+          return
+        }
+      }
+
+      const nextImagePatch = uploadedImage
+        ? uploadedImage
+        : removeExistingImage
+          ? {
+              imageHeight: null,
+              imagePath: null,
+              imageSize: null,
+              imageWidth: null,
+            }
+          : {}
+      const nextImagePath = uploadedImage?.imagePath ?? (removeExistingImage ? null : existingImagePath)
+      const nextImageWidth = uploadedImage?.imageWidth ?? (removeExistingImage ? null : card?.imageWidth ?? null)
+      const nextImageHeight =
+        uploadedImage?.imageHeight ?? (removeExistingImage ? null : card?.imageHeight ?? null)
       const nextHeight = getCardContentHeight({
         description: trimmedDescription,
+        imageHeight: nextImageHeight,
+        imagePath: nextImagePath,
+        imageWidth: nextImageWidth,
         title: trimmedTitle,
         w: card?.w ?? defaultCardSize.w,
       })
@@ -168,6 +301,7 @@ export function CardEditor() {
           deadlineAt,
           description: trimmedDescription,
           h: nextHeight,
+          ...nextImagePatch,
           status,
           title: trimmedTitle,
         })
@@ -178,6 +312,8 @@ export function CardEditor() {
             deadlineAt,
             description: trimmedDescription,
             h: nextHeight,
+            id: nextCardId,
+            ...nextImagePatch,
             projectId: editor.boardScope === 'shared' ? editor.projectId : null,
             status,
             title: trimmedTitle,
@@ -189,8 +325,20 @@ export function CardEditor() {
         )
       }
 
+      if (existingImagePath && (uploadedImage || removeExistingImage)) {
+        void removeCardImage(existingImagePath).catch(() => undefined)
+      }
+
       setDirty(false)
     } catch {
+      if (uploadedImage) {
+        void removeCardImage(uploadedImage.imagePath).catch(() => undefined)
+      }
+
+      if (isImageChanging) {
+        setFormError(t.cardImage.saveFailed)
+      }
+
       return
     } finally {
       setIsSaving(false)
@@ -220,6 +368,7 @@ export function CardEditor() {
 
         <form
           className="grid gap-4 lg:grid-cols-[minmax(290px,360px)_minmax(0,1fr)] lg:items-start"
+          onPaste={handleImagePaste}
           onSubmit={handleSubmit}
         >
           <div className="space-y-4">
@@ -251,6 +400,80 @@ export function CardEditor() {
                 }}
             />
           </label>
+
+            <div
+              className="card-image-dropzone"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={handleImageDrop}
+            >
+              <input
+                accept="image/*"
+                className="hidden"
+                ref={imageInputRef}
+                type="file"
+                onChange={(event) => void handleImageFile(event.target.files?.item(0) ?? null)}
+              />
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="card-image-kicker">
+                    <ImagePlus size={14} />
+                    {t.cardImage.label}
+                  </span>
+                  <p>{t.cardImage.hint}</p>
+                </div>
+                <button
+                  className="icon-button h-10 w-10 shrink-0"
+                  disabled={isPreparingImage || isSaving}
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  {isPreparingImage ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                </button>
+              </div>
+
+              {pendingImage ? (
+                <div className="card-image-preview-shell">
+                  <img alt={t.cardImage.previewAlt(title)} draggable={false} src={pendingImage.objectUrl} />
+                  <div>
+                    <strong>{t.cardImage.ready}</strong>
+                    <span>{t.cardImage.compressed(Math.ceil(pendingImage.size / 1024))}</span>
+                  </div>
+                  <button
+                    aria-label={t.cardImage.remove}
+                    className="icon-button h-9 w-9"
+                    disabled={isSaving}
+                    type="button"
+                    onClick={handleRemoveImage}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ) : visibleImagePath ? (
+                <div className="card-image-preview-shell">
+                  <CardImageView
+                    alt={t.cardImage.previewAlt(title)}
+                    height={card?.imageHeight ?? null}
+                    path={visibleImagePath}
+                    width={card?.imageWidth ?? null}
+                  />
+                  <div>
+                    <strong>{t.cardImage.attached}</strong>
+                    <span>{t.cardImage.replaceHint}</span>
+                  </div>
+                  <button
+                    aria-label={t.cardImage.remove}
+                    className="icon-button h-9 w-9"
+                    disabled={isSaving}
+                    type="button"
+                    onClick={handleRemoveImage}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ) : null}
+
+              {imageError ? <div className="mt-3 text-xs font-bold text-red-200">{imageError}</div> : null}
+            </div>
 
             <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
               <button
@@ -286,7 +509,7 @@ export function CardEditor() {
               {isEditing ? (
                 <button
                   className="secondary-button justify-center text-red-200 hover:border-red-400/50 hover:text-red-100"
-                  disabled={isSaving}
+                  disabled={isSaving || isPreparingImage}
                   type="button"
                   onClick={handleDelete}
                 >
@@ -300,7 +523,7 @@ export function CardEditor() {
                 <button className="secondary-button justify-center" disabled={isSaving} type="button" onClick={() => void requestClose()}>
                   {t.common.cancel}
                 </button>
-                <button className="primary-button justify-center" disabled={isSaving} type="submit">
+                <button className="primary-button justify-center" disabled={isSaving || isPreparingImage} type="submit">
                   <Save size={17} />
                   {isSaving ? t.cardEditor.saving : t.cardEditor.save}
                 </button>

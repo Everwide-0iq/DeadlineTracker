@@ -9,6 +9,7 @@ import {
   updateCard as updateCardApi,
   type CardRealtimeStatus,
 } from './card.api.ts'
+import { removeCardImage } from './cardImage.api.ts'
 import type {
   BoardFilter,
   BoardScope,
@@ -33,7 +34,7 @@ type CardState = {
   clearSaveError: () => void
   clearDragGuide: () => void
   closeEditor: () => void
-  createCard: (input: CreateCardInput, userId: string | null) => Promise<void>
+  createCard: (input: CreateCardInput, userId: string | null) => Promise<Card>
   deleteCard: (id: string) => Promise<void>
   loadCards: () => Promise<void>
   moveCardLocal: (id: string, x: number, y: number) => void
@@ -75,6 +76,10 @@ const getMessage = (error: unknown) => {
 
     if (message?.includes("Could not find the 'project_id' column")) {
       return t.errors.cardsMissingProject
+    }
+
+    if (message?.includes("Could not find the 'image_path' column")) {
+      return t.errors.cardsMissingImage
     }
 
     if (message) {
@@ -124,6 +129,7 @@ export const useCardStore = create<CardState>((set, get) => ({
     try {
       const card = await createCardApi(input, userId)
       set((state) => ({ cards: upsertCard(state.cards, card), editor: null, selectedCardId: card.id }))
+      return card
     } catch (error) {
       set({ saveError: getMessage(error) })
       throw error
@@ -131,6 +137,7 @@ export const useCardStore = create<CardState>((set, get) => ({
   },
   deleteCard: async (id) => {
     const previousCards = get().cards
+    const previousCard = previousCards.find((card) => card.id === id) ?? null
     set((state) => ({
       cards: state.cards.filter((card) => card.id !== id),
       saveError: null,
@@ -139,6 +146,7 @@ export const useCardStore = create<CardState>((set, get) => ({
 
     try {
       await deleteCardApi(id)
+      void removeCardImage(previousCard?.imagePath ?? null).catch(() => undefined)
     } catch (error) {
       set({ cards: previousCards, saveError: getMessage(error) })
       throw error

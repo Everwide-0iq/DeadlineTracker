@@ -217,6 +217,9 @@ export function DesktopBoard({
     userId,
   })
   const gridSize = clamp(34 * camera.zoom, 18, 72)
+  const devicePixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  const displayCameraX = Math.round(camera.x * devicePixelRatio) / devicePixelRatio
+  const displayCameraY = Math.round(camera.y * devicePixelRatio) / devicePixelRatio
   const cardById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards])
   const sceneStyle: SceneStyle = {
     '--scene-depth-x': `${camera.x * 0.018}px`,
@@ -350,7 +353,7 @@ export function DesktopBoard({
       const rect = event.currentTarget.getBoundingClientRect()
       const pointX = event.clientX - rect.left
       const pointY = event.clientY - rect.top
-      const nextZoom = clamp(camera.zoom * (event.deltaY > 0 ? 0.9 : 1.1), 0.45, 1.6)
+      const nextZoom = clamp(camera.zoom * (event.deltaY > 0 ? 0.9 : 1.1), 0.1, 2)
       const worldX = (pointX - camera.x) / camera.zoom
       const worldY = (pointY - camera.y) / camera.zoom
 
@@ -590,9 +593,9 @@ export function DesktopBoard({
         }}
       >
         <div
-          className="absolute left-0 top-0 h-0 w-0"
+          className="board-world absolute left-0 top-0 h-0 w-0"
           style={{
-            transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})`,
+            transform: `translate(${displayCameraX}px, ${displayCameraY}px) scale(${camera.zoom})`,
             transformOrigin: '0 0',
           }}
         >

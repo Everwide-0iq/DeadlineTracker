@@ -1,5 +1,13 @@
 create extension if not exists pgcrypto;
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('card-images', 'card-images', false, 2097152, array['image/webp'])
+on conflict (id) do update
+set
+  public = false,
+  file_size_limit = 2097152,
+  allowed_mime_types = array['image/webp'];
+
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -51,6 +59,10 @@ create table if not exists public.cards (
   status text not null default 'todo' check (status in ('todo', 'done')),
   board_scope text not null default 'shared' check (board_scope in ('shared', 'personal')),
   project_id uuid references public.projects(id) on delete cascade,
+  image_path text,
+  image_width integer,
+  image_height integer,
+  image_size integer,
   x double precision not null default 0,
   y double precision not null default 0,
   w double precision not null default 340,
@@ -65,6 +77,18 @@ add column if not exists board_scope text not null default 'shared';
 
 alter table public.cards
 add column if not exists project_id uuid references public.projects(id) on delete cascade;
+
+alter table public.cards
+add column if not exists image_path text;
+
+alter table public.cards
+add column if not exists image_width integer;
+
+alter table public.cards
+add column if not exists image_height integer;
+
+alter table public.cards
+add column if not exists image_size integer;
 
 do $$
 begin
@@ -108,6 +132,32 @@ begin
   add constraint cards_project_scope_check check (
     (board_scope = 'personal' and project_id is null)
     or (board_scope = 'shared' and project_id is not null)
+  );
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+alter table public.cards
+drop constraint if exists cards_image_metadata_check;
+
+do $$
+begin
+  alter table public.cards
+  add constraint cards_image_metadata_check check (
+    (
+      image_path is null
+      and image_width is null
+      and image_height is null
+      and image_size is null
+    )
+    or (
+      image_path is not null
+      and char_length(image_path) between 8 and 512
+      and image_width between 1 and 4096
+      and image_height between 1 and 4096
+      and image_size between 1 and 2097152
+    )
   );
 exception
   when duplicate_object then null;
@@ -271,6 +321,7 @@ create index if not exists cards_created_at_idx on public.cards (created_at);
 create index if not exists cards_board_scope_idx on public.cards (board_scope);
 create index if not exists cards_project_id_idx on public.cards (project_id);
 create index if not exists cards_created_by_idx on public.cards (created_by);
+create index if not exists cards_image_path_idx on public.cards (image_path) where image_path is not null;
 create index if not exists card_links_from_card_id_idx on public.card_links (from_card_id);
 create index if not exists card_links_to_card_id_idx on public.card_links (to_card_id);
 create index if not exists card_links_board_scope_idx on public.card_links (board_scope);
@@ -603,6 +654,59 @@ on public.board_texts
 for delete
 to authenticated
 using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
+
+drop policy if exists "card_images_select_authenticated" on storage.objects;
+create policy "card_images_select_authenticated"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'card-images'
+  and (
+    (storage.foldername(name))[1] = (select auth.uid()::text)
+    or exists (
+      select 1
+      from public.cards
+      where public.cards.image_path = storage.objects.name
+        and (
+          public.cards.board_scope = 'shared'
+          or (public.cards.board_scope = 'personal' and public.cards.created_by = auth.uid())
+        )
+    )
+  )
+);
+
+drop policy if exists "card_images_insert_own_folder" on storage.objects;
+create policy "card_images_insert_own_folder"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'card-images'
+  and (storage.foldername(name))[1] = (select auth.uid()::text)
+  and lower(name) like '%.webp'
+);
+
+drop policy if exists "card_images_delete_visible_or_own" on storage.objects;
+create policy "card_images_delete_visible_or_own"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'card-images'
+  and (
+    (storage.foldername(name))[1] = (select auth.uid()::text)
+    or exists (
+      select 1
+      from public.cards
+      where public.cards.image_path = storage.objects.name
+        and (
+          public.cards.board_scope = 'shared'
+          or (public.cards.board_scope = 'personal' and public.cards.created_by = auth.uid())
+        )
+    )
+  )
+);
 
 do $$
 begin

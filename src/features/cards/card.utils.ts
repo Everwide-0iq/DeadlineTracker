@@ -21,10 +21,16 @@ const titleLineHeight = 28
 const descriptionLineHeight = 24
 const includedTitleLines = 2
 const includedDescriptionLines = 2
+const imagePreviewMargin = 16
+const maxImagePreviewHeight = 360
+const minImagePreviewHeight = 128
 
 type CardContentSizeInput = {
   description: string | null
   h?: number
+  imageHeight?: number | null
+  imagePath?: string | null
+  imageWidth?: number | null
   title: string
   w?: number
 }
@@ -45,7 +51,38 @@ const getTextLineCount = (value: string | null, charactersPerLine: number) => {
     }, 0)
 }
 
-export function getCardContentHeight({ description, h, title, w }: CardContentSizeInput) {
+const getImagePreviewHeight = (
+  contentWidth: number,
+  imagePath: string | null | undefined,
+  imageWidth: number | null | undefined,
+  imageHeight: number | null | undefined,
+) => {
+  if (!imagePath) {
+    return 0
+  }
+
+  if (!imageWidth || !imageHeight) {
+    return 170 + imagePreviewMargin
+  }
+
+  const imageRatio = Math.min(Math.max(imageWidth / imageHeight, 0.42), 3.2)
+  const imageHeightForWidth = contentWidth / imageRatio
+
+  return (
+    Math.round(Math.min(Math.max(imageHeightForWidth, minImagePreviewHeight), maxImagePreviewHeight)) +
+    imagePreviewMargin
+  )
+}
+
+export function getCardContentHeight({
+  description,
+  h,
+  imageHeight,
+  imagePath,
+  imageWidth,
+  title,
+  w,
+}: CardContentSizeInput) {
   const cardWidth = w ?? defaultCardSize.w
   const contentWidth = Math.max(cardWidth - cardHorizontalPadding, 220)
   const titleCharactersPerLine = Math.max(Math.floor(contentWidth / titleAverageCharWidth), 12)
@@ -58,17 +95,28 @@ export function getCardContentHeight({ description, h, title, w }: CardContentSi
   const titleExtraHeight = Math.max(titleLines - includedTitleLines, 0) * titleLineHeight
   const descriptionExtraHeight =
     Math.max(descriptionLines - includedDescriptionLines, 0) * descriptionLineHeight
+  const imageExtraHeight = getImagePreviewHeight(contentWidth, imagePath, imageWidth, imageHeight)
 
-  return Math.ceil(Math.max(h ?? defaultCardSize.h, defaultCardSize.h + titleExtraHeight + descriptionExtraHeight))
+  return Math.ceil(
+    Math.max(
+      h ?? defaultCardSize.h,
+      defaultCardSize.h + titleExtraHeight + descriptionExtraHeight + imageExtraHeight,
+    ),
+  )
 }
 
-export function getCardRenderSize(card: Pick<Card, 'description' | 'h' | 'title' | 'w'>) {
+export function getCardRenderSize(
+  card: Pick<Card, 'description' | 'h' | 'imageHeight' | 'imagePath' | 'imageWidth' | 'title' | 'w'>,
+) {
   const width = card.w || defaultCardSize.w
 
   return {
     h: getCardContentHeight({
       description: card.description,
       h: card.h,
+      imageHeight: card.imageHeight,
+      imagePath: card.imagePath,
+      imageWidth: card.imageWidth,
       title: card.title,
       w: width,
     }),

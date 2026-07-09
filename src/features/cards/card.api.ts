@@ -17,6 +17,10 @@ export function mapCardFromRow(row: CardRow): Card {
     id: row.id,
     title: row.title,
     description: row.description,
+    imageHeight: row.image_height ?? null,
+    imagePath: row.image_path ?? null,
+    imageSize: row.image_size ?? null,
+    imageWidth: row.image_width ?? null,
     deadlineAt: row.deadline_at,
     status: row.status,
     boardScope: row.board_scope ?? 'shared',
@@ -33,8 +37,13 @@ export function mapCardFromRow(row: CardRow): Card {
 
 function toInsertRow(input: CreateCardInput, userId: string | null) {
   return {
+    ...(input.id ? { id: input.id } : {}),
     title: input.title,
     description: input.description,
+    image_height: input.imageHeight ?? null,
+    image_path: input.imagePath ?? null,
+    image_size: input.imageSize ?? null,
+    image_width: input.imageWidth ?? null,
     deadline_at: input.deadlineAt,
     board_scope: input.boardScope,
     project_id: input.projectId,
@@ -51,6 +60,10 @@ function toUpdateRow(input: UpdateCardInput) {
   return {
     ...(input.title !== undefined ? { title: input.title } : {}),
     ...(input.description !== undefined ? { description: input.description } : {}),
+    ...(input.imageHeight !== undefined ? { image_height: input.imageHeight } : {}),
+    ...(input.imagePath !== undefined ? { image_path: input.imagePath } : {}),
+    ...(input.imageSize !== undefined ? { image_size: input.imageSize } : {}),
+    ...(input.imageWidth !== undefined ? { image_width: input.imageWidth } : {}),
     ...(input.deadlineAt !== undefined ? { deadline_at: input.deadlineAt } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
     ...(input.x !== undefined ? { x: input.x } : {}),

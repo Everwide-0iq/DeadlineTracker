@@ -111,6 +111,38 @@ button {
     @apply w-full rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3 text-white outline-none transition placeholder:text-white/[0.24] focus:border-red-300/50 focus:bg-white/[0.07] focus:shadow-[0_0_0_4px_rgb(255_70_61_/_0.08)];
   }
 
+  .card-image-dropzone {
+    @apply rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-4 transition duration-200 hover:border-red-300/35 hover:bg-red-500/[0.06];
+    background:
+      radial-gradient(circle at 12% 0%, rgb(255 70 61 / 0.1), transparent 36%),
+      rgb(255 255 255 / 0.03);
+  }
+
+  .card-image-dropzone p {
+    @apply mt-2 text-sm font-semibold leading-5 text-white/45;
+  }
+
+  .card-image-kicker {
+    @apply inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-white/45;
+  }
+
+  .card-image-preview-shell {
+    @apply mt-4 grid grid-cols-[72px_minmax(0,1fr)_40px] items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-2.5;
+  }
+
+  .card-image-preview-shell > img,
+  .card-image-preview-shell > .card-image-frame {
+    @apply h-16 w-[72px] overflow-hidden rounded-xl border border-white/10 object-contain;
+  }
+
+  .card-image-preview-shell strong {
+    @apply block truncate text-sm font-black text-white;
+  }
+
+  .card-image-preview-shell span {
+    @apply mt-1 block truncate text-xs font-bold text-white/40;
+  }
+
   .deadline-picker {
     background:
       radial-gradient(circle at 8% 0%, rgb(255 70 61 / 0.1), transparent 34%),
@@ -365,6 +397,17 @@ button {
   opacity: 0.38;
 }
 
+.board-world {
+  transform-style: flat;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+.board-world .deadline-card,
+.board-world .board-text-item {
+  backface-visibility: hidden;
+}
+
 .deadline-card-underlight {
   border-radius: 34px;
   background:
@@ -405,9 +448,8 @@ button {
     inset 0 0 42px rgba(255, 255, 255, 0.015);
   backdrop-filter: blur(18px);
   animation: cardMaterialize 280ms ease-out both;
-  transform: perspective(900px) rotateX(var(--card-tilt-y)) rotateY(var(--card-tilt-x)) scale(var(--card-scale));
-  transform-style: preserve-3d;
-  will-change: transform;
+  transform: translateY(0) scale(var(--card-scale));
+  transform-style: flat;
 }
 
 .deadline-card:hover {
@@ -416,6 +458,7 @@ button {
     0 0 44px var(--deadline-glow),
     inset 0 1px 0 rgba(255, 255, 255, 0.11);
   transform: perspective(900px) rotateX(var(--card-tilt-y)) rotateY(var(--card-tilt-x)) translate3d(0, -2px, 0) scale(var(--card-scale));
+  will-change: transform;
 }
 
 .deadline-card[data-zone="calm"] {
@@ -524,6 +567,75 @@ button {
 .countdown-text {
   color: var(--deadline-text);
   text-shadow: 0 0 22px var(--deadline-glow);
+}
+
+.card-image-frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--deadline-border, var(--accent)) 32%, transparent);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--deadline-border, var(--accent)) 16%, transparent), transparent 42%),
+    rgba(255, 255, 255, 0.035);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 24px color-mix(in srgb, var(--deadline-glow, rgba(255, 70, 61, 0.25)) 38%, transparent);
+}
+
+.card-image-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition:
+    opacity 240ms ease;
+}
+
+.card-image-frame[data-loaded="true"] .card-image-media {
+  opacity: 1;
+}
+
+.deadline-card-image {
+  aspect-ratio: var(--card-image-ratio, 1.7778);
+  max-height: 360px;
+  width: 100%;
+}
+
+.deadline-card-image[data-orientation="portrait"] {
+  max-height: 380px;
+}
+
+.deadline-list-image {
+  width: 76px;
+  height: 54px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+}
+
+.mobile-card-image {
+  aspect-ratio: var(--card-image-ratio, 1.7778);
+  max-height: 420px;
+  width: 100%;
+  border-radius: 18px;
+}
+
+.card-image-shimmer {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(110deg, transparent 0 28%, rgba(255, 255, 255, 0.12) 45%, transparent 62% 100%),
+    rgba(255, 255, 255, 0.035);
+  animation: cardImageShimmer 1.25s ease-in-out infinite;
+}
+
+.card-image-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.38);
 }
 
 .magnetic-guide {
@@ -805,6 +917,20 @@ button {
 @keyframes cardLinkFlow {
   to {
     stroke-dashoffset: -30;
+  }
+}
+
+@keyframes cardImageShimmer {
+  0% {
+    opacity: 0.42;
+    transform: translateX(-28%);
+  }
+  50% {
+    opacity: 0.72;
+  }
+  100% {
+    opacity: 0.42;
+    transform: translateX(28%);
   }
 }
 

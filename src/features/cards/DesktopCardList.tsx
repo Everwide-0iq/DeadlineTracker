@@ -5,6 +5,7 @@ import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import { useCardStore } from './card.store.ts'
+import { CardImageView } from './CardImageView.tsx'
 import type { BoardScope, Card } from './card.types.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
@@ -73,6 +74,15 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_18px_var(--deadline-glow)]">
           {card.status === 'done' ? <CheckCircle2 size={21} /> : <Flame size={21} />}
         </div>
+        {card.imagePath ? (
+          <CardImageView
+            alt={t.cardImage.previewAlt(card.title)}
+            className="deadline-list-image"
+            height={card.imageHeight}
+            path={card.imagePath}
+            width={card.imageWidth}
+          />
+        ) : null}
         <div className="min-w-0">
           <h3
             className={cn(

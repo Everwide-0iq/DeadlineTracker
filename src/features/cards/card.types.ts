@@ -8,6 +8,10 @@ export type Card = {
   id: string
   title: string
   description: string | null
+  imageHeight: number | null
+  imagePath: string | null
+  imageSize: number | null
+  imageWidth: number | null
   deadlineAt: string
   status: CardStatus
   boardScope: BoardScope
@@ -25,6 +29,10 @@ export type CardRow = {
   id: string
   title: string
   description: string | null
+  image_height?: number | null
+  image_path?: string | null
+  image_size?: number | null
+  image_width?: number | null
   deadline_at: string
   status: CardStatus
   board_scope: BoardScope
@@ -39,8 +47,13 @@ export type CardRow = {
 }
 
 export type CreateCardInput = {
+  id?: string
   title: string
   description: string | null
+  imageHeight?: number | null
+  imagePath?: string | null
+  imageSize?: number | null
+  imageWidth?: number | null
   deadlineAt: string
   boardScope: BoardScope
   projectId: string | null
@@ -52,7 +65,21 @@ export type CreateCardInput = {
 }
 
 export type UpdateCardInput = Partial<
-  Pick<Card, 'title' | 'description' | 'deadlineAt' | 'status' | 'x' | 'y' | 'w' | 'h'>
+  Pick<
+    Card,
+    | 'title'
+    | 'description'
+    | 'imageHeight'
+    | 'imagePath'
+    | 'imageSize'
+    | 'imageWidth'
+    | 'deadlineAt'
+    | 'status'
+    | 'x'
+    | 'y'
+    | 'w'
+    | 'h'
+  >
 >
 
 export type CardEditorState =

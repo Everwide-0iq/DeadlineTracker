@@ -67,6 +67,23 @@ const ru = {
     statusDone: 'Готово',
     statusTodo: 'В работе',
   },
+  cardImage: {
+    attached: 'Изображение прикреплено',
+    authRequired: 'Нужно войти в аккаунт, чтобы загрузить изображение.',
+    compressed: (sizeKb: number) => `WebP, ${sizeKb} КБ`,
+    compressedTooLarge: 'Картинка слишком тяжёлая даже после сжатия. Попробуй обрезать её или выбрать другой скриншот.',
+    hint: 'Перетащи файл сюда, выбери изображение или вставь скриншот через Ctrl+V.',
+    label: 'Изображение',
+    prepareFailed: 'Не удалось подготовить изображение.',
+    previewAlt: (title: string) => `Изображение для карточки ${title || 'без названия'}`,
+    ready: 'Готово к загрузке',
+    remove: 'Убрать изображение',
+    replaceHint: 'Можно заменить или удалить перед сохранением.',
+    saveFailed: 'Картинка загружена, но карточку сохранить не удалось. Попробуй ещё раз.',
+    sourceTooLarge: 'Исходное изображение слишком большое. Максимум — 10 МБ.',
+    unsupported: 'Можно добавить только изображение.',
+    uploadFailed: 'Не удалось загрузить изображение в Supabase Storage.',
+  },
   boardText: {
     color: 'Цвет',
     content: 'Текст',
@@ -194,6 +211,8 @@ const ru = {
     cardsGeneric: 'Не удалось выполнить операцию с карточками.',
     cardsMissingProject:
       'В таблице public.cards не найден столбец project_id. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.',
+    cardsMissingImage:
+      'В таблице public.cards нет колонок image_path/image_width/image_height/image_size. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.',
     cardsMissingScope:
       'В таблице public.cards не найден столбец board_scope. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.',
     cardsMissingTable:
@@ -361,6 +380,23 @@ const en = {
     statusDone: 'Done',
     statusTodo: 'In progress',
   },
+  cardImage: {
+    attached: 'Image attached',
+    authRequired: 'Sign in before uploading an image.',
+    compressed: (sizeKb: number) => `WebP, ${sizeKb} KB`,
+    compressedTooLarge: 'The image is still too heavy after compression. Try cropping it or choosing another screenshot.',
+    hint: 'Drop a file here, choose an image, or paste a screenshot with Ctrl+V.',
+    label: 'Image',
+    prepareFailed: 'Could not prepare the image.',
+    previewAlt: (title: string) => `Image for ${title || 'untitled card'}`,
+    ready: 'Ready to upload',
+    remove: 'Remove image',
+    replaceHint: 'You can replace or remove it before saving.',
+    saveFailed: 'The image uploaded, but the card could not be saved. Try again.',
+    sourceTooLarge: 'The source image is too large. Maximum size is 10 MB.',
+    unsupported: 'Only images can be attached.',
+    uploadFailed: 'Could not upload the image to Supabase Storage.',
+  },
   boardText: {
     color: 'Color',
     content: 'Text',
@@ -488,6 +524,8 @@ const en = {
     cardsGeneric: 'Could not complete the card operation.',
     cardsMissingProject:
       'Column project_id was not found in public.cards. Run the latest supabase/migrations/0001_initial_schema.sql migration in Supabase SQL Editor.',
+    cardsMissingImage:
+      'Columns image_path/image_width/image_height/image_size are missing in public.cards. Run the latest supabase/migrations/0001_initial_schema.sql migration.',
     cardsMissingScope:
       'Column board_scope was not found in public.cards. Run the latest supabase/migrations/0001_initial_schema.sql migration in Supabase SQL Editor.',
     cardsMissingTable:
