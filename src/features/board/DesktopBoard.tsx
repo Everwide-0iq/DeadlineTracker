@@ -1,4 +1,4 @@
-import { AlertTriangle, Download, Plus } from 'lucide-react'
+import { Activity, AlertTriangle, Download, Plus } from 'lucide-react'
 import {
   memo,
   useCallback,
@@ -22,6 +22,7 @@ import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
+import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
 import { BoardControls } from './BoardControls.tsx'
 import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
@@ -67,6 +68,7 @@ type WorldBounds = {
 const cursorMeasureThrottleMs = 70
 const cameraMoveSettleMs = 180
 const viewportOverscan = 720
+const performanceModeStorageKey = 'fireboard.performance-mode.v1'
 
 const getExportLocale = (language: 'en' | 'ru') => (language === 'ru' ? 'ru-RU' : 'en-US')
 
@@ -83,6 +85,8 @@ const formatExportDate = (date: Date, language: 'en' | 'ru') =>
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date)
+
+const readPerformanceMode = () => readStorageValue(performanceModeStorageKey) === 'true'
 
 const getViewportWorldBounds = (
   camera: BoardCamera,
@@ -268,6 +272,7 @@ export function DesktopBoard({
   const lastCursorMeasureAtRef = useRef(0)
   const viewportRectRef = useRef<DOMRectReadOnly | null>(null)
   const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
+  const [isPerformanceMode, setIsPerformanceMode] = useState(readPerformanceMode)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
   const createLink = useCardLinkStore((state) => state.createLink)
   const deleteLink = useCardLinkStore((state) => state.deleteLink)
@@ -832,11 +837,19 @@ export function DesktopBoard({
 
   const handleZoomIn = useCallback(() => zoomBy(1.1), [zoomBy])
   const handleZoomOut = useCallback(() => zoomBy(0.9), [zoomBy])
+  const togglePerformanceMode = useCallback(() => {
+    setIsPerformanceMode((current) => {
+      const next = !current
+      writeStorageValue(performanceModeStorageKey, String(next))
+      return next
+    })
+  }, [])
 
   return (
     <main
       className="desktop-board-scene relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b] shadow-2xl"
       data-camera-moving={isCameraMovingRef.current ? 'true' : 'false'}
+      data-performance-mode={isPerformanceMode ? 'true' : 'false'}
       onPointerMove={handleScenePointerMove}
       ref={viewportRef}
       style={sceneStyle}
@@ -861,9 +874,11 @@ export function DesktopBoard({
           <MagneticGuides camera={camera} dragGuide={dragGuide} viewportSize={viewportSize} />
 
           <div className="board-content-transition" key={viewKey}>
-            {renderedCards.map((card) => (
-              <CardUnderlight card={card} key={`light-${card.id}`} now={now} />
-            ))}
+            {isPerformanceMode
+              ? null
+              : renderedCards.map((card) => (
+                  <CardUnderlight card={card} key={`light-${card.id}`} now={now} />
+                ))}
 
             <CardLinkLayer
               cards={cards}
@@ -917,15 +932,29 @@ export function DesktopBoard({
         />
       </div>
 
-      <button
-        aria-label={t.board.exportJson}
-        className="pointer-events-auto absolute right-[274px] top-6 z-20 hidden items-center gap-2 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white/70 shadow-2xl backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:border-red-300/40 hover:bg-red-500/10 hover:text-white xl:flex"
-        type="button"
-        onClick={handleExportBoard}
-      >
-        <Download size={15} />
-        {t.board.exportJson}
-      </button>
+      <div className="pointer-events-auto absolute right-[274px] top-6 z-20 hidden items-center gap-2 xl:flex">
+        <button
+          aria-label={t.board.exportJson}
+          className="board-top-action"
+          type="button"
+          onClick={handleExportBoard}
+        >
+          <Download size={15} />
+          {t.board.exportJson}
+        </button>
+
+        <button
+          aria-label="Performance mode"
+          aria-pressed={isPerformanceMode}
+          className="board-top-action board-performance-toggle"
+          data-active={isPerformanceMode ? 'true' : 'false'}
+          type="button"
+          onClick={togglePerformanceMode}
+        >
+          <Activity size={15} />
+          Performance
+        </button>
+      </div>
 
       <MiniMap
         camera={camera}

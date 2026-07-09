@@ -78,6 +78,14 @@ button {
     @apply border-red-300/60 bg-red-500/[0.14] text-red-100 shadow-[0_0_18px_rgb(255_70_61_/_0.22)];
   }
 
+  .board-top-action {
+    @apply inline-flex min-h-11 items-center gap-2 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white/70 shadow-2xl backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:border-red-300/40 hover:bg-red-500/10 hover:text-white active:translate-y-0;
+  }
+
+  .board-performance-toggle[data-active="true"] {
+    @apply border-emerald-300/40 bg-emerald-400/[0.12] text-emerald-100 shadow-[0_0_22px_rgb(52_211_153_/_0.16),inset_0_0_0_1px_rgb(255_255_255_/_0.04)];
+  }
+
   .list-action-button {
     @apply grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-white/[0.045] text-white/[0.58] transition duration-200 hover:-translate-y-0.5 hover:border-red-300/40 hover:bg-red-500/10 hover:text-white active:translate-y-0;
   }
@@ -503,6 +511,67 @@ button {
   box-shadow:
     0 0 18px color-mix(in srgb, var(--deadline-glow) 72%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.desktop-board-scene[data-performance-mode="true"]::before {
+  opacity: 0.12;
+}
+
+.desktop-board-scene[data-performance-mode="true"]::after,
+.desktop-board-scene[data-performance-mode="true"] .board-viewport::before,
+.desktop-board-scene[data-performance-mode="true"] .board-viewport::after {
+  display: none;
+}
+
+.desktop-board-scene[data-performance-mode="true"] .deadline-card-underlight,
+.desktop-board-scene[data-performance-mode="true"] .deadline-card-noise,
+.desktop-board-scene[data-performance-mode="true"] .card-image-backdrop,
+.desktop-board-scene[data-performance-mode="true"] .card-image-shimmer,
+.desktop-board-scene[data-performance-mode="true"] .card-link-glow,
+.desktop-board-scene[data-performance-mode="true"] .card-link-draft-glow,
+.desktop-board-scene[data-performance-mode="true"] .card-link-flow {
+  display: none;
+}
+
+.desktop-board-scene[data-performance-mode="true"] .deadline-card,
+.desktop-board-scene[data-performance-mode="true"] .deadline-card[data-zone="calm"],
+.desktop-board-scene[data-performance-mode="true"] .deadline-card[data-zone="important"],
+.desktop-board-scene[data-performance-mode="true"] .deadline-card[data-zone="soon"],
+.desktop-board-scene[data-performance-mode="true"] .deadline-card[data-zone="critical"],
+.desktop-board-scene[data-performance-mode="true"] .deadline-card[data-zone="overdue"] {
+  backdrop-filter: none;
+  animation: none;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--deadline-border) 16%, transparent),
+    0 8px 22px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.desktop-board-scene[data-performance-mode="true"] .deadline-card:hover {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--deadline-border) 28%, transparent),
+    0 10px 26px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.065);
+}
+
+.desktop-board-scene[data-performance-mode="true"] .countdown-text,
+.desktop-board-scene[data-performance-mode="true"] .board-text-item,
+.desktop-board-scene[data-performance-mode="true"] .board-text-preview-content {
+  text-shadow: none;
+}
+
+.desktop-board-scene[data-performance-mode="true"] .card-image-frame,
+.desktop-board-scene[data-performance-mode="true"] .heat-horizon,
+.desktop-board-scene[data-performance-mode="true"] .board-top-action {
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.desktop-board-scene[data-performance-mode="true"] .magnetic-guide,
+.desktop-board-scene[data-performance-mode="true"] .card-link-draft-path,
+.desktop-board-scene[data-performance-mode="true"] .deadline-card-completed,
+.desktop-board-scene[data-performance-mode="true"] .deadline-card-completed::after {
+  animation: none;
 }
 
 .deadline-card-selected {
