@@ -2,14 +2,21 @@ import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent 
 import { useCardStore } from '../cards/card.store.ts'
 import type { Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
+import type { DragGuide } from './dragGuide.types.ts'
 
 type DragState = {
   frameId: number | null
   latestX: number
   latestY: number
+  lastGuide: DragGuide | null
+  ownSize: {
+    h: number
+    w: number
+  }
   pendingX: number
   pendingY: number
   removeListeners: () => void
+  targetLines: CardLineSet[]
 }
 
 type UseDragCardOptions = {
@@ -25,21 +32,27 @@ type SnapAxis = {
   delta: number
 }
 
-const getCardLines = (card: Card, x = card.x, y = card.y) => {
-  const renderSize = getCardRenderSize(card)
+type CardLineSet = {
+  horizontal: Array<{ coordinate: number; offset: number }>
+  vertical: Array<{ coordinate: number; offset: number }>
+}
 
-  return {
-    horizontal: [
-      { coordinate: x, offset: 0 },
-      { coordinate: x + renderSize.w / 2, offset: renderSize.w / 2 },
-      { coordinate: x + renderSize.w, offset: renderSize.w },
-    ],
-    vertical: [
-      { coordinate: y, offset: 0 },
-      { coordinate: y + renderSize.h / 2, offset: renderSize.h / 2 },
-      { coordinate: y + renderSize.h, offset: renderSize.h },
-    ],
-  }
+const getLinesFromSize = (x: number, y: number, w: number, h: number): CardLineSet => ({
+  horizontal: [
+    { coordinate: x, offset: 0 },
+    { coordinate: x + w / 2, offset: w / 2 },
+    { coordinate: x + w, offset: w },
+  ],
+  vertical: [
+    { coordinate: y, offset: 0 },
+    { coordinate: y + h / 2, offset: h / 2 },
+    { coordinate: y + h, offset: h },
+  ],
+})
+
+const getCardLines = (card: Card) => {
+  const renderSize = getCardRenderSize(card)
+  return getLinesFromSize(card.x, card.y, renderSize.w, renderSize.h)
 }
 
 const findSnapAxis = (
@@ -66,12 +79,17 @@ const findSnapAxis = (
   return best
 }
 
-const getMagneticPosition = (cards: Card[], card: Card, rawX: number, rawY: number) => {
-  const ownLines = getCardLines(card, rawX, rawY)
-  const targetLines = cards
-    .filter((item) => item.id !== card.id)
-    .map((item) => getCardLines(item))
+const areGuidesEqual = (left: DragGuide | null, right: DragGuide | null) =>
+  left?.cardId === right?.cardId && left?.x === right?.x && left?.y === right?.y
 
+const getMagneticPosition = (
+  card: Card,
+  ownSize: { h: number; w: number },
+  targetLines: CardLineSet[],
+  rawX: number,
+  rawY: number,
+) => {
+  const ownLines = getLinesFromSize(rawX, rawY, ownSize.w, ownSize.h)
   const snapX = findSnapAxis(
     ownLines.horizontal,
     targetLines.flatMap((lines) => lines.horizontal),
@@ -117,6 +135,11 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
       const startClientY = event.clientY
       const startX = card.x
       const startY = card.y
+      const ownSize = getCardRenderSize(card)
+      const targetLines = useCardStore
+        .getState()
+        .cards.filter((item) => item.id !== card.id)
+        .map((item) => getCardLines(item))
       const flushMove = () => {
         const dragState = dragRef.current
 
@@ -131,20 +154,25 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
       }
 
       const handleMove = (moveEvent: PointerEvent) => {
-        const rawX = startX + (moveEvent.clientX - startClientX) / cameraZoom
-        const rawY = startY + (moveEvent.clientY - startClientY) / cameraZoom
-        const next = moveEvent.shiftKey
-          ? { guide: null, x: rawX, y: rawY }
-          : getMagneticPosition(useCardStore.getState().cards, card, rawX, rawY)
         const dragState = dragRef.current
 
         if (!dragState) {
           return
         }
 
+        const rawX = startX + (moveEvent.clientX - startClientX) / cameraZoom
+        const rawY = startY + (moveEvent.clientY - startClientY) / cameraZoom
+        const next = moveEvent.shiftKey
+          ? { guide: null, x: rawX, y: rawY }
+          : getMagneticPosition(card, dragState.ownSize, dragState.targetLines, rawX, rawY)
+
         dragState.pendingX = next.x
         dragState.pendingY = next.y
-        useCardStore.getState().setDragGuide(next.guide)
+
+        if (!areGuidesEqual(dragState.lastGuide, next.guide)) {
+          dragState.lastGuide = next.guide
+          useCardStore.getState().setDragGuide(next.guide)
+        }
 
         if (dragState.frameId === null) {
           dragState.frameId = window.requestAnimationFrame(flushMove)
@@ -185,9 +213,12 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
         frameId: null,
         latestX: card.x,
         latestY: card.y,
+        lastGuide: null,
+        ownSize,
         pendingX: card.x,
         pendingY: card.y,
         removeListeners,
+        targetLines,
       }
       window.addEventListener('pointermove', handleMove)
       window.addEventListener('pointerup', handleUp)

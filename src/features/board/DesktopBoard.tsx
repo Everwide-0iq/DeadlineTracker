@@ -8,7 +8,6 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent,
-  type WheelEvent,
 } from 'react'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import type { CardLink, CardLinkSide } from '../cardLinks/cardLink.types.ts'
@@ -260,6 +259,8 @@ export function DesktopBoard({
   zoomBy,
 }: DesktopBoardProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const boardViewportRef = useRef<HTMLDivElement | null>(null)
+  const boardWorldRef = useRef<HTMLDivElement | null>(null)
   const cameraRef = useRef(camera)
   const cameraMoveEndTimerRef = useRef<number | null>(null)
   const isCameraMovingRef = useRef(false)
@@ -267,7 +268,6 @@ export function DesktopBoard({
   const lastCursorMeasureAtRef = useRef(0)
   const viewportRectRef = useRef<DOMRectReadOnly | null>(null)
   const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
-  const [isCameraMoving, setIsCameraMoving] = useState(false)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
   const createLink = useCardLinkStore((state) => state.createLink)
   const deleteLink = useCardLinkStore((state) => state.deleteLink)
@@ -325,9 +325,31 @@ export function DesktopBoard({
     '--scene-depth-y': `${camera.y * 0.018}px`,
   }
 
+  const applyCameraToDom = useCallback((nextCamera: BoardCamera) => {
+    const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+    const nextDisplayX = Math.round(nextCamera.x * dpr) / dpr
+    const nextDisplayY = Math.round(nextCamera.y * dpr) / dpr
+    const nextGridSize = clamp(34 * nextCamera.zoom, 18, 72)
+
+    if (boardWorldRef.current) {
+      boardWorldRef.current.style.transform = `translate(${nextDisplayX}px, ${nextDisplayY}px) scale(${nextCamera.zoom})`
+    }
+
+    if (boardViewportRef.current) {
+      boardViewportRef.current.style.backgroundPosition = `${nextCamera.x}px ${nextCamera.y}px`
+      boardViewportRef.current.style.backgroundSize = `${nextGridSize}px ${nextGridSize}px`
+    }
+
+    if (viewportRef.current) {
+      viewportRef.current.style.setProperty('--scene-depth-x', `${nextCamera.x * 0.018}px`)
+      viewportRef.current.style.setProperty('--scene-depth-y', `${nextCamera.y * 0.018}px`)
+    }
+  }, [])
+
   useEffect(() => {
     cameraRef.current = camera
-  }, [camera])
+    applyCameraToDom(camera)
+  }, [applyCameraToDom, camera])
 
   const setCameraMoving = useCallback((value: boolean) => {
     if (isCameraMovingRef.current === value) {
@@ -335,7 +357,9 @@ export function DesktopBoard({
     }
 
     isCameraMovingRef.current = value
-    setIsCameraMoving(value)
+    if (viewportRef.current) {
+      viewportRef.current.dataset.cameraMoving = value ? 'true' : 'false'
+    }
   }, [])
 
   const clearCameraMoveTimer = useCallback(() => {
@@ -352,13 +376,16 @@ export function DesktopBoard({
     setCameraMoving(true)
   }, [clearCameraMoveTimer, setCameraMoving])
 
-  const settleCameraMoveSoon = useCallback(() => {
+  const settleCameraMoveSoon = useCallback((commitCamera = false) => {
     clearCameraMoveTimer()
     cameraMoveEndTimerRef.current = window.setTimeout(() => {
       cameraMoveEndTimerRef.current = null
+      if (commitCamera) {
+        setCamera(cameraRef.current)
+      }
       setCameraMoving(false)
     }, cameraMoveSettleMs)
-  }, [clearCameraMoveTimer, setCameraMoving])
+  }, [clearCameraMoveTimer, setCamera, setCameraMoving])
 
   const handleExportBoard = useCallback(() => {
     const exportedAt = new Date()
@@ -534,10 +561,16 @@ export function DesktopBoard({
   ])
 
   const zoomAtPoint = useCallback(
-    (event: WheelEvent<HTMLDivElement>) => {
+    (event: globalThis.WheelEvent) => {
+      const viewport = boardViewportRef.current
+
+      if (!viewport) {
+        return
+      }
+
       event.preventDefault()
       beginCameraMove()
-      const rect = event.currentTarget.getBoundingClientRect()
+      const rect = viewport.getBoundingClientRect()
       viewportRectRef.current = rect
       const pointX = event.clientX - rect.left
       const pointY = event.clientY - rect.top
@@ -545,16 +578,30 @@ export function DesktopBoard({
       const nextZoom = clamp(currentCamera.zoom * (event.deltaY > 0 ? 0.9 : 1.1), 0.1, 2)
       const worldX = (pointX - currentCamera.x) / currentCamera.zoom
       const worldY = (pointY - currentCamera.y) / currentCamera.zoom
-
-      setCamera({
+      const nextCamera = {
         x: pointX - worldX * nextZoom,
         y: pointY - worldY * nextZoom,
         zoom: nextZoom,
-      })
-      settleCameraMoveSoon()
+      }
+
+      cameraRef.current = nextCamera
+      applyCameraToDom(nextCamera)
+      settleCameraMoveSoon(true)
     },
-    [beginCameraMove, setCamera, settleCameraMoveSoon],
+    [applyCameraToDom, beginCameraMove, settleCameraMoveSoon],
   )
+
+  useEffect(() => {
+    const viewport = boardViewportRef.current
+
+    if (!viewport) {
+      return undefined
+    }
+
+    viewport.addEventListener('wheel', zoomAtPoint, { passive: false })
+
+    return () => viewport.removeEventListener('wheel', zoomAtPoint)
+  }, [zoomAtPoint])
 
   const handlePanStart = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
@@ -586,7 +633,8 @@ export function DesktopBoard({
 
     const flushCamera = () => {
       frameId = null
-      setCamera(pendingCamera)
+      cameraRef.current = pendingCamera
+      applyCameraToDom(pendingCamera)
     }
 
     const handleMove = (moveEvent: globalThis.PointerEvent) => {
@@ -608,9 +656,11 @@ export function DesktopBoard({
 
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId)
-        setCamera(pendingCamera)
+        cameraRef.current = pendingCamera
+        applyCameraToDom(pendingCamera)
       }
 
+      setCamera(pendingCamera)
       setCameraMoving(false)
     }
 
@@ -786,7 +836,7 @@ export function DesktopBoard({
   return (
     <main
       className="desktop-board-scene relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b] shadow-2xl"
-      data-camera-moving={isCameraMoving ? 'true' : 'false'}
+      data-camera-moving={isCameraMovingRef.current ? 'true' : 'false'}
       onPointerMove={handleScenePointerMove}
       ref={viewportRef}
       style={sceneStyle}
@@ -794,7 +844,7 @@ export function DesktopBoard({
       <div
         className="board-viewport absolute inset-0"
         onPointerDown={handlePanStart}
-        onWheel={zoomAtPoint}
+        ref={boardViewportRef}
         style={{
           backgroundPosition: `${camera.x}px ${camera.y}px`,
           backgroundSize: `${gridSize}px ${gridSize}px`,
@@ -802,6 +852,7 @@ export function DesktopBoard({
       >
         <div
           className="board-world absolute left-0 top-0 h-0 w-0"
+          ref={boardWorldRef}
           style={{
             transform: `translate(${displayCameraX}px, ${displayCameraY}px) scale(${camera.zoom})`,
             transformOrigin: '0 0',
