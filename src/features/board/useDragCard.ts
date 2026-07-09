@@ -5,17 +5,21 @@ import { getCardRenderSize } from '../cards/card.utils.ts'
 import type { DragGuide } from './dragGuide.types.ts'
 
 type DragState = {
+  didMove: boolean
   frameId: number | null
-  latestX: number
-  latestY: number
+  latestPositions: CardPosition[]
   lastGuide: DragGuide | null
   ownSize: {
     h: number
     w: number
   }
-  pendingX: number
-  pendingY: number
+  pendingPositions: CardPosition[]
+  primaryStart: {
+    x: number
+    y: number
+  }
   removeListeners: () => void
+  startPositions: CardPosition[]
   targetLines: CardLineSet[]
 }
 
@@ -30,6 +34,12 @@ const snapDistance = 16
 type SnapAxis = {
   coordinate: number
   delta: number
+}
+
+type CardPosition = {
+  id: string
+  x: number
+  y: number
 }
 
 type CardLineSet = {
@@ -131,14 +141,30 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
       event.preventDefault()
       event.stopPropagation()
 
+      const cardElement = event.currentTarget
       const startClientX = event.clientX
       const startClientY = event.clientY
       const startX = card.x
       const startY = card.y
+      const state = useCardStore.getState()
+      const selectedIds = new Set(state.selectedCardIds)
+      const shouldDragSelection = selectedIds.has(card.id) && selectedIds.size > 1
+
+      if (!shouldDragSelection && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        state.selectCard(card.id)
+      }
+
+      const dragCards =
+        shouldDragSelection ? state.cards.filter((item) => selectedIds.has(item.id)) : [card]
+      const dragCardIds = new Set(dragCards.map((item) => item.id))
+      const startPositions = dragCards.map((item) => ({
+        id: item.id,
+        x: item.x,
+        y: item.y,
+      }))
       const ownSize = getCardRenderSize(card)
-      const targetLines = useCardStore
-        .getState()
-        .cards.filter((item) => item.id !== card.id)
+      const targetLines = state.cards
+        .filter((item) => !dragCardIds.has(item.id))
         .map((item) => getCardLines(item))
       const flushMove = () => {
         const dragState = dragRef.current
@@ -148,9 +174,8 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
         }
 
         dragState.frameId = null
-        dragState.latestX = dragState.pendingX
-        dragState.latestY = dragState.pendingY
-        useCardStore.getState().moveCardLocal(card.id, dragState.pendingX, dragState.pendingY)
+        dragState.latestPositions = dragState.pendingPositions
+        useCardStore.getState().moveCardsLocal(dragState.pendingPositions)
       }
 
       const handleMove = (moveEvent: PointerEvent) => {
@@ -160,14 +185,32 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
           return
         }
 
+        const movedEnough =
+          Math.abs(moveEvent.clientX - startClientX) > 3 ||
+          Math.abs(moveEvent.clientY - startClientY) > 3
+
+        if (!dragState.didMove && !movedEnough) {
+          return
+        }
+
+        dragState.didMove = true
+        if (movedEnough) {
+          cardElement.dataset.cardDragMoved = 'true'
+        }
+
         const rawX = startX + (moveEvent.clientX - startClientX) / cameraZoom
         const rawY = startY + (moveEvent.clientY - startClientY) / cameraZoom
         const next = moveEvent.shiftKey
           ? { guide: null, x: rawX, y: rawY }
           : getMagneticPosition(card, dragState.ownSize, dragState.targetLines, rawX, rawY)
+        const deltaX = next.x - dragState.primaryStart.x
+        const deltaY = next.y - dragState.primaryStart.y
 
-        dragState.pendingX = next.x
-        dragState.pendingY = next.y
+        dragState.pendingPositions = dragState.startPositions.map((position) => ({
+          id: position.id,
+          x: position.x + deltaX,
+          y: position.y + deltaY,
+        }))
 
         if (!areGuidesEqual(dragState.lastGuide, next.guide)) {
           dragState.lastGuide = next.guide
@@ -187,10 +230,12 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
           return
         }
 
-        void useCardStore
-          .getState()
-          .persistCardPosition(card.id, dragState.latestX, dragState.latestY)
-          .catch(() => undefined)
+        if (dragState.didMove) {
+          void useCardStore
+            .getState()
+            .persistCardPositions(dragState.latestPositions)
+            .catch(() => undefined)
+        }
       }
 
       function removeListeners() {
@@ -200,24 +245,30 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
 
         if (dragRef.current?.frameId !== null && dragRef.current?.frameId !== undefined) {
           window.cancelAnimationFrame(dragRef.current.frameId)
-          dragRef.current.latestX = dragRef.current.pendingX
-          dragRef.current.latestY = dragRef.current.pendingY
-          useCardStore.getState().moveCardLocal(card.id, dragRef.current.latestX, dragRef.current.latestY)
+          dragRef.current.latestPositions = dragRef.current.pendingPositions
+          useCardStore.getState().moveCardsLocal(dragRef.current.latestPositions)
         }
 
         dragRef.current = null
         useCardStore.getState().clearDragGuide()
+        window.setTimeout(() => {
+          delete cardElement.dataset.cardDragMoved
+        }, 0)
       }
 
       dragRef.current = {
+        didMove: false,
         frameId: null,
-        latestX: card.x,
-        latestY: card.y,
+        latestPositions: startPositions,
         lastGuide: null,
         ownSize,
-        pendingX: card.x,
-        pendingY: card.y,
+        pendingPositions: startPositions,
+        primaryStart: {
+          x: startX,
+          y: startY,
+        },
         removeListeners,
+        startPositions,
         targetLines,
       }
       window.addEventListener('pointermove', handleMove)

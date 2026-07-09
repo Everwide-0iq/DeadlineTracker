@@ -55,6 +55,7 @@ function DeadlineCardComponent({
   const deleteCard = useCardStore((state) => state.deleteCard)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const selectCard = useCardStore((state) => state.selectCard)
+  const toggleCardSelection = useCardStore((state) => state.toggleCardSelection)
   const updateCard = useCardStore((state) => state.updateCard)
   const selectLink = useCardLinkStore((state) => state.selectLink)
   const selectText = useBoardTextStore((state) => state.selectText)
@@ -138,6 +139,11 @@ function DeadlineCardComponent({
   }
 
   const handleCardClick = (event: MouseEvent<HTMLElement>) => {
+    if (event.currentTarget.dataset.cardDragMoved === 'true') {
+      event.preventDefault()
+      return
+    }
+
     const target = event.target
 
     if (target instanceof Element && target.closest('[data-card-action="true"]')) {
@@ -146,6 +152,12 @@ function DeadlineCardComponent({
 
     selectLink(null)
     selectText(null)
+
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      toggleCardSelection(card.id)
+      return
+    }
+
     selectCard(card.id)
   }
 

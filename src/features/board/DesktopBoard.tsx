@@ -64,6 +64,12 @@ type WorldBounds = {
   right: number
   top: number
 }
+type SelectionBox = {
+  currentX: number
+  currentY: number
+  startX: number
+  startY: number
+}
 
 const cursorMeasureThrottleMs = 70
 const cameraMoveSettleMs = 180
@@ -114,6 +120,13 @@ const intersectsBounds = (left: number, top: number, width: number, height: numb
   left + width >= bounds.left &&
   top <= bounds.bottom &&
   top + height >= bounds.top
+
+const getSelectionBounds = (box: SelectionBox): WorldBounds => ({
+  bottom: Math.max(box.startY, box.currentY),
+  left: Math.min(box.startX, box.currentX),
+  right: Math.max(box.startX, box.currentX),
+  top: Math.min(box.startY, box.currentY),
+})
 
 const getTextEstimatedHeight = (text: BoardText) => {
   const charactersPerLine = Math.max(Math.floor(text.w / Math.max(text.fontSize * 0.58, 1)), 1)
@@ -273,6 +286,7 @@ export function DesktopBoard({
   const viewportRectRef = useRef<DOMRectReadOnly | null>(null)
   const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
   const [isPerformanceMode, setIsPerformanceMode] = useState(readPerformanceMode)
+  const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
   const createLink = useCardLinkStore((state) => state.createLink)
   const deleteLink = useCardLinkStore((state) => state.deleteLink)
@@ -289,6 +303,8 @@ export function DesktopBoard({
   const saveError = useCardStore((state) => state.saveError)
   const realtimeStatus = useCardStore((state) => state.realtimeStatus)
   const selectCard = useCardStore((state) => state.selectCard)
+  const selectedCardIds = useCardStore((state) => state.selectedCardIds)
+  const selectCards = useCardStore((state) => state.selectCards)
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
@@ -307,6 +323,7 @@ export function DesktopBoard({
     () => new Map(cards.map((card) => [card.id, getCardRenderSize(card)])),
     [cards],
   )
+  const selectedCardIdSet = useMemo(() => new Set(selectedCardIds), [selectedCardIds])
   const visibleWorldBounds = useMemo(
     () => getViewportWorldBounds(camera, viewportSize),
     [camera, viewportSize],
@@ -325,6 +342,19 @@ export function DesktopBoard({
     () => texts.filter((text) => isTextInBounds(text, visibleWorldBounds)),
     [texts, visibleWorldBounds],
   )
+  const selectionBoxStyle = useMemo<CSSProperties | null>(() => {
+    if (!selectionBox) {
+      return null
+    }
+
+    const bounds = getSelectionBounds(selectionBox)
+    return {
+      height: bounds.bottom - bounds.top,
+      left: bounds.left,
+      top: bounds.top,
+      width: bounds.right - bounds.left,
+    }
+  }, [selectionBox])
   const sceneStyle: SceneStyle = {
     '--scene-depth-x': `${camera.x * 0.018}px`,
     '--scene-depth-y': `${camera.y * 0.018}px`,
@@ -355,6 +385,19 @@ export function DesktopBoard({
     cameraRef.current = camera
     applyCameraToDom(camera)
   }, [applyCameraToDom, camera])
+
+  useEffect(() => {
+    if (selectedCardIds.length === 0) {
+      return
+    }
+
+    const visibleCardIds = new Set(cards.map((card) => card.id))
+    const nextSelectedIds = selectedCardIds.filter((id) => visibleCardIds.has(id))
+
+    if (nextSelectedIds.length !== selectedCardIds.length) {
+      selectCards(nextSelectedIds)
+    }
+  }, [cards, selectCards, selectedCardIds])
 
   const setCameraMoving = useCallback((value: boolean) => {
     if (isCameraMovingRef.current === value) {
@@ -608,6 +651,27 @@ export function DesktopBoard({
     return () => viewport.removeEventListener('wheel', zoomAtPoint)
   }, [zoomAtPoint])
 
+  const getSelectedIdsInBox = useCallback(
+    (box: SelectionBox, baseIds: string[]) => {
+      const bounds = getSelectionBounds(box)
+      const nextIds = new Set(baseIds)
+
+      for (const card of cards) {
+        const renderSize = cardRenderSizeById.get(card.id)
+
+        if (
+          renderSize &&
+          intersectsBounds(card.x, card.y, renderSize.w, renderSize.h, bounds)
+        ) {
+          nextIds.add(card.id)
+        }
+      }
+
+      return Array.from(nextIds)
+    },
+    [cardRenderSizeById, cards],
+  )
+
   const handlePanStart = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
       return
@@ -621,6 +685,61 @@ export function DesktopBoard({
     }
 
     if (target !== event.currentTarget) {
+      return
+    }
+
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      event.preventDefault()
+      selectLink(null)
+      selectText(null)
+
+      const startPoint = getWorldPointFromClient(event.clientX, event.clientY)
+      const baseIds = [...selectedCardIds]
+      let frameId: number | null = null
+      let pendingBox: SelectionBox = {
+        currentX: startPoint.x,
+        currentY: startPoint.y,
+        startX: startPoint.x,
+        startY: startPoint.y,
+      }
+
+      setSelectionBox(pendingBox)
+
+      const flushSelection = () => {
+        frameId = null
+        setSelectionBox(pendingBox)
+        selectCards(getSelectedIdsInBox(pendingBox, baseIds))
+      }
+
+      const handleMove = (moveEvent: globalThis.PointerEvent) => {
+        const point = getWorldPointFromClient(moveEvent.clientX, moveEvent.clientY)
+        pendingBox = {
+          ...pendingBox,
+          currentX: point.x,
+          currentY: point.y,
+        }
+
+        if (frameId === null) {
+          frameId = window.requestAnimationFrame(flushSelection)
+        }
+      }
+
+      const handleUp = () => {
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', handleUp)
+        window.removeEventListener('pointercancel', handleUp)
+
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId)
+        }
+
+        selectCards(getSelectedIdsInBox(pendingBox, baseIds))
+        setSelectionBox(null)
+      }
+
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', handleUp)
+      window.addEventListener('pointercancel', handleUp)
       return
     }
 
@@ -872,6 +991,9 @@ export function DesktopBoard({
           }}
         >
           <MagneticGuides camera={camera} dragGuide={dragGuide} viewportSize={viewportSize} />
+          {selectionBoxStyle ? (
+            <div className="board-selection-box pointer-events-none absolute z-[24]" style={selectionBoxStyle} />
+          ) : null}
 
           <div className="board-content-transition" key={viewKey}>
             {isPerformanceMode
@@ -911,7 +1033,7 @@ export function DesktopBoard({
                   canDrag
                   card={card}
                   isConnecting={Boolean(draftLink)}
-                  isSelected={selectedCardId === card.id}
+                  isSelected={selectedCardIdSet.has(card.id)}
                   onStartConnection={handleStartConnection}
                 />
               </div>
