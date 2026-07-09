@@ -25,6 +25,7 @@ import {
   type ProjectDeadlineSummary,
   type ProjectMoveDirection,
 } from '../features/projects/project.types.ts'
+import { getProjectDisplayName } from '../features/projects/project.utils.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { readStorageValue, writeStorageValue } from '../lib/storage.ts'
 
@@ -248,6 +249,20 @@ export function BoardPage() {
       ),
     [activeBoardScope, activeProjectId, texts, userId],
   )
+  const activeProject = useMemo(
+    () => projects.find((project) => project.id === activeProjectId) ?? null,
+    [activeProjectId, projects],
+  )
+  const exportContext = useMemo(
+    () => ({
+      boardName:
+        activeBoardScope === 'shared'
+          ? getProjectDisplayName(activeProject, t) ?? t.project.general
+          : t.sidebar.personal,
+      filterName: t.filters[filter],
+    }),
+    [activeBoardScope, activeProject, filter, t],
+  )
   const mobileCards = useMemo(() => sortCardsForMobile(visibleCards, now), [now, visibleCards])
   const viewKey = `${activeBoardScope}:${activeBoardScope === 'shared' ? activeProjectId : 'personal'}:${filter}`
 
@@ -397,6 +412,7 @@ export function BoardPage() {
             camera={camera}
             boardScope={activeBoardScope}
             cards={visibleCards}
+            exportContext={exportContext}
             links={visibleLinks}
             texts={visibleTexts}
             error={boardError}

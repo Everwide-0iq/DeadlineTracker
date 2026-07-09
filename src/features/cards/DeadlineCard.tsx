@@ -74,6 +74,7 @@ function DeadlineCardComponent({
     '--deadline-border': visual.borderColor,
     '--deadline-glow': visual.glowColor,
     '--deadline-text': visual.textColor,
+    height: renderSize.h,
     left: card.x,
     minHeight: renderSize.h,
     top: card.y,
@@ -183,7 +184,7 @@ function DeadlineCardComponent({
   return (
     <article
       className={cn(
-        'deadline-card group absolute z-[12] select-none overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
+        'deadline-card group absolute z-[12] flex select-none flex-col overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
         card.status === 'done' && 'deadline-card-done',
         isCompleting && 'deadline-card-completed',
         isConnecting && 'deadline-card-connecting',
@@ -231,8 +232,8 @@ function DeadlineCardComponent({
             </button>
           ))
         : null}
-      <div className="relative z-10">
-        <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
           <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_22px_var(--deadline-glow)]">
             {card.status === 'done' ? <CheckCircle2 size={21} /> : <Flame size={21} />}
           </div>
@@ -254,7 +255,7 @@ function DeadlineCardComponent({
 
         <h3
           className={cn(
-            'mb-3 whitespace-pre-wrap break-words text-[22px] font-bold leading-tight text-white drop-shadow',
+            'mb-3 shrink-0 whitespace-pre-wrap break-words text-[22px] font-bold leading-tight text-white drop-shadow',
             card.status === 'done' && 'text-white/55 line-through',
           )}
         >
@@ -262,36 +263,40 @@ function DeadlineCardComponent({
         </h3>
 
         {card.description ? (
-          <p className="mb-4 whitespace-pre-wrap break-words text-sm leading-6 text-white/55">
+          <p className="mb-4 shrink-0 whitespace-pre-wrap break-words text-sm leading-6 text-white/55">
             {card.description}
           </p>
         ) : null}
 
         {card.imagePath ? (
-          <CardImageView
-            alt={t.cardImage.previewAlt(card.title)}
-            className="deadline-card-image mb-4"
-            height={card.imageHeight}
-            path={card.imagePath}
-            width={card.imageWidth}
-          />
+          <div className="deadline-card-image-slot mb-4">
+            <CardImageView
+              alt={t.cardImage.previewAlt(card.title)}
+              className="deadline-card-image"
+              height={card.imageHeight}
+              path={card.imagePath}
+              width={card.imageWidth}
+            />
+          </div>
         ) : null}
 
-        <div className="mb-4 flex items-center gap-3 text-[var(--deadline-text)]">
-          <Clock3 size={23} />
-          <span className="countdown-text text-[34px] font-black tracking-normal">{countdown}</span>
-        </div>
+        <div className="mt-auto shrink-0">
+          <div className="mb-4 flex items-center gap-3 text-[var(--deadline-text)]">
+            <Clock3 size={23} />
+            <span className="countdown-text text-[34px] font-black tracking-normal">{countdown}</span>
+          </div>
 
-        <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-[var(--deadline-border)] shadow-[0_0_18px_var(--deadline-glow)] transition-all"
-            style={{ width: `${Math.round(visual.progress * 100)}%` }}
-          />
-        </div>
+          <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-[var(--deadline-border)] shadow-[0_0_18px_var(--deadline-glow)] transition-all"
+              style={{ width: `${Math.round(visual.progress * 100)}%` }}
+            />
+          </div>
 
-        <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-[var(--deadline-text)]">
-          <span className="h-2.5 w-2.5 rounded-full bg-[var(--deadline-border)] shadow-[0_0_12px_var(--deadline-glow)]" />
-          {visual.label}
+          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-[var(--deadline-text)]">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--deadline-border)] shadow-[0_0_12px_var(--deadline-glow)]" />
+            {visual.label}
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { AlertTriangle, Plus } from 'lucide-react'
+import { AlertTriangle, Download, Plus } from 'lucide-react'
 import {
   memo,
   useCallback,
@@ -36,6 +36,10 @@ type DesktopBoardProps = {
   camera: BoardCamera
   boardScope: BoardScope
   cards: Card[]
+  exportContext: {
+    boardName: string
+    filterName: string
+  }
   links: CardLink[]
   texts: BoardText[]
   error: string | null
@@ -54,6 +58,22 @@ type DesktopBoardProps = {
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 type UnderlightStyle = CSSProperties & Record<`--${string}`, string | number>
 type SceneStyle = CSSProperties & Record<`--${string}`, string | number>
+
+const getExportLocale = (language: 'en' | 'ru') => (language === 'ru' ? 'ru-RU' : 'en-US')
+
+const sanitizeFileNamePart = (value: string) =>
+  value
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 60) || 'board'
+
+const formatExportDate = (date: Date, language: 'en' | 'ru') =>
+  new Intl.DateTimeFormat(getExportLocale(language), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
 
 const CardUnderlight = memo(function CardUnderlight({ card, now }: { card: Card; now: number }) {
   const language = useI18nStore((state) => state.language)
@@ -174,6 +194,7 @@ export function DesktopBoard({
   camera,
   boardScope,
   cards,
+  exportContext,
   links,
   texts,
   error,
@@ -225,6 +246,56 @@ export function DesktopBoard({
     '--scene-depth-x': `${camera.x * 0.018}px`,
     '--scene-depth-y': `${camera.y * 0.018}px`,
   }
+
+  const handleExportBoard = useCallback(() => {
+    const exportedAt = new Date()
+    const formatDate = (value: string) => {
+      const date = new Date(value)
+
+      if (Number.isNaN(date.getTime())) {
+        return {
+          iso: value,
+          local: null,
+        }
+      }
+
+      return {
+        iso: date.toISOString(),
+        local: formatExportDate(date, language),
+      }
+    }
+    const payload = {
+      exportedAt: exportedAt.toISOString(),
+      exportedAtLocal: formatExportDate(exportedAt, language),
+      board: {
+        name: exportContext.boardName,
+        type: boardScope === 'shared' ? 'team' : 'personal',
+      },
+      filter: exportContext.filterName,
+      tasks: cards.map((card) => ({
+        title: card.title,
+        description: card.description || null,
+        completed: card.status === 'done',
+        status: card.status,
+        deadline: formatDate(card.deadlineAt),
+      })),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const datePart = exportedAt.toISOString().slice(0, 10)
+    const boardPart = sanitizeFileNamePart(exportContext.boardName)
+    const filterPart = sanitizeFileNamePart(exportContext.filterName)
+
+    link.href = url
+    link.download = `fireboard-${boardPart}-${filterPart}-${datePart}.json`
+    document.body.append(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 0)
+  }, [boardScope, cards, exportContext.boardName, exportContext.filterName, language])
 
   useEffect(() => {
     return () => {
@@ -652,6 +723,16 @@ export function DesktopBoard({
           onZoomOut={() => zoomBy(0.9)}
         />
       </div>
+
+      <button
+        aria-label={t.board.exportJson}
+        className="pointer-events-auto absolute right-[274px] top-6 z-20 hidden items-center gap-2 rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white/70 shadow-2xl backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:border-red-300/40 hover:bg-red-500/10 hover:text-white xl:flex"
+        type="button"
+        onClick={handleExportBoard}
+      >
+        <Download size={15} />
+        {t.board.exportJson}
+      </button>
 
       <MiniMap
         camera={camera}

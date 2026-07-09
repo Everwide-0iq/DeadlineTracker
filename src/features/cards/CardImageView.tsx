@@ -76,14 +76,23 @@ export function CardImageView({
       style={frameStyle}
     >
       {url && !isUnavailable ? (
-        <img
-          alt={alt}
-          className={cn('card-image-media', imageClassName)}
-          draggable={false}
-          src={url}
-          onError={() => setIsUnavailable(true)}
-          onLoad={() => setIsLoaded(true)}
-        />
+        <>
+          <img
+            aria-hidden="true"
+            alt=""
+            className="card-image-backdrop"
+            draggable={false}
+            src={url}
+          />
+          <img
+            alt={alt}
+            className={cn('card-image-media', imageClassName)}
+            draggable={false}
+            src={url}
+            onError={() => setIsUnavailable(true)}
+            onLoad={() => setIsLoaded(true)}
+          />
+        </>
       ) : null}
       {!isLoaded && !isUnavailable ? <div className="card-image-shimmer" /> : null}
       {isUnavailable ? (
