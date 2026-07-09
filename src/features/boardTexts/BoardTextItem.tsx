@@ -5,12 +5,11 @@ import { useCardStore } from '../cards/card.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
-import type { BoardCamera } from '../board/useBoardCamera.ts'
 import { useBoardTextStore } from './boardText.store.ts'
 import type { BoardText, BoardTextFontFamily } from './boardText.types.ts'
 
 type BoardTextItemProps = {
-  camera: BoardCamera
+  cameraZoom: number
   isSelected: boolean
   text: BoardText
 }
@@ -43,7 +42,7 @@ const fontFamilies: Record<BoardTextFontFamily, string> = {
   system: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 }
 
-function BoardTextItemComponent({ camera, isSelected, text }: BoardTextItemProps) {
+function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemProps) {
   const dragRef = useRef<DragState | null>(null)
   const resizeRef = useRef<ResizeState | null>(null)
   const openEditEditor = useBoardTextStore((state) => state.openEditEditor)
@@ -105,8 +104,8 @@ function BoardTextItemComponent({ camera, isSelected, text }: BoardTextItemProps
         return
       }
 
-      dragState.pendingX = startX + (moveEvent.clientX - startClientX) / camera.zoom
-      dragState.pendingY = startY + (moveEvent.clientY - startClientY) / camera.zoom
+      dragState.pendingX = startX + (moveEvent.clientX - startClientX) / cameraZoom
+      dragState.pendingY = startY + (moveEvent.clientY - startClientY) / cameraZoom
 
       if (dragState.frameId === null) {
         dragState.frameId = window.requestAnimationFrame(flushMove)
@@ -203,7 +202,11 @@ function BoardTextItemComponent({ camera, isSelected, text }: BoardTextItemProps
         return
       }
 
-      resizeState.pendingW = clamp(startW + (moveEvent.clientX - startClientX) / camera.zoom, minTextWidth, maxTextWidth)
+      resizeState.pendingW = clamp(
+        startW + (moveEvent.clientX - startClientX) / cameraZoom,
+        minTextWidth,
+        maxTextWidth,
+      )
 
       if (resizeState.frameId === null) {
         resizeState.frameId = window.requestAnimationFrame(flushResize)

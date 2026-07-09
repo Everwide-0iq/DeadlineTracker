@@ -1,4 +1,9 @@
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import {
+  memo,
+  useMemo,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
@@ -26,6 +31,16 @@ type MiniMapProps = {
   viewportSize: ViewportSize
 }
 
+type MiniMapCardMetric = {
+  color: string
+  glowColor: string
+  h: number
+  id: string
+  w: number
+  x: number
+  y: number
+}
+
 const mapSize = {
   height: 114,
   width: 212,
@@ -47,19 +62,19 @@ function getViewportBounds(camera: BoardCamera, viewportSize: ViewportSize): Wor
   }
 }
 
-function getMiniMapGeometry(cards: Card[], camera: BoardCamera, viewportSize: ViewportSize) {
+function getMiniMapGeometry(
+  cardMetrics: MiniMapCardMetric[],
+  camera: BoardCamera,
+  viewportSize: ViewportSize,
+) {
   const viewportBounds = getViewportBounds(camera, viewportSize)
-  const cardBounds = cards.reduce<WorldBounds>(
-    (acc, card) => {
-      const renderSize = getCardRenderSize(card)
-
-      return {
-        maxX: Math.max(acc.maxX, card.x + renderSize.w),
-        maxY: Math.max(acc.maxY, card.y + renderSize.h),
-        minX: Math.min(acc.minX, card.x),
-        minY: Math.min(acc.minY, card.y),
-      }
-    },
+  const cardBounds = cardMetrics.reduce<WorldBounds>(
+    (acc, card) => ({
+      maxX: Math.max(acc.maxX, card.x + card.w),
+      maxY: Math.max(acc.maxY, card.y + card.h),
+      minX: Math.min(acc.minX, card.x),
+      minY: Math.min(acc.minY, card.y),
+    }),
     viewportBounds,
   )
 
@@ -88,10 +103,28 @@ function getMiniMapGeometry(cards: Card[], camera: BoardCamera, viewportSize: Vi
   }
 }
 
-export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMapProps) {
+function MiniMapComponent({ camera, cards, now, setCamera, viewportSize }: MiniMapProps) {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
-  const geometry = getMiniMapGeometry(cards, camera, viewportSize)
+  const cardMetrics = useMemo(
+    () =>
+      cards.map((card) => {
+        const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
+        const renderSize = getCardRenderSize(card)
+
+        return {
+          color: visual.borderColor,
+          glowColor: visual.glowColor,
+          h: renderSize.h,
+          id: card.id,
+          w: renderSize.w,
+          x: card.x,
+          y: card.y,
+        }
+      }),
+    [cards, language, now],
+  )
+  const geometry = getMiniMapGeometry(cardMetrics, camera, viewportSize)
 
   const toMapX = (worldX: number) => geometry.offsetX + (worldX - geometry.bounds.minX) * geometry.scale
   const toMapY = (worldY: number) => geometry.offsetY + (worldY - geometry.bounds.minY) * geometry.scale
@@ -160,9 +193,7 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
         style={{ height: mapSize.height, width: mapSize.width }}
         tabIndex={0}
       >
-        {cards.map((card) => {
-          const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
-          const renderSize = getCardRenderSize(card)
+        {cardMetrics.map((card) => {
           const left = toMapX(card.x)
           const top = toMapY(card.y)
 
@@ -171,12 +202,12 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
               className="absolute rounded-[3px]"
               key={card.id}
               style={{
-                backgroundColor: visual.borderColor,
-                boxShadow: `0 0 10px ${visual.glowColor}`,
-                height: Math.max(renderSize.h * geometry.scale, 4),
+                backgroundColor: card.color,
+                boxShadow: `0 0 10px ${card.glowColor}`,
+                height: Math.max(card.h * geometry.scale, 4),
                 left,
                 top,
-                width: Math.max(renderSize.w * geometry.scale, 6),
+                width: Math.max(card.w * geometry.scale, 6),
               }}
             />
           )
@@ -194,3 +225,5 @@ export function MiniMap({ camera, cards, now, setCamera, viewportSize }: MiniMap
     </div>
   )
 }
+
+export const MiniMap = memo(MiniMapComponent)

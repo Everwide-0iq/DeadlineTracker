@@ -1,4 +1,5 @@
 import { Clock3 } from 'lucide-react'
+import { memo, useMemo } from 'react'
 import type { Card } from '../cards/card.types.ts'
 import { formatCountdown } from '../cards/countdown.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
@@ -27,14 +28,18 @@ const segments: Array<Omit<Segment, 'count'>> = [
 
 const getDaysLeft = (card: Card, now: number) => (new Date(card.deadlineAt).getTime() - now) / dayMs
 
-export function HeatHorizon({ cards, now }: HeatHorizonProps) {
+function HeatHorizonComponent({ cards, now }: HeatHorizonProps) {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
-  const activeCards = cards
-    .filter((card) => card.status !== 'done')
-    .map((card) => ({ card, daysLeft: getDaysLeft(card, now) }))
-    .filter((item) => !Number.isNaN(item.daysLeft))
-    .sort((left, right) => left.daysLeft - right.daysLeft)
+  const activeCards = useMemo(
+    () =>
+      cards
+        .filter((card) => card.status !== 'done')
+        .map((card) => ({ card, daysLeft: getDaysLeft(card, now) }))
+        .filter((item) => !Number.isNaN(item.daysLeft))
+        .sort((left, right) => left.daysLeft - right.daysLeft),
+    [cards, now],
+  )
 
   const nearest = activeCards[0]?.card ?? null
   const countedSegments = segments.map((segment) => ({
@@ -84,3 +89,5 @@ export function HeatHorizon({ cards, now }: HeatHorizonProps) {
     </aside>
   )
 }
+
+export const HeatHorizon = memo(HeatHorizonComponent)

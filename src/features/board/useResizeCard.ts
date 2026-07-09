@@ -4,7 +4,6 @@ import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import { useCardStore } from '../cards/card.store.ts'
 import type { Card } from '../cards/card.types.ts'
 import { getCardContentHeight, getCardRenderSize } from '../cards/card.utils.ts'
-import type { BoardCamera } from './useBoardCamera.ts'
 
 export type CardResizeDirection = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw'
 
@@ -18,7 +17,7 @@ type ResizeState = {
 }
 
 type UseResizeCardOptions = {
-  camera: BoardCamera
+  cameraZoom: number
   card: Card
   enabled: boolean
 }
@@ -87,7 +86,7 @@ const computeResizeGeometry = (
   })
 }
 
-export function useResizeCard({ camera, card, enabled }: UseResizeCardOptions) {
+export function useResizeCard({ cameraZoom, card, enabled }: UseResizeCardOptions) {
   const resizeRef = useRef<ResizeState | null>(null)
 
   useEffect(
@@ -144,8 +143,8 @@ export function useResizeCard({ camera, card, enabled }: UseResizeCardOptions) {
           card,
           direction,
           start,
-          (moveEvent.clientX - startClientX) / camera.zoom,
-          (moveEvent.clientY - startClientY) / camera.zoom,
+          (moveEvent.clientX - startClientX) / cameraZoom,
+          (moveEvent.clientY - startClientY) / cameraZoom,
         )
 
         if (resizeState.frameId === null) {
@@ -191,6 +190,6 @@ export function useResizeCard({ camera, card, enabled }: UseResizeCardOptions) {
       window.addEventListener('pointerup', handleUp)
       window.addEventListener('pointercancel', handleUp)
     },
-    [camera.zoom, card, enabled],
+    [cameraZoom, card, enabled],
   )
 }

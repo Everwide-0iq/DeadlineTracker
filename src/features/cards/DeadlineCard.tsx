@@ -4,7 +4,6 @@ import { cn } from '../../lib/cn.ts'
 import { useDragCard } from '../board/useDragCard.ts'
 import { useResizeCard, type CardResizeDirection } from '../board/useResizeCard.ts'
 import { useBoardTextStore } from '../boardTexts/boardText.store.ts'
-import type { BoardCamera } from '../board/useBoardCamera.ts'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import type { CardLinkSide } from '../cardLinks/cardLink.types.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -19,7 +18,7 @@ import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
 
 type DeadlineCardProps = {
-  camera: BoardCamera
+  cameraZoom: number
   canDrag: boolean
   canConnect?: boolean
   card: Card
@@ -42,7 +41,7 @@ const linkSides: CardLinkSide[] = ['top', 'right', 'bottom', 'left']
 const resizeDirections: CardResizeDirection[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']
 
 function DeadlineCardComponent({
-  camera,
+  cameraZoom,
   canConnect = false,
   canDrag,
   card,
@@ -62,8 +61,8 @@ function DeadlineCardComponent({
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
-  const dragPointerDown = useDragCard({ camera, card, enabled: canDrag })
-  const resizePointerDown = useResizeCard({ camera, card, enabled: canDrag })
+  const dragPointerDown = useDragCard({ cameraZoom, card, enabled: canDrag })
+  const resizePointerDown = useResizeCard({ cameraZoom, card, enabled: canDrag })
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)

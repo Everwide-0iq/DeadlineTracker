@@ -58,6 +58,16 @@ type DesktopBoardProps = {
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 type UnderlightStyle = CSSProperties & Record<`--${string}`, string | number>
 type SceneStyle = CSSProperties & Record<`--${string}`, string | number>
+type WorldBounds = {
+  bottom: number
+  left: number
+  right: number
+  top: number
+}
+
+const cursorMeasureThrottleMs = 70
+const cameraMoveSettleMs = 180
+const viewportOverscan = 720
 
 const getExportLocale = (language: 'en' | 'ru') => (language === 'ru' ? 'ru-RU' : 'en-US')
 
@@ -74,6 +84,46 @@ const formatExportDate = (date: Date, language: 'en' | 'ru') =>
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date)
+
+const getViewportWorldBounds = (
+  camera: BoardCamera,
+  viewportSize: { height: number; width: number },
+): WorldBounds => {
+  if (viewportSize.width === 0 || viewportSize.height === 0) {
+    return {
+      bottom: Number.POSITIVE_INFINITY,
+      left: Number.NEGATIVE_INFINITY,
+      right: Number.POSITIVE_INFINITY,
+      top: Number.NEGATIVE_INFINITY,
+    }
+  }
+
+  return {
+    bottom: (viewportSize.height - camera.y) / camera.zoom + viewportOverscan,
+    left: -camera.x / camera.zoom - viewportOverscan,
+    right: (viewportSize.width - camera.x) / camera.zoom + viewportOverscan,
+    top: -camera.y / camera.zoom - viewportOverscan,
+  }
+}
+
+const intersectsBounds = (left: number, top: number, width: number, height: number, bounds: WorldBounds) =>
+  left <= bounds.right &&
+  left + width >= bounds.left &&
+  top <= bounds.bottom &&
+  top + height >= bounds.top
+
+const getTextEstimatedHeight = (text: BoardText) => {
+  const charactersPerLine = Math.max(Math.floor(text.w / Math.max(text.fontSize * 0.58, 1)), 1)
+  const lineCount = text.content
+    .replace(/\r/g, '')
+    .split('\n')
+    .reduce((count, line) => count + Math.max(Math.ceil(Math.max(line.length, 1) / charactersPerLine), 1), 0)
+
+  return Math.max(text.fontSize * lineCount * 1.16 + 32, text.fontSize + 32)
+}
+
+const isTextInBounds = (text: BoardText, bounds: WorldBounds) =>
+  intersectsBounds(text.x, text.y, text.w, getTextEstimatedHeight(text), bounds)
 
 const CardUnderlight = memo(function CardUnderlight({ card, now }: { card: Card; now: number }) {
   const language = useI18nStore((state) => state.language)
@@ -157,7 +207,7 @@ function RemoteCursor({ cursor }: { cursor: BoardCursor }) {
   )
 }
 
-function PresenceCluster({
+const PresenceCluster = memo(function PresenceCluster({
   members,
   self,
 }: {
@@ -188,7 +238,7 @@ function PresenceCluster({
       </div>
     </aside>
   )
-}
+})
 
 export function DesktopBoard({
   camera,
@@ -210,8 +260,14 @@ export function DesktopBoard({
   zoomBy,
 }: DesktopBoardProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const cameraRef = useRef(camera)
+  const cameraMoveEndTimerRef = useRef<number | null>(null)
+  const isCameraMovingRef = useRef(false)
   const linkDraftCleanupRef = useRef<(() => void) | null>(null)
+  const lastCursorMeasureAtRef = useRef(0)
+  const viewportRectRef = useRef<DOMRectReadOnly | null>(null)
   const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
+  const [isCameraMoving, setIsCameraMoving] = useState(false)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
   const createLink = useCardLinkStore((state) => state.createLink)
   const deleteLink = useCardLinkStore((state) => state.deleteLink)
@@ -242,10 +298,67 @@ export function DesktopBoard({
   const displayCameraX = Math.round(camera.x * devicePixelRatio) / devicePixelRatio
   const displayCameraY = Math.round(camera.y * devicePixelRatio) / devicePixelRatio
   const cardById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards])
+  const cardRenderSizeById = useMemo(
+    () => new Map(cards.map((card) => [card.id, getCardRenderSize(card)])),
+    [cards],
+  )
+  const visibleWorldBounds = useMemo(
+    () => getViewportWorldBounds(camera, viewportSize),
+    [camera, viewportSize],
+  )
+  const renderedCards = useMemo(
+    () =>
+      cards.filter((card) => {
+        const renderSize = cardRenderSizeById.get(card.id)
+        return renderSize
+          ? intersectsBounds(card.x, card.y, renderSize.w, renderSize.h, visibleWorldBounds)
+          : true
+      }),
+    [cardRenderSizeById, cards, visibleWorldBounds],
+  )
+  const renderedTexts = useMemo(
+    () => texts.filter((text) => isTextInBounds(text, visibleWorldBounds)),
+    [texts, visibleWorldBounds],
+  )
   const sceneStyle: SceneStyle = {
     '--scene-depth-x': `${camera.x * 0.018}px`,
     '--scene-depth-y': `${camera.y * 0.018}px`,
   }
+
+  useEffect(() => {
+    cameraRef.current = camera
+  }, [camera])
+
+  const setCameraMoving = useCallback((value: boolean) => {
+    if (isCameraMovingRef.current === value) {
+      return
+    }
+
+    isCameraMovingRef.current = value
+    setIsCameraMoving(value)
+  }, [])
+
+  const clearCameraMoveTimer = useCallback(() => {
+    if (cameraMoveEndTimerRef.current === null) {
+      return
+    }
+
+    window.clearTimeout(cameraMoveEndTimerRef.current)
+    cameraMoveEndTimerRef.current = null
+  }, [])
+
+  const beginCameraMove = useCallback(() => {
+    clearCameraMoveTimer()
+    setCameraMoving(true)
+  }, [clearCameraMoveTimer, setCameraMoving])
+
+  const settleCameraMoveSoon = useCallback(() => {
+    clearCameraMoveTimer()
+    cameraMoveEndTimerRef.current = window.setTimeout(() => {
+      cameraMoveEndTimerRef.current = null
+      setCameraMoving(false)
+    }, cameraMoveSettleMs)
+  }, [clearCameraMoveTimer, setCameraMoving])
 
   const handleExportBoard = useCallback(() => {
     const exportedAt = new Date()
@@ -300,8 +413,9 @@ export function DesktopBoard({
   useEffect(() => {
     return () => {
       linkDraftCleanupRef.current?.()
+      clearCameraMoveTimer()
     }
-  }, [])
+  }, [clearCameraMoveTimer])
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -311,6 +425,7 @@ export function DesktopBoard({
     }
 
     const updateSize = () => {
+      viewportRectRef.current = viewport.getBoundingClientRect()
       setViewportSize({
         height: viewport.clientHeight,
         width: viewport.clientWidth,
@@ -421,20 +536,24 @@ export function DesktopBoard({
   const zoomAtPoint = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
       event.preventDefault()
+      beginCameraMove()
       const rect = event.currentTarget.getBoundingClientRect()
+      viewportRectRef.current = rect
       const pointX = event.clientX - rect.left
       const pointY = event.clientY - rect.top
-      const nextZoom = clamp(camera.zoom * (event.deltaY > 0 ? 0.9 : 1.1), 0.1, 2)
-      const worldX = (pointX - camera.x) / camera.zoom
-      const worldY = (pointY - camera.y) / camera.zoom
+      const currentCamera = cameraRef.current
+      const nextZoom = clamp(currentCamera.zoom * (event.deltaY > 0 ? 0.9 : 1.1), 0.1, 2)
+      const worldX = (pointX - currentCamera.x) / currentCamera.zoom
+      const worldY = (pointY - currentCamera.y) / currentCamera.zoom
 
       setCamera({
         x: pointX - worldX * nextZoom,
         y: pointY - worldY * nextZoom,
         zoom: nextZoom,
       })
+      settleCameraMoveSoon()
     },
-    [camera, setCamera],
+    [beginCameraMove, setCamera, settleCameraMoveSoon],
   )
 
   const handlePanStart = (event: PointerEvent<HTMLDivElement>) => {
@@ -457,10 +576,11 @@ export function DesktopBoard({
     selectCard(null)
     selectLink(null)
     selectText(null)
+    beginCameraMove()
 
     const startClientX = event.clientX
     const startClientY = event.clientY
-    const startCamera = camera
+    const startCamera = cameraRef.current
     let frameId: number | null = null
     let pendingCamera = startCamera
 
@@ -490,6 +610,8 @@ export function DesktopBoard({
         window.cancelAnimationFrame(frameId)
         setCamera(pendingCamera)
       }
+
+      setCameraMoving(false)
     }
 
     window.addEventListener('pointermove', handleMove)
@@ -505,13 +627,15 @@ export function DesktopBoard({
         return { x: 0, y: 0 }
       }
 
-      const rect = viewport.getBoundingClientRect()
+      const rect = viewportRectRef.current ?? viewport.getBoundingClientRect()
+      viewportRectRef.current = rect
+      const currentCamera = cameraRef.current
       return {
-        x: (clientX - rect.left - camera.x) / camera.zoom,
-        y: (clientY - rect.top - camera.y) / camera.zoom,
+        x: (clientX - rect.left - currentCamera.x) / currentCamera.zoom,
+        y: (clientY - rect.top - currentCamera.y) / currentCamera.zoom,
       }
     },
-    [camera.x, camera.y, camera.zoom],
+    [],
   )
 
   const handleStartConnection = useCallback(
@@ -617,18 +741,27 @@ export function DesktopBoard({
 
   const handleScenePointerMove = useCallback(
     (event: PointerEvent<HTMLElement>) => {
+      const nowMs = performance.now()
+
+      if (nowMs - lastCursorMeasureAtRef.current < cursorMeasureThrottleMs) {
+        return
+      }
+
       const scene = viewportRef.current
 
       if (!scene) {
         return
       }
 
-      const rect = scene.getBoundingClientRect()
+      lastCursorMeasureAtRef.current = nowMs
+      const rect = viewportRectRef.current ?? scene.getBoundingClientRect()
+      viewportRectRef.current = rect
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
-      sendCursor((x - camera.x) / camera.zoom, (y - camera.y) / camera.zoom)
+      const currentCamera = cameraRef.current
+      sendCursor((x - currentCamera.x) / currentCamera.zoom, (y - currentCamera.y) / currentCamera.zoom)
     },
-    [camera.x, camera.y, camera.zoom, sendCursor],
+    [sendCursor],
   )
 
   const handleDeleteLink = useCallback(
@@ -647,9 +780,13 @@ export function DesktopBoard({
     [confirm, deleteLink, t.link],
   )
 
+  const handleZoomIn = useCallback(() => zoomBy(1.1), [zoomBy])
+  const handleZoomOut = useCallback(() => zoomBy(0.9), [zoomBy])
+
   return (
     <main
       className="desktop-board-scene relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b] shadow-2xl"
+      data-camera-moving={isCameraMoving ? 'true' : 'false'}
       onPointerMove={handleScenePointerMove}
       ref={viewportRef}
       style={sceneStyle}
@@ -673,7 +810,7 @@ export function DesktopBoard({
           <MagneticGuides camera={camera} dragGuide={dragGuide} viewportSize={viewportSize} />
 
           <div className="board-content-transition" key={viewKey}>
-            {cards.map((card) => (
+            {renderedCards.map((card) => (
               <CardUnderlight card={card} key={`light-${card.id}`} now={now} />
             ))}
 
@@ -691,14 +828,19 @@ export function DesktopBoard({
               }}
             />
 
-            {texts.map((text) => (
-              <BoardTextItem camera={camera} isSelected={selectedTextId === text.id} key={text.id} text={text} />
+            {renderedTexts.map((text) => (
+              <BoardTextItem
+                cameraZoom={camera.zoom}
+                isSelected={selectedTextId === text.id}
+                key={text.id}
+                text={text}
+              />
             ))}
 
-            {cards.map((card) => (
+            {renderedCards.map((card) => (
               <div data-card-root="true" key={card.id}>
                 <DeadlineCard
-                  camera={camera}
+                  cameraZoom={camera.zoom}
                   canConnect
                   canDrag
                   card={card}
@@ -718,9 +860,9 @@ export function DesktopBoard({
 
       <div className="pointer-events-none absolute left-5 top-5 z-20">
         <BoardControls
-          camera={camera}
-          onZoomIn={() => zoomBy(1.1)}
-          onZoomOut={() => zoomBy(0.9)}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          zoom={camera.zoom}
         />
       </div>
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent 
 import { useCardStore } from '../cards/card.store.ts'
 import type { Card } from '../cards/card.types.ts'
 import { getCardRenderSize } from '../cards/card.utils.ts'
-import type { BoardCamera } from './useBoardCamera.ts'
 
 type DragState = {
   frameId: number | null
@@ -14,7 +13,7 @@ type DragState = {
 }
 
 type UseDragCardOptions = {
-  camera: BoardCamera
+  cameraZoom: number
   card: Card
   enabled: boolean
 }
@@ -89,7 +88,7 @@ const getMagneticPosition = (cards: Card[], card: Card, rawX: number, rawY: numb
   }
 }
 
-export function useDragCard({ camera, card, enabled }: UseDragCardOptions) {
+export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
   const dragRef = useRef<DragState | null>(null)
 
   useEffect(
@@ -132,8 +131,8 @@ export function useDragCard({ camera, card, enabled }: UseDragCardOptions) {
       }
 
       const handleMove = (moveEvent: PointerEvent) => {
-        const rawX = startX + (moveEvent.clientX - startClientX) / camera.zoom
-        const rawY = startY + (moveEvent.clientY - startClientY) / camera.zoom
+        const rawX = startX + (moveEvent.clientX - startClientX) / cameraZoom
+        const rawY = startY + (moveEvent.clientY - startClientY) / cameraZoom
         const next = moveEvent.shiftKey
           ? { guide: null, x: rawX, y: rawY }
           : getMagneticPosition(useCardStore.getState().cards, card, rawX, rawY)
@@ -194,6 +193,6 @@ export function useDragCard({ camera, card, enabled }: UseDragCardOptions) {
       window.addEventListener('pointerup', handleUp)
       window.addEventListener('pointercancel', handleUp)
     },
-    [camera.zoom, card, enabled],
+    [cameraZoom, card, enabled],
   )
 }

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
 
 export type BoardCamera = {
@@ -17,6 +17,7 @@ const defaultCamera: BoardCamera = {
   zoom: 1,
 }
 
+const persistDelayMs = 420
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
 function readStoredCamera(): BoardCamera {
@@ -57,19 +58,48 @@ function persistCamera(camera: BoardCamera) {
 
 export function useBoardCamera() {
   const [camera, setCameraState] = useState(readStoredCamera)
+  const latestCameraRef = useRef(camera)
+  const persistTimerRef = useRef<number | null>(null)
 
   const setCamera = useCallback((next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => {
     setCameraState((current) => {
       const resolved = typeof next === 'function' ? next(current) : next
-      const cameraToStore = {
+      return {
         x: resolved.x,
         y: resolved.y,
         zoom: clamp(resolved.zoom, minZoom, maxZoom),
       }
-
-      persistCamera(cameraToStore)
-      return cameraToStore
     })
+  }, [])
+
+  useEffect(() => {
+    latestCameraRef.current = camera
+
+    if (persistTimerRef.current !== null) {
+      window.clearTimeout(persistTimerRef.current)
+    }
+
+    persistTimerRef.current = window.setTimeout(() => {
+      persistCamera(latestCameraRef.current)
+      persistTimerRef.current = null
+    }, persistDelayMs)
+
+    return () => {
+      if (persistTimerRef.current !== null) {
+        window.clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
+      }
+    }
+  }, [camera])
+
+  useEffect(() => {
+    const flushCamera = () => persistCamera(latestCameraRef.current)
+
+    window.addEventListener('pagehide', flushCamera)
+
+    return () => {
+      window.removeEventListener('pagehide', flushCamera)
+    }
   }, [])
 
   const zoomBy = useCallback(

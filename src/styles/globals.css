@@ -401,6 +401,7 @@ button {
   transform-style: flat;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
+  will-change: transform;
 }
 
 .board-world .deadline-card,
@@ -409,6 +410,7 @@ button {
 }
 
 .deadline-card-underlight {
+  contain: layout paint style;
   border-radius: 34px;
   background:
     radial-gradient(
@@ -434,10 +436,16 @@ button {
   opacity: 0.64;
 }
 
+.desktop-board-scene[data-camera-moving="true"] .deadline-card-underlight {
+  filter: blur(7px);
+  animation-play-state: paused;
+}
+
 .deadline-card {
   --card-scale: 1;
   --card-tilt-x: 0deg;
   --card-tilt-y: 0deg;
+  contain: layout style;
   background:
     radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--deadline-border) 18%, transparent), transparent 34%),
     linear-gradient(135deg, var(--deadline-bg), rgba(5, 7, 10, 0.76));
@@ -463,6 +471,12 @@ button {
 
 .deadline-card[data-zone="calm"] {
   backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.desktop-board-scene[data-camera-moving="true"] .deadline-card,
+.desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="calm"] {
+  backdrop-filter: blur(12px) saturate(1.02);
+  transition-duration: 0ms;
 }
 
 .deadline-card[data-zone="important"],
@@ -746,6 +760,11 @@ button {
   opacity: 0.28;
 }
 
+.desktop-board-scene[data-camera-moving="true"] .card-image-backdrop {
+  filter: blur(12px) saturate(1.08);
+  opacity: 0.2;
+}
+
 .deadline-card-image-slot {
   display: flex;
   min-height: 128px;
@@ -797,6 +816,13 @@ button {
   animation: cardImageShimmer 1.25s ease-in-out infinite;
 }
 
+.desktop-board-scene[data-camera-moving="true"] .card-image-shimmer,
+.desktop-board-scene[data-camera-moving="true"] .magnetic-guide,
+.desktop-board-scene[data-camera-moving="true"] .card-link-flow,
+.desktop-board-scene[data-camera-moving="true"] .card-link-draft-path {
+  animation-play-state: paused;
+}
+
 .card-image-fallback {
   position: absolute;
   inset: 0;
@@ -833,6 +859,12 @@ button {
   opacity: 0.09;
   filter: blur(6px);
   pointer-events: none;
+}
+
+.desktop-board-scene[data-camera-moving="true"] .card-link-glow,
+.desktop-board-scene[data-camera-moving="true"] .card-link-draft-glow {
+  filter: blur(3px);
+  opacity: 0.06;
 }
 
 .card-link-path,
@@ -1174,6 +1206,7 @@ button {
 }
 
 .board-text-item {
+  contain: layout style;
   max-width: none;
   min-width: 140px;
   padding: 12px 46px 12px 14px;
@@ -1192,6 +1225,10 @@ button {
 
 .board-text-item:active {
   cursor: grabbing;
+}
+
+.desktop-board-scene[data-camera-moving="true"] .board-text-item {
+  transition-duration: 0ms;
 }
 
 .board-text-item:hover,
