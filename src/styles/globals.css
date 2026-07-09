@@ -486,6 +486,137 @@ button {
   outline-offset: 4px;
 }
 
+.card-resize-handle {
+  position: absolute;
+  z-index: 26;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.card-resize-handle span {
+  position: absolute;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--deadline-border) 72%, white);
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--deadline-border) 8%, transparent),
+    0 0 18px var(--deadline-glow);
+}
+
+.deadline-card:hover .card-resize-handle,
+.deadline-card-selected .card-resize-handle {
+  opacity: 0.42;
+}
+
+.card-resize-handle:hover {
+  opacity: 0.95;
+}
+
+.card-resize-handle-n,
+.card-resize-handle-s {
+  left: 24px;
+  right: 24px;
+  height: 12px;
+  cursor: ns-resize;
+}
+
+.card-resize-handle-n {
+  top: -6px;
+}
+
+.card-resize-handle-s {
+  bottom: -6px;
+}
+
+.card-resize-handle-e,
+.card-resize-handle-w {
+  bottom: 24px;
+  top: 24px;
+  width: 12px;
+  cursor: ew-resize;
+}
+
+.card-resize-handle-e {
+  right: -6px;
+}
+
+.card-resize-handle-w {
+  left: -6px;
+}
+
+.card-resize-handle-n span,
+.card-resize-handle-s span {
+  height: 2px;
+  left: 24%;
+  right: 24%;
+  top: 5px;
+}
+
+.card-resize-handle-e span,
+.card-resize-handle-w span {
+  bottom: 24%;
+  top: 24%;
+  width: 2px;
+}
+
+.card-resize-handle-e span {
+  right: 5px;
+}
+
+.card-resize-handle-w span {
+  left: 5px;
+}
+
+.card-resize-handle-ne,
+.card-resize-handle-se,
+.card-resize-handle-sw,
+.card-resize-handle-nw {
+  width: 24px;
+  height: 24px;
+}
+
+.card-resize-handle-ne,
+.card-resize-handle-sw {
+  cursor: nesw-resize;
+}
+
+.card-resize-handle-se,
+.card-resize-handle-nw {
+  cursor: nwse-resize;
+}
+
+.card-resize-handle-ne {
+  right: -9px;
+  top: -9px;
+}
+
+.card-resize-handle-se {
+  bottom: -9px;
+  right: -9px;
+}
+
+.card-resize-handle-sw {
+  bottom: -9px;
+  left: -9px;
+}
+
+.card-resize-handle-nw {
+  left: -9px;
+  top: -9px;
+}
+
+.card-resize-handle-ne span,
+.card-resize-handle-se span,
+.card-resize-handle-sw span,
+.card-resize-handle-nw span {
+  width: 9px;
+  height: 9px;
+  inset: 7px;
+}
+
 .card-link-handle {
   --link-handle-transform: translate3d(0, 0, 0);
   position: absolute;

@@ -46,6 +46,8 @@ type CardState = {
   ) => void
   openEditEditor: (cardId: string) => void
   persistCardPosition: (id: string, x: number, y: number) => Promise<void>
+  persistCardGeometry: (id: string, geometry: Pick<Card, 'h' | 'w' | 'x' | 'y'>) => Promise<void>
+  resizeCardLocal: (id: string, geometry: Pick<Card, 'h' | 'w' | 'x' | 'y'>) => void
   selectCard: (id: string | null) => void
   setFilter: (filter: BoardFilter) => void
   setDragGuide: (guide: DragGuide | null) => void
@@ -180,6 +182,22 @@ export const useCardStore = create<CardState>((set, get) => ({
       set({ saveError: getMessage(error) })
       throw error
     }
+  },
+  persistCardGeometry: async (id, geometry) => {
+    set({ saveError: null })
+
+    try {
+      const card = await updateCardApi(id, geometry)
+      set((state) => ({ cards: upsertCard(state.cards, card) }))
+    } catch (error) {
+      set({ saveError: getMessage(error) })
+      throw error
+    }
+  },
+  resizeCardLocal: (id, geometry) => {
+    set((state) => ({
+      cards: state.cards.map((card) => (card.id === id ? { ...card, ...geometry } : card)),
+    }))
   },
   selectCard: (id) => set({ selectedCardId: id }),
   setDragGuide: (guide) => set({ dragGuide: guide }),

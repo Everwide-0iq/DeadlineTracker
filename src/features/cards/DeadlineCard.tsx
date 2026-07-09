@@ -2,6 +2,7 @@ import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2 } from 'luc
 import { memo, useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useDragCard } from '../board/useDragCard.ts'
+import { useResizeCard, type CardResizeDirection } from '../board/useResizeCard.ts'
 import { useBoardTextStore } from '../boardTexts/boardText.store.ts'
 import type { BoardCamera } from '../board/useBoardCamera.ts'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
@@ -38,6 +39,7 @@ type MenuPosition = {
 }
 
 const linkSides: CardLinkSide[] = ['top', 'right', 'bottom', 'left']
+const resizeDirections: CardResizeDirection[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']
 
 function DeadlineCardComponent({
   camera,
@@ -61,6 +63,7 @@ function DeadlineCardComponent({
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
   const dragPointerDown = useDragCard({ camera, card, enabled: canDrag })
+  const resizePointerDown = useResizeCard({ camera, card, enabled: canDrag })
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)
@@ -197,6 +200,20 @@ function DeadlineCardComponent({
       style={cardStyle}
     >
       <div className="pointer-events-none absolute inset-0 rounded-[18px] opacity-45 deadline-card-noise" />
+      {canDrag
+        ? resizeDirections.map((direction) => (
+            <button
+              aria-label={`${t.card.actions}: resize ${direction}`}
+              className={cn('card-resize-handle', `card-resize-handle-${direction}`)}
+              data-card-action="true"
+              key={direction}
+              type="button"
+              onPointerDown={(event) => resizePointerDown(direction, event)}
+            >
+              <span />
+            </button>
+          ))
+        : null}
       {canConnect
         ? linkSides.map((side) => (
             <button

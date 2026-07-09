@@ -19,8 +19,9 @@ const titleAverageCharWidth = 12.5
 const descriptionAverageCharWidth = 7.4
 const titleLineHeight = 28
 const descriptionLineHeight = 24
-const includedTitleLines = 2
-const includedDescriptionLines = 2
+const cardFixedChromeHeight = 218
+const titleBlockMargin = 12
+const descriptionBlockMargin = 16
 const imagePreviewMargin = 16
 const maxImagePreviewHeight = 360
 const minImagePreviewHeight = 128
@@ -92,15 +93,17 @@ export function getCardContentHeight({
   )
   const titleLines = Math.max(getTextLineCount(title, titleCharactersPerLine), 1)
   const descriptionLines = getTextLineCount(description, descriptionCharactersPerLine)
-  const titleExtraHeight = Math.max(titleLines - includedTitleLines, 0) * titleLineHeight
-  const descriptionExtraHeight =
-    Math.max(descriptionLines - includedDescriptionLines, 0) * descriptionLineHeight
+  const titleHeight = titleLines * titleLineHeight + titleBlockMargin
+  const descriptionHeight =
+    descriptionLines > 0 ? descriptionLines * descriptionLineHeight + descriptionBlockMargin : 0
   const imageExtraHeight = getImagePreviewHeight(contentWidth, imagePath, imageWidth, imageHeight)
+  const minimumContentHeight =
+    cardFixedChromeHeight + titleHeight + descriptionHeight + imageExtraHeight
 
   return Math.ceil(
     Math.max(
       h ?? defaultCardSize.h,
-      defaultCardSize.h + titleExtraHeight + descriptionExtraHeight + imageExtraHeight,
+      minimumContentHeight,
     ),
   )
 }
