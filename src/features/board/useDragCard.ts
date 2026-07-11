@@ -147,6 +147,7 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
       const startX = card.x
       const startY = card.y
       const state = useCardStore.getState()
+      state.setGeometryInteracting(true)
       const selectedIds = new Set(state.selectedCardIds)
       const shouldDragSelection = selectedIds.has(card.id) && selectedIds.size > 1
 
@@ -234,7 +235,19 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
           void useCardStore
             .getState()
             .persistCardPositions(dragState.latestPositions)
-            .catch(() => undefined)
+            .catch(() => {
+              const state = useCardStore.getState()
+              const attemptedById = new Map(
+                dragState.latestPositions.map((position) => [position.id, position]),
+              )
+              const safeRollback = dragState.startPositions.filter((position) => {
+                const current = state.cards.find((item) => item.id === position.id)
+                const attempted = attemptedById.get(position.id)
+                return current && attempted && current.x === attempted.x && current.y === attempted.y
+              })
+
+              state.moveCardsLocal(safeRollback)
+            })
         }
       }
 
@@ -251,6 +264,7 @@ export function useDragCard({ cameraZoom, card, enabled }: UseDragCardOptions) {
 
         dragRef.current = null
         useCardStore.getState().clearDragGuide()
+        useCardStore.getState().setGeometryInteracting(false)
         window.setTimeout(() => {
           delete cardElement.dataset.cardDragMoved
         }, 0)

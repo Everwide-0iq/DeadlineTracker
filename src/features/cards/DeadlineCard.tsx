@@ -1,5 +1,13 @@
 import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink } from 'lucide-react'
-import { memo, useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
+import {
+  memo,
+  useEffect,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useDragCard } from '../board/useDragCard.ts'
 import { useResizeCard, type CardResizeDirection } from '../board/useResizeCard.ts'
@@ -201,6 +209,29 @@ function DeadlineCardComponent({
     setIsMenuOpen(true)
   }
 
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) {
+      return
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      openEditEditor(card.id)
+      return
+    }
+
+    if (event.key === ' ') {
+      event.preventDefault()
+      selectLink(null)
+      selectText(null)
+      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+        toggleCardSelection(card.id)
+      } else {
+        selectCard(card.id)
+      }
+    }
+  }
+
   const handleCardPointerMove = (event: PointerEvent<HTMLElement>) => {
     if (event.pointerType === 'touch' || event.buttons !== 0) {
       return
@@ -220,6 +251,7 @@ function DeadlineCardComponent({
 
   return (
     <article
+      aria-label={`${card.title}, ${countdown}`}
       className={cn(
         'deadline-card group absolute z-[12] flex select-none flex-col overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
         card.status === 'done' && 'deadline-card-done',
@@ -232,10 +264,12 @@ function DeadlineCardComponent({
       onClick={handleCardClick}
       onContextMenu={handleContextMenu}
       onDoubleClick={() => openEditEditor(card.id)}
+      onKeyDown={handleCardKeyDown}
       onPointerDown={dragPointerDown}
       onPointerLeave={handleCardPointerLeave}
       onPointerMove={handleCardPointerMove}
       style={cardStyle}
+      tabIndex={0}
     >
       <div className="pointer-events-none absolute inset-0 rounded-[18px] opacity-45 deadline-card-noise" />
       {canDrag
@@ -245,6 +279,7 @@ function DeadlineCardComponent({
               className={cn('card-resize-handle', `card-resize-handle-${direction}`)}
               data-card-action="true"
               key={direction}
+              tabIndex={-1}
               type="button"
               onPointerDown={(event) => resizePointerDown(direction, event)}
             >
@@ -262,6 +297,7 @@ function DeadlineCardComponent({
               data-card-link-handle="true"
               data-card-side={side}
               key={side}
+              tabIndex={-1}
               type="button"
               onPointerDown={(event) => onStartConnection?.(card, side, event)}
             >

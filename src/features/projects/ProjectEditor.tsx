@@ -1,6 +1,7 @@
 import { FolderPlus, Save, X } from 'lucide-react'
 import { useState, type CSSProperties, type FormEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useDialogFocus } from '../../lib/useDialogFocus.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import type { Project } from './project.types.ts'
@@ -34,16 +35,21 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
   const [isSaving, setIsSaving] = useState(false)
   const [name, setName] = useState('')
 
-  if (!isOpen) {
-    return null
-  }
-
   const resetAndClose = () => {
     setError(null)
     setIsSaving(false)
     setName('')
     setColor(projectColors[0])
     onClose()
+  }
+
+  const dialogRef = useDialogFocus<HTMLElement>({
+    active: isOpen,
+    onEscape: resetAndClose,
+  })
+
+  if (!isOpen) {
+    return null
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -75,14 +81,22 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/55 p-0 backdrop-blur-sm lg:place-items-center lg:p-6">
-      <section className="w-full max-w-lg rounded-t-[28px] border border-white/10 bg-[#090b10]/95 p-5 shadow-[0_0_70px_rgb(255_65_65_/_0.17)] lg:rounded-[28px] lg:p-6">
+      <section
+        aria-labelledby="project-editor-title"
+        aria-modal="true"
+        className="w-full max-w-lg rounded-t-[28px] border border-white/10 bg-[#090b10]/95 p-5 shadow-[0_0_70px_rgb(255_65_65_/_0.17)] lg:rounded-[28px] lg:p-6"
+        ref={dialogRef}
+        role="dialog"
+      >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
               <FolderPlus size={17} />
               {t.project.new}
             </div>
-            <h2 className="text-2xl font-black text-white">{t.project.projectSpace}</h2>
+            <h2 className="text-2xl font-black text-white" id="project-editor-title">
+              {t.project.projectSpace}
+            </h2>
             <p className="mt-1 text-sm text-white/40">{t.project.teamVisible}</p>
           </div>
           <button aria-label={t.project.closeEditor} className="icon-button" type="button" onClick={resetAndClose}>

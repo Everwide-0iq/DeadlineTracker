@@ -1,6 +1,7 @@
 import { Palette, Save, SlidersHorizontal, Type, X } from 'lucide-react'
 import { useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useDialogFocus } from '../../lib/useDialogFocus.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
@@ -49,6 +50,10 @@ export function BoardTextEditor() {
     }),
     [color, fontFamily, fontSize],
   )
+  const dialogRef = useDialogFocus<HTMLFormElement>({
+    active: Boolean(editor),
+    onEscape: closeEditor,
+  })
 
   if (!editor || (editor.mode === 'edit' && !existingText)) {
     return null
@@ -98,8 +103,12 @@ export function BoardTextEditor() {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-5 text-white backdrop-blur-md">
       <form
+        aria-labelledby="board-text-editor-title"
+        aria-modal="true"
         className="board-text-editor w-[min(48rem,calc(100vw-2.5rem))] max-w-none rounded-[28px] border border-white/10 bg-[#06070c]/95 p-5 shadow-2xl"
         onSubmit={handleSubmit}
+        ref={dialogRef}
+        role="dialog"
       >
         <header className="mb-4 flex items-start justify-between gap-4">
           <div>
@@ -107,7 +116,9 @@ export function BoardTextEditor() {
               <Type size={14} />
               {t.boardText.kicker}
             </div>
-            <h2 className="text-3xl font-black leading-none tracking-normal">{title}</h2>
+            <h2 className="text-3xl font-black leading-none tracking-normal" id="board-text-editor-title">
+              {title}
+            </h2>
           </div>
           <button aria-label={t.common.close} className="icon-button" type="button" onClick={closeEditor}>
             <X size={19} />

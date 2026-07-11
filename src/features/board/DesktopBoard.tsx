@@ -35,6 +35,7 @@ import type { BoardCamera } from './useBoardCamera.ts'
 type DesktopBoardProps = {
   camera: BoardCamera
   boardScope: BoardScope
+  collaborationRoomId: string
   cards: Card[]
   exportContext: {
     boardName: string
@@ -259,6 +260,7 @@ const PresenceCluster = memo(function PresenceCluster({
 export function DesktopBoard({
   camera,
   boardScope,
+  collaborationRoomId,
   cards,
   exportContext,
   links,
@@ -300,6 +302,7 @@ export function DesktopBoard({
   const deleteCard = useCardStore((state) => state.deleteCard)
   const dragGuide = useCardStore((state) => state.dragGuide)
   const editor = useCardStore((state) => state.editor)
+  const isGeometryInteracting = useCardStore((state) => state.isGeometryInteracting)
   const saveError = useCardStore((state) => state.saveError)
   const realtimeStatus = useCardStore((state) => state.realtimeStatus)
   const selectCard = useCardStore((state) => state.selectCard)
@@ -311,6 +314,7 @@ export function DesktopBoard({
   const { members, remoteCursors, self, sendCursor } = useBoardCollaboration({
     enabled: boardScope === 'shared',
     fallbackName: t.board.memberFallback,
+    roomId: collaborationRoomId,
     userEmail,
     userId,
   })
@@ -968,6 +972,7 @@ export function DesktopBoard({
     <main
       className="desktop-board-scene relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b] shadow-2xl"
       data-camera-moving={isCameraMovingRef.current ? 'true' : 'false'}
+      data-geometry-interacting={isGeometryInteracting ? 'true' : 'false'}
       data-performance-mode={isPerformanceMode ? 'true' : 'false'}
       onPointerMove={handleScenePointerMove}
       ref={viewportRef}
@@ -1054,7 +1059,7 @@ export function DesktopBoard({
         />
       </div>
 
-      <div className="pointer-events-auto absolute right-[274px] top-6 z-20 hidden items-center gap-2 xl:flex">
+      <div className="pointer-events-auto absolute right-6 top-6 z-20 hidden items-center gap-2 lg:flex xl:right-[274px]">
         <button
           aria-label={t.board.exportJson}
           className="board-top-action"
@@ -1066,7 +1071,7 @@ export function DesktopBoard({
         </button>
 
         <button
-          aria-label="Performance mode"
+          aria-label={t.board.performanceMode}
           aria-pressed={isPerformanceMode}
           className="board-top-action board-performance-toggle"
           data-active={isPerformanceMode ? 'true' : 'false'}
@@ -1074,7 +1079,7 @@ export function DesktopBoard({
           onClick={togglePerformanceMode}
         >
           <Activity size={15} />
-          Performance
+          {t.board.performanceMode}
         </button>
       </div>
 

@@ -312,6 +312,66 @@ exception
 end;
 $$;
 
+create table if not exists public.card_image_cleanup_queue (
+  image_path text primary key,
+  requested_by uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint card_image_cleanup_path_check check (char_length(image_path) between 8 and 512)
+);
+
+alter table public.cards
+drop constraint if exists cards_content_geometry_check;
+
+alter table public.cards
+add constraint cards_content_geometry_check check (
+  char_length(btrim(title)) between 1 and 120
+  and (description is null or char_length(description) <= 1800)
+  and isfinite(deadline_at)
+  and x between -10000000 and 10000000
+  and y between -10000000 and 10000000
+  and w between 280 and 3200
+  and h between 120 and 6000
+) not valid;
+
+do $$
+begin
+  alter table public.cards validate constraint cards_content_geometry_check;
+exception
+  when check_violation then null;
+end;
+$$;
+
+alter table public.board_texts
+drop constraint if exists board_texts_position_check;
+
+alter table public.board_texts
+add constraint board_texts_position_check check (
+  x between -10000000 and 10000000
+  and y between -10000000 and 10000000
+) not valid;
+
+do $$
+begin
+  alter table public.board_texts validate constraint board_texts_position_check;
+exception
+  when check_violation then null;
+end;
+$$;
+
+alter table public.projects
+drop constraint if exists projects_sort_order_check;
+
+alter table public.projects
+add constraint projects_sort_order_check check (sort_order between 0 and 1000000000) not valid;
+
+do $$
+begin
+  alter table public.projects validate constraint projects_sort_order_check;
+exception
+  when check_violation then null;
+end;
+$$;
+
 create index if not exists projects_created_at_idx on public.projects (created_at);
 create index if not exists projects_created_by_idx on public.projects (created_by);
 create index if not exists projects_sort_order_idx on public.projects (sort_order);
@@ -331,6 +391,8 @@ create index if not exists board_texts_board_scope_idx on public.board_texts (bo
 create index if not exists board_texts_project_id_idx on public.board_texts (project_id);
 create index if not exists board_texts_created_by_idx on public.board_texts (created_by);
 create index if not exists board_texts_created_at_idx on public.board_texts (created_at);
+create index if not exists card_image_cleanup_requested_by_idx
+on public.card_image_cleanup_queue (requested_by, created_at);
 
 with duplicate_card_links as (
   select
@@ -365,6 +427,7 @@ language plpgsql
 as $$
 begin
   new.created_by = old.created_by;
+  new.created_at = old.created_at;
   new.board_scope = old.board_scope;
   return new;
 end;
@@ -425,6 +488,7 @@ language plpgsql
 as $$
 begin
   new.created_by = old.created_by;
+  new.created_at = old.created_at;
   return new;
 end;
 $$;
@@ -435,8 +499,54 @@ language plpgsql
 as $$
 begin
   new.created_by = old.created_by;
+  new.created_at = old.created_at;
   new.board_scope = old.board_scope;
   new.project_id = old.project_id;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_project_ownership()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.created_by = old.created_by;
+  new.created_at = old.created_at;
+  return new;
+end;
+$$;
+
+create or replace function public.queue_card_image_cleanup()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cleanup_path text;
+  cleanup_user uuid;
+begin
+  if tg_op = 'UPDATE' and old.image_path is not distinct from new.image_path then
+    return new;
+  end if;
+
+  cleanup_path = old.image_path;
+  cleanup_user = coalesce(auth.uid(), old.created_by);
+
+  if cleanup_path is not null and cleanup_user is not null then
+    insert into public.card_image_cleanup_queue (image_path, requested_by)
+    values (cleanup_path, cleanup_user)
+    on conflict (image_path) do update
+    set
+      requested_by = excluded.requested_by,
+      created_at = now();
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
   return new;
 end;
 $$;
@@ -458,6 +568,24 @@ create trigger protect_board_texts_ownership
 before update on public.board_texts
 for each row
 execute function public.protect_board_text_ownership();
+
+drop trigger if exists protect_projects_ownership on public.projects;
+create trigger protect_projects_ownership
+before update on public.projects
+for each row
+execute function public.protect_project_ownership();
+
+drop trigger if exists queue_replaced_card_image on public.cards;
+create trigger queue_replaced_card_image
+after update of image_path on public.cards
+for each row
+execute function public.queue_card_image_cleanup();
+
+drop trigger if exists queue_deleted_card_image on public.cards;
+create trigger queue_deleted_card_image
+after delete on public.cards
+for each row
+execute function public.queue_card_image_cleanup();
 
 drop trigger if exists validate_card_links_scope on public.card_links;
 create trigger validate_card_links_scope
@@ -489,6 +617,233 @@ before update on public.board_texts
 for each row
 execute function public.set_updated_at();
 
+create or replace function public.update_card_positions(payload jsonb)
+returns setof public.cards
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  payload_count integer;
+  distinct_count integer;
+  matched_count integer;
+begin
+  if payload is null or jsonb_typeof(payload) <> 'array' then
+    raise exception 'Card position payload must be a JSON array';
+  end if;
+
+  select count(*), count(distinct item.id)
+  into payload_count, distinct_count
+  from jsonb_to_recordset(payload) as item(id uuid, x double precision, y double precision);
+
+  if payload_count = 0 then
+    return;
+  end if;
+
+  if payload_count <> distinct_count or exists (
+    select 1
+    from jsonb_to_recordset(payload) as item(id uuid, x double precision, y double precision)
+    where item.id is null
+      or item.x is null
+      or item.y is null
+      or item.x not between -10000000 and 10000000
+      or item.y not between -10000000 and 10000000
+  ) then
+    raise exception 'Card position payload is invalid';
+  end if;
+
+  perform card.id
+  from public.cards as card
+  join jsonb_to_recordset(payload) as item(id uuid, x double precision, y double precision)
+    on item.id = card.id
+  order by card.id
+  for update of card;
+
+  get diagnostics matched_count = row_count;
+
+  if matched_count <> payload_count then
+    raise exception 'One or more cards were not found or are not accessible';
+  end if;
+
+  update public.cards as card
+  set
+    x = item.x,
+    y = item.y
+  from jsonb_to_recordset(payload) as item(id uuid, x double precision, y double precision)
+  where card.id = item.id;
+
+  return query
+  select card.*
+  from public.cards as card
+  join jsonb_to_recordset(payload) as item(id uuid, x double precision, y double precision)
+    on item.id = card.id
+  order by card.created_at, card.id;
+end;
+$$;
+
+create or replace function public.update_card_geometries(payload jsonb)
+returns setof public.cards
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  payload_count integer;
+  distinct_count integer;
+  matched_count integer;
+begin
+  if payload is null or jsonb_typeof(payload) <> 'array' then
+    raise exception 'Card geometry payload must be a JSON array';
+  end if;
+
+  select count(*), count(distinct item.id)
+  into payload_count, distinct_count
+  from jsonb_to_recordset(payload) as item(
+    id uuid,
+    x double precision,
+    y double precision,
+    w double precision,
+    h double precision
+  );
+
+  if payload_count = 0 then
+    return;
+  end if;
+
+  if payload_count <> distinct_count or exists (
+    select 1
+    from jsonb_to_recordset(payload) as item(
+      id uuid,
+      x double precision,
+      y double precision,
+      w double precision,
+      h double precision
+    )
+    where item.id is null
+      or item.x is null
+      or item.y is null
+      or item.w is null
+      or item.h is null
+      or item.x not between -10000000 and 10000000
+      or item.y not between -10000000 and 10000000
+      or item.w not between 280 and 3200
+      or item.h not between 120 and 6000
+  ) then
+    raise exception 'Card geometry payload is invalid';
+  end if;
+
+  perform card.id
+  from public.cards as card
+  join jsonb_to_recordset(payload) as item(
+    id uuid,
+    x double precision,
+    y double precision,
+    w double precision,
+    h double precision
+  ) on item.id = card.id
+  order by card.id
+  for update of card;
+
+  get diagnostics matched_count = row_count;
+
+  if matched_count <> payload_count then
+    raise exception 'One or more cards were not found or are not accessible';
+  end if;
+
+  update public.cards as card
+  set
+    x = item.x,
+    y = item.y,
+    w = item.w,
+    h = item.h
+  from jsonb_to_recordset(payload) as item(
+    id uuid,
+    x double precision,
+    y double precision,
+    w double precision,
+    h double precision
+  )
+  where card.id = item.id;
+
+  return query
+  select card.*
+  from public.cards as card
+  join jsonb_to_recordset(payload) as item(
+    id uuid,
+    x double precision,
+    y double precision,
+    w double precision,
+    h double precision
+  ) on item.id = card.id
+  order by card.created_at, card.id;
+end;
+$$;
+
+create or replace function public.reorder_projects(payload jsonb)
+returns setof public.projects
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  payload_count integer;
+  distinct_count integer;
+  matched_count integer;
+begin
+  if payload is null or jsonb_typeof(payload) <> 'array' then
+    raise exception 'Project order payload must be a JSON array';
+  end if;
+
+  select count(*), count(distinct item.id)
+  into payload_count, distinct_count
+  from jsonb_to_recordset(payload) as item(id uuid, sort_order integer);
+
+  if payload_count = 0 then
+    return query
+    select project.* from public.projects as project order by project.sort_order, project.created_at;
+    return;
+  end if;
+
+  if payload_count <> distinct_count or exists (
+    select 1
+    from jsonb_to_recordset(payload) as item(id uuid, sort_order integer)
+    where item.id is null
+      or item.id = '00000000-0000-0000-0000-000000000001'
+      or item.sort_order is null
+      or item.sort_order not between 1 and 1000000000
+  ) then
+    raise exception 'Project order payload is invalid';
+  end if;
+
+  perform project.id
+  from public.projects as project
+  join jsonb_to_recordset(payload) as item(id uuid, sort_order integer)
+    on item.id = project.id
+  order by project.id
+  for update of project;
+
+  get diagnostics matched_count = row_count;
+
+  if matched_count <> payload_count then
+    raise exception 'One or more projects were not found or are not accessible';
+  end if;
+
+  update public.projects as project
+  set sort_order = item.sort_order
+  from jsonb_to_recordset(payload) as item(id uuid, sort_order integer)
+  where project.id = item.id;
+
+  return query
+  select project.*
+  from public.projects as project
+  order by project.sort_order, project.created_at, project.id;
+end;
+$$;
+
+revoke all on function public.update_card_positions(jsonb) from public;
+revoke all on function public.update_card_geometries(jsonb) from public;
+revoke all on function public.reorder_projects(jsonb) from public;
+grant execute on function public.update_card_positions(jsonb) to authenticated;
+grant execute on function public.update_card_geometries(jsonb) to authenticated;
+grant execute on function public.reorder_projects(jsonb) to authenticated;
+
 drop trigger if exists log_cards_activity on public.cards;
 drop trigger if exists log_projects_activity on public.projects;
 drop trigger if exists log_card_links_activity on public.card_links;
@@ -503,6 +858,7 @@ alter table public.projects enable row level security;
 alter table public.cards enable row level security;
 alter table public.card_links enable row level security;
 alter table public.board_texts enable row level security;
+alter table public.card_image_cleanup_queue enable row level security;
 
 drop policy if exists "projects_select_authenticated" on public.projects;
 create policy "projects_select_authenticated"
@@ -655,6 +1011,23 @@ for delete
 to authenticated
 using (board_scope = 'shared' or (board_scope = 'personal' and created_by = auth.uid()));
 
+drop policy if exists "card_image_cleanup_select_own" on public.card_image_cleanup_queue;
+create policy "card_image_cleanup_select_own"
+on public.card_image_cleanup_queue
+for select
+to authenticated
+using (requested_by = auth.uid());
+
+drop policy if exists "card_image_cleanup_delete_own" on public.card_image_cleanup_queue;
+create policy "card_image_cleanup_delete_own"
+on public.card_image_cleanup_queue
+for delete
+to authenticated
+using (requested_by = auth.uid());
+
+revoke all on table public.card_image_cleanup_queue from anon;
+grant select, delete on table public.card_image_cleanup_queue to authenticated;
+
 drop policy if exists "card_images_select_authenticated" on storage.objects;
 create policy "card_images_select_authenticated"
 on storage.objects
@@ -672,6 +1045,12 @@ using (
           public.cards.board_scope = 'shared'
           or (public.cards.board_scope = 'personal' and public.cards.created_by = auth.uid())
         )
+    )
+    or exists (
+      select 1
+      from public.card_image_cleanup_queue
+      where public.card_image_cleanup_queue.image_path = storage.objects.name
+        and public.card_image_cleanup_queue.requested_by = auth.uid()
     )
   )
 );
@@ -704,6 +1083,12 @@ using (
           public.cards.board_scope = 'shared'
           or (public.cards.board_scope = 'personal' and public.cards.created_by = auth.uid())
         )
+    )
+    or exists (
+      select 1
+      from public.card_image_cleanup_queue
+      where public.card_image_cleanup_queue.image_path = storage.objects.name
+        and public.card_image_cleanup_queue.requested_by = auth.uid()
     )
   )
 );

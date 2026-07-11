@@ -5,15 +5,21 @@ export function useCompletionAnimation(isDone: boolean) {
   const [isCompleting, setIsCompleting] = useState(false)
 
   useEffect(() => {
+    if (!isDone) {
+      previousIsDoneRef.current = false
+      setIsCompleting(false)
+      return undefined
+    }
+
     if (!previousIsDoneRef.current && isDone) {
       setIsCompleting(true)
-      previousIsDoneRef.current = isDone
+      previousIsDoneRef.current = true
 
       const timerId = window.setTimeout(() => setIsCompleting(false), 900)
       return () => window.clearTimeout(timerId)
     }
 
-    previousIsDoneRef.current = isDone
+    previousIsDoneRef.current = true
     return undefined
   }, [isDone])
 

@@ -7,6 +7,8 @@ const maxStoredBytes = 1_800 * 1024
 const maxImageSide = 2400
 const signedUrlLifetimeSeconds = 60 * 60
 const signedUrlRefreshPaddingMs = 60 * 1000
+const cleanupBatchSize = 100
+const maxCleanupBatchesPerRun = 20
 
 type SignedUrlCacheEntry = {
   expiresAt: number
@@ -116,10 +118,18 @@ export async function prepareCardImage(file: File): Promise<PreparedCardImage> {
   const { height, image, objectUrl, width } = await loadImage(file)
   const qualitySteps = [0.92, 0.86, 0.78, 0.68]
   const sizeSteps = [maxImageSide, 2000, 1700, 1400, 1100]
+  const seenTargetSizes = new Set<string>()
 
   try {
     for (const maxSide of sizeSteps) {
       const target = getTargetSize(width, height, maxSide)
+      const targetKey = `${target.width}x${target.height}`
+
+      if (seenTargetSizes.has(targetKey)) {
+        continue
+      }
+
+      seenTargetSizes.add(targetKey)
 
       for (const quality of qualitySteps) {
         const blob = await renderWebp(image, target.width, target.height, quality)
@@ -183,6 +193,58 @@ export async function removeCardImage(path: string | null) {
 
   if (error) {
     throw error
+  }
+
+  const { error: cleanupError } = await requireSupabase()
+    .from('card_image_cleanup_queue')
+    .delete()
+    .eq('image_path', path)
+
+  if (cleanupError) {
+    throw cleanupError
+  }
+}
+
+export async function cleanupPendingCardImages() {
+  const supabase = requireSupabase()
+
+  for (let batch = 0; batch < maxCleanupBatchesPerRun; batch += 1) {
+    const { data, error } = await supabase
+      .from('card_image_cleanup_queue')
+      .select('image_path')
+      .order('created_at', { ascending: true })
+      .limit(cleanupBatchSize)
+
+    if (error) {
+      throw error
+    }
+
+    const paths = (data ?? []).map((item) => item.image_path)
+
+    if (paths.length === 0) {
+      return
+    }
+
+    const { error: removeError } = await supabase.storage.from(cardImageBucket).remove(paths)
+
+    if (removeError) {
+      throw removeError
+    }
+
+    paths.forEach((path) => signedUrlCache.delete(path))
+
+    const { error: queueError } = await supabase
+      .from('card_image_cleanup_queue')
+      .delete()
+      .in('image_path', paths)
+
+    if (queueError) {
+      throw queueError
+    }
+
+    if (paths.length < cleanupBatchSize) {
+      return
+    }
   }
 }
 

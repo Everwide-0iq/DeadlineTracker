@@ -77,6 +77,13 @@ function expandRect(rect: Rect, margin: number): Rect {
   }
 }
 
+function expandCardRect(rect: CardRect, margin: number): CardRect {
+  return {
+    ...expandRect(rect, margin),
+    id: rect.id,
+  }
+}
+
 function getAnchorPointFromRect(rect: Rect, side: CardLinkSide): Point {
   switch (side) {
     case 'top':
@@ -132,27 +139,69 @@ function axisSegmentIntersectsRect(from: Point, to: Point, rect: Rect) {
   return false
 }
 
-function scoreRoute(points: Point[], obstacles: Rect[]) {
-  const intersections = points.reduce((count, point, index) => {
-    const previous = points[index - 1]
+function scoreRoute(
+  points: Point[],
+  obstacles: CardRect[],
+  sourceCardId: string,
+  targetCardId: string,
+) {
+  let intersections = 0
+  let routeLeft = Number.POSITIVE_INFINITY
+  let routeRight = Number.NEGATIVE_INFINITY
+  let routeTop = Number.POSITIVE_INFINITY
+  let routeBottom = Number.NEGATIVE_INFINITY
 
-    if (!previous) {
-      return count
+  for (const point of points) {
+    routeLeft = Math.min(routeLeft, point.x)
+    routeRight = Math.max(routeRight, point.x)
+    routeTop = Math.min(routeTop, point.y)
+    routeBottom = Math.max(routeBottom, point.y)
+  }
+
+  for (const obstacle of obstacles) {
+    if (
+      obstacle.id === sourceCardId ||
+      obstacle.id === targetCardId ||
+      obstacle.right < routeLeft ||
+      obstacle.left > routeRight ||
+      obstacle.bottom < routeTop ||
+      obstacle.top > routeBottom
+    ) {
+      continue
     }
 
-    return (
-      count +
-      obstacles.filter((obstacle) => axisSegmentIntersectsRect(previous, point, obstacle)).length
-    )
-  }, 0)
+    for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) {
+      const previous = points[pointIndex - 1]
+      const point = points[pointIndex]
+      if (axisSegmentIntersectsRect(previous, point, obstacle)) {
+        intersections += 1
+      }
+    }
+  }
 
   return getRouteLength(points) + intersections * 12_000 + Math.max(points.length - 2, 0) * 18
 }
 
-function getBestRoute(candidates: Point[][], obstacles: Rect[]) {
-  return candidates
-    .map((points) => dedupePoints(points))
-    .sort((left, right) => scoreRoute(left, obstacles) - scoreRoute(right, obstacles))[0]
+function getBestRoute(
+  candidates: Point[][],
+  obstacles: CardRect[],
+  sourceCardId: string,
+  targetCardId: string,
+) {
+  let bestRoute: Point[] = []
+  let bestScore = Number.POSITIVE_INFINITY
+
+  for (const candidate of candidates) {
+    const route = dedupePoints(candidate)
+    const score = scoreRoute(route, obstacles, sourceCardId, targetCardId)
+
+    if (score < bestScore) {
+      bestRoute = route
+      bestScore = score
+    }
+  }
+
+  return bestRoute
 }
 
 function getRoundedPath(points: Point[]) {
@@ -223,7 +272,7 @@ function getLinkGeometry(
   sourceSide: CardLinkSide,
   targetRect: CardRect,
   targetSide: CardLinkSide,
-  cardRects: CardRect[],
+  expandedCardRects: CardRect[],
 ): LinkGeometry {
   const start = getAnchorPointFromRect(sourceRect, sourceSide)
   const end = getAnchorPointFromRect(targetRect, targetSide)
@@ -241,9 +290,6 @@ function getLinkGeometry(
   const rightX = combinedRect.right + routeMargin
   const middleX = (startOut.x + endOut.x) / 2
   const middleY = (startOut.y + endOut.y) / 2
-  const obstacles = cardRects
-    .filter((card) => card.id !== sourceRect.id && card.id !== targetRect.id)
-    .map((rect) => expandRect(rect, 14))
   const candidates: Point[][] = [
     [start, startOut, { x: middleX, y: startOut.y }, { x: middleX, y: endOut.y }, endOut, end],
     [start, startOut, { x: startOut.x, y: middleY }, { x: endOut.x, y: middleY }, endOut, end],
@@ -260,7 +306,7 @@ function getLinkGeometry(
     )
   }
 
-  const points = getBestRoute(candidates, obstacles)
+  const points = getBestRoute(candidates, expandedCardRects, sourceRect.id, targetRect.id)
 
   return {
     midpoint: getPointAtHalfLength(points),
@@ -318,6 +364,10 @@ function CardLinkLayerComponent({
     [cards, hasLinkWork],
   )
   const cardRects = useMemo(() => Array.from(cardRectById.values()), [cardRectById])
+  const expandedCardRects = useMemo(
+    () => cardRects.map((rect) => expandCardRect(rect, 14)),
+    [cardRects],
+  )
 
   const linkGeometries = useMemo(
     () =>
@@ -336,7 +386,7 @@ function CardLinkLayerComponent({
           link.fromSide,
           targetRect,
           link.toSide,
-          cardRects,
+          expandedCardRects,
         )
 
         return [
@@ -348,7 +398,7 @@ function CardLinkLayerComponent({
           },
         ]
       }),
-    [cardById, cardRectById, cardRects, links],
+    [cardById, cardRectById, expandedCardRects, links],
   )
 
   const renderedLinks = useMemo(

@@ -60,30 +60,16 @@ export async function createProject(input: CreateProjectInput, userId: string | 
 }
 
 export async function updateProjectOrders(projects: Project[]) {
-  const updates = projects
+  const payload = projects
     .filter((project) => project.id !== defaultProjectId)
-    .map((project) =>
-      requireSupabase()
-        .from('projects')
-        .update({ sort_order: project.sortOrder })
-        .eq('id', project.id)
-        .select('*')
-        .single(),
-    )
-
-  const results = await Promise.all(updates)
-  const error = results.find((result) => result.error)?.error
+    .map((project) => ({ id: project.id, sort_order: project.sortOrder }))
+  const { data, error } = await requireSupabase().rpc('reorder_projects', { payload })
 
   if (error) {
     throw error
   }
 
-  return sortProjects(
-    projects.map((project) => {
-      const updated = results.find((result) => result.data?.id === project.id)?.data
-      return updated ? mapProjectFromRow(updated) : project
-    }),
-  )
+  return sortProjects((data ?? []).map(mapProjectFromRow))
 }
 
 export async function deleteProject(id: string) {

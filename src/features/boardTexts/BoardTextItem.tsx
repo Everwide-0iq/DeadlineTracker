@@ -1,5 +1,5 @@
 import { GripVertical, Pencil, Trash2 } from 'lucide-react'
-import { memo, useEffect, useRef, type CSSProperties, type PointerEvent } from 'react'
+import { memo, useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import { useCardStore } from '../cards/card.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -16,18 +16,23 @@ type BoardTextItemProps = {
 
 type TextStyle = CSSProperties & Record<`--${string}`, string | number>
 type DragState = {
+  didMove: boolean
   frameId: number | null
   latestX: number
   latestY: number
   pendingX: number
   pendingY: number
   removeListeners: () => void
+  startX: number
+  startY: number
 }
 type ResizeState = {
+  didResize: boolean
   frameId: number | null
   latestW: number
   pendingW: number
   removeListeners: () => void
+  startW: number
 }
 
 const maxTextWidth = 1400
@@ -104,6 +109,16 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
         return
       }
 
+      const movedEnough =
+        Math.abs(moveEvent.clientX - startClientX) > 3 ||
+        Math.abs(moveEvent.clientY - startClientY) > 3
+
+      if (!dragState.didMove && !movedEnough) {
+        return
+      }
+
+      dragState.didMove = true
+
       dragState.pendingX = startX + (moveEvent.clientX - startClientX) / cameraZoom
       dragState.pendingY = startY + (moveEvent.clientY - startClientY) / cameraZoom
 
@@ -120,10 +135,19 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
         return
       }
 
-      void useBoardTextStore
-        .getState()
-        .persistTextPosition(text.id, dragState.latestX, dragState.latestY)
-        .catch(() => undefined)
+      if (dragState.didMove) {
+        void useBoardTextStore
+          .getState()
+          .persistTextPosition(text.id, dragState.latestX, dragState.latestY)
+          .catch(() => {
+            const state = useBoardTextStore.getState()
+            const current = state.texts.find((item) => item.id === text.id)
+
+            if (current?.x === dragState.latestX && current.y === dragState.latestY) {
+              state.moveTextLocal(text.id, dragState.startX, dragState.startY)
+            }
+          })
+      }
     }
 
     function removeListeners() {
@@ -142,12 +166,15 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
     }
 
     dragRef.current = {
+      didMove: false,
       frameId: null,
       latestX: text.x,
       latestY: text.y,
       pendingX: text.x,
       pendingY: text.y,
       removeListeners,
+      startX: text.x,
+      startY: text.y,
     }
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
@@ -202,6 +229,14 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
         return
       }
 
+      const resizedEnough = Math.abs(moveEvent.clientX - startClientX) > 3
+
+      if (!resizeState.didResize && !resizedEnough) {
+        return
+      }
+
+      resizeState.didResize = true
+
       resizeState.pendingW = clamp(
         startW + (moveEvent.clientX - startClientX) / cameraZoom,
         minTextWidth,
@@ -221,10 +256,19 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
         return
       }
 
-      void useBoardTextStore
-        .getState()
-        .persistTextWidth(text.id, resizeState.latestW)
-        .catch(() => undefined)
+      if (resizeState.didResize) {
+        void useBoardTextStore
+          .getState()
+          .persistTextWidth(text.id, resizeState.latestW)
+          .catch(() => {
+            const state = useBoardTextStore.getState()
+            const current = state.texts.find((item) => item.id === text.id)
+
+            if (current?.w === resizeState.latestW) {
+              state.resizeTextLocal(text.id, resizeState.startW)
+            }
+          })
+      }
     }
 
     function removeListeners() {
@@ -242,10 +286,12 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
     }
 
     resizeRef.current = {
+      didResize: false,
       frameId: null,
       latestW: text.w,
       pendingW: text.w,
       removeListeners,
+      startW: text.w,
     }
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
@@ -262,6 +308,22 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
     width: text.w,
   }
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) {
+      return
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      openEditEditor(text.id)
+    } else if (event.key === ' ') {
+      event.preventDefault()
+      selectCard(null)
+      selectLink(null)
+      selectText(text.id)
+    }
+  }
+
   return (
     <article
       aria-label={t.boardText.label}
@@ -274,14 +336,17 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
         selectText(text.id)
       }}
       onDoubleClick={() => openEditEditor(text.id)}
+      onKeyDown={handleKeyDown}
       onPointerDown={handlePointerDown}
       style={style}
+      tabIndex={0}
     >
       <p>{text.content}</p>
       <button
         aria-label={t.boardText.resize}
         className="board-text-resize-handle"
         data-board-text-action="true"
+        tabIndex={-1}
         type="button"
         onPointerDown={handleResizePointerDown}
       >

@@ -7,9 +7,11 @@ import {
   fetchCards,
   subscribeToCardChanges,
   updateCard as updateCardApi,
+  updateCardGeometries as updateCardGeometriesApi,
+  updateCardPositions as updateCardPositionsApi,
   type CardRealtimeStatus,
 } from './card.api.ts'
-import { removeCardImage } from './cardImage.api.ts'
+import { cleanupPendingCardImages } from './cardImage.api.ts'
 import type {
   BoardFilter,
   BoardScope,
@@ -26,6 +28,7 @@ type CardState = {
   error: string | null
   filter: BoardFilter
   hasLoaded: boolean
+  isGeometryInteracting: boolean
   isLoading: boolean
   now: number
   realtimeStatus: CardRealtimeStatus
@@ -57,6 +60,7 @@ type CardState = {
   resizeCardsLocal: (updates: Array<{ geometry: Pick<Card, 'h' | 'w' | 'x' | 'y'>; id: string }>) => void
   selectCard: (id: string | null) => void
   selectCards: (ids: string[]) => void
+  setGeometryInteracting: (isInteracting: boolean) => void
   setFilter: (filter: BoardFilter) => void
   setDragGuide: (guide: DragGuide | null) => void
   setNow: (now: number) => void
@@ -128,6 +132,7 @@ export const useCardStore = create<CardState>((set, get) => ({
   error: null,
   filter: 'all',
   hasLoaded: false,
+  isGeometryInteracting: false,
   isLoading: false,
   now: Date.now(),
   realtimeStatus: 'idle',
@@ -155,10 +160,9 @@ export const useCardStore = create<CardState>((set, get) => ({
     }
   },
   deleteCard: async (id) => {
-    const previousCards = get().cards
+    const deletedCard = get().cards.find((card) => card.id === id) ?? null
     const previousSelectedCardId = get().selectedCardId
     const previousSelectedCardIds = get().selectedCardIds
-    const previousCard = previousCards.find((card) => card.id === id) ?? null
     set((state) => ({
       cards: state.cards.filter((card) => card.id !== id),
       saveError: null,
@@ -168,14 +172,14 @@ export const useCardStore = create<CardState>((set, get) => ({
 
     try {
       await deleteCardApi(id)
-      void removeCardImage(previousCard?.imagePath ?? null).catch(() => undefined)
+      void cleanupPendingCardImages().catch(() => undefined)
     } catch (error) {
-      set({
-        cards: previousCards,
+      set((state) => ({
+        cards: deletedCard ? upsertCard(state.cards, deletedCard) : state.cards,
         saveError: getMessage(error),
         selectedCardId: previousSelectedCardId,
         selectedCardIds: previousSelectedCardIds,
-      })
+      }))
       throw error
     }
   },
@@ -222,9 +226,7 @@ export const useCardStore = create<CardState>((set, get) => ({
     set({ saveError: null })
 
     try {
-      const updatedCards = await Promise.all(
-        positions.map((position) => updateCardApi(position.id, { x: position.x, y: position.y })),
-      )
+      const updatedCards = await updateCardPositionsApi(positions)
       set((state) => ({
         cards: updatedCards.reduce((nextCards, card) => upsertCard(nextCards, card), state.cards),
       }))
@@ -248,8 +250,8 @@ export const useCardStore = create<CardState>((set, get) => ({
     set({ saveError: null })
 
     try {
-      const updatedCards = await Promise.all(
-        updates.map((update) => updateCardApi(update.id, update.geometry)),
+      const updatedCards = await updateCardGeometriesApi(
+        updates.map((update) => ({ id: update.id, ...update.geometry })),
       )
       set((state) => ({
         cards: updatedCards.reduce((nextCards, card) => upsertCard(nextCards, card), state.cards),
@@ -278,6 +280,7 @@ export const useCardStore = create<CardState>((set, get) => ({
     const nextIds = uniqueIds(ids)
     set({ selectedCardId: nextIds.at(-1) ?? null, selectedCardIds: nextIds })
   },
+  setGeometryInteracting: (isGeometryInteracting) => set({ isGeometryInteracting }),
   setDragGuide: (guide) => set({ dragGuide: guide }),
   setFilter: (filter) => set({ filter }),
   setNow: (now) => set({ now }),
@@ -299,8 +302,9 @@ export const useCardStore = create<CardState>((set, get) => ({
     ),
   updateCard: async (id, input) => {
     const previousCard = get().cards.find((card) => card.id === id) ?? null
+    const optimisticCard = previousCard ? applyLocalPatch(previousCard, input) : null
     set((state) => ({
-      cards: state.cards.map((card) => (card.id === id ? applyLocalPatch(card, input) : card)),
+      cards: state.cards.map((card) => (card.id === id && optimisticCard ? optimisticCard : card)),
       saveError: null,
     }))
 
@@ -308,8 +312,16 @@ export const useCardStore = create<CardState>((set, get) => ({
       const card = await updateCardApi(id, input)
       set((state) => ({ cards: upsertCard(state.cards, card), editor: null }))
     } catch (error) {
-      if (previousCard) {
-        set((state) => ({ cards: upsertCard(state.cards, previousCard), saveError: getMessage(error) }))
+      if (previousCard && optimisticCard) {
+        set((state) => {
+          const currentCard = state.cards.find((card) => card.id === id)
+          const cards =
+            currentCard?.updatedAt === optimisticCard.updatedAt
+              ? upsertCard(state.cards, previousCard)
+              : state.cards
+
+          return { cards, saveError: getMessage(error) }
+        })
       } else {
         set({ saveError: getMessage(error) })
       }

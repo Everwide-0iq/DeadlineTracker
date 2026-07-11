@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useDialogFocus } from '../../lib/useDialogFocus.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
@@ -101,6 +102,28 @@ export function CardEditor() {
 
   useEffect(() => () => revokePreparedCardImage(pendingImage), [pendingImage])
 
+  const requestClose = async () => {
+    if (dirty) {
+      const confirmed = await confirm({
+        confirmLabel: t.common.close,
+        description: t.cardEditor.cancelUnsavedDescription,
+        title: t.cardEditor.cancelUnsavedTitle,
+        tone: 'info',
+      })
+
+      if (!confirmed) {
+        return
+      }
+    }
+
+    closeEditor()
+  }
+
+  const dialogRef = useDialogFocus<HTMLElement>({
+    active: Boolean(editor),
+    onEscape: () => void requestClose(),
+  })
+
   if (!editor) {
     return null
   }
@@ -119,23 +142,6 @@ export function CardEditor() {
     if (!dirty) {
       setDirty(true)
     }
-  }
-
-  const requestClose = async () => {
-    if (dirty) {
-      const confirmed = await confirm({
-        confirmLabel: t.common.close,
-        description: t.cardEditor.cancelUnsavedDescription,
-        title: t.cardEditor.cancelUnsavedTitle,
-        tone: 'info',
-      })
-
-      if (!confirmed) {
-        return
-      }
-    }
-
-    closeEditor()
   }
 
   const getImageErrorMessage = (error: unknown) => {
@@ -349,14 +355,22 @@ export function CardEditor() {
 
   return createPortal(
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/55 p-0 backdrop-blur-sm lg:place-items-center lg:p-3">
-      <section className="max-h-[calc(100vh-1rem)] w-full max-w-6xl overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#090b10]/95 p-5 shadow-[0_0_70px_rgb(255_65_65_/_0.17)] lg:max-h-[calc(100vh-1.5rem)] lg:rounded-[28px] lg:p-4">
+      <section
+        aria-labelledby="card-editor-title"
+        aria-modal="true"
+        className="max-h-[calc(100dvh-1rem)] w-full max-w-6xl overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#090b10]/95 p-5 shadow-[0_0_70px_rgb(255_65_65_/_0.17)] lg:max-h-[calc(100dvh-1.5rem)] lg:rounded-[28px] lg:p-4"
+        ref={dialogRef}
+        role="dialog"
+      >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
               <CalendarClock size={17} />
               {isEditing ? t.cardEditor.edit : t.sidebar.newCard}
             </div>
-            <h2 className="text-2xl font-black text-white">{isEditing ? t.cardEditor.setupDeadline : t.cardEditor.addDeadline}</h2>
+            <h2 className="text-2xl font-black text-white" id="card-editor-title">
+              {isEditing ? t.cardEditor.setupDeadline : t.cardEditor.addDeadline}
+            </h2>
             <p className="mt-1 text-sm text-white/40 lg:hidden xl:block">
               {editorScope === 'personal'
                 ? t.cardEditor.personalScope

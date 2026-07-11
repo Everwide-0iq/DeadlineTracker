@@ -22,6 +22,7 @@ export type BoardCursor = BoardMember & {
 type UseBoardCollaborationOptions = {
   enabled: boolean
   fallbackName: string
+  roomId: string
   userEmail: string | null
   userId: string | null
 }
@@ -79,6 +80,7 @@ const isCursor = (value: unknown): value is BoardCursor =>
 export function useBoardCollaboration({
   enabled,
   fallbackName,
+  roomId,
   userEmail,
   userId,
 }: UseBoardCollaborationOptions) {
@@ -108,7 +110,7 @@ export function useBoardCollaboration({
     }
 
     const supabase = requireSupabase()
-    const channel = supabase.channel('fireboard:presence', {
+    const channel = supabase.channel(`fireboard:presence:${roomId}`, {
       config: {
         broadcast: { self: false },
         presence: { key: clientId },
@@ -150,7 +152,7 @@ export function useBoardCollaboration({
       void channel.untrack().catch(() => undefined)
       void supabase.removeChannel(channel)
     }
-  }, [clientId, enabled, self])
+  }, [clientId, enabled, roomId, self])
 
   useEffect(() => {
     if (!enabled) {

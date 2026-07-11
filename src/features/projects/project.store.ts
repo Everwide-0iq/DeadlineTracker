@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { cleanupPendingCardImages } from '../cards/cardImage.api.ts'
 import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createProject as createProjectApi,
@@ -66,6 +67,22 @@ const getNextSortOrder = (projects: Project[]) => {
   const movableProjects = projects.filter((project) => project.id !== defaultProjectId)
   const maxSortOrder = movableProjects.reduce((max, project) => Math.max(max, project.sortOrder), 0)
   return maxSortOrder + 1000
+}
+
+const restoreProjectOrder = (current: Project[], attempted: Project[], previous: Project[]) => {
+  const attemptedOrderById = new Map(attempted.map((project) => [project.id, project.sortOrder]))
+  const previousOrderById = new Map(previous.map((project) => [project.id, project.sortOrder]))
+
+  return sortProjects(
+    current.map((project) => {
+      const attemptedOrder = attemptedOrderById.get(project.id)
+      const previousOrder = previousOrderById.get(project.id)
+
+      return attemptedOrder !== undefined && previousOrder !== undefined && project.sortOrder === attemptedOrder
+        ? { ...project, sortOrder: previousOrder }
+        : project
+    }),
+  )
 }
 
 const withNormalizedSortOrder = (projects: Project[]) => {
@@ -136,7 +153,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return
     }
 
-    const previousProjects = get().projects
+    const deletedProject = get().projects.find((project) => project.id === id) ?? null
     set((state) => ({
       error: null,
       projects: state.projects.filter((project) => project.id !== id),
@@ -144,8 +161,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     try {
       await deleteProjectApi(id)
+      void cleanupPendingCardImages().catch(() => undefined)
     } catch (error) {
-      set({ error: getMessage(error), projects: previousProjects })
+      set((state) => ({
+        error: getMessage(error),
+        projects: deletedProject ? upsertProject(state.projects, deletedProject) : state.projects,
+      }))
       throw error
     }
   },
@@ -167,7 +188,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const savedProjects = await updateProjectOrders(nextProjects)
       set({ projects: savedProjects })
     } catch (error) {
-      set({ error: getMessage(error), projects: previousProjects })
+      set((state) => ({
+        error: getMessage(error),
+        projects: restoreProjectOrder(state.projects, nextProjects, previousProjects),
+      }))
       throw error
     }
   },

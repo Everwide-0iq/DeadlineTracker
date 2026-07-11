@@ -10,6 +10,7 @@ import { useCardLinkStore } from '../features/cardLinks/cardLink.store.ts'
 import { useCardStore } from '../features/cards/card.store.ts'
 import { DesktopCardList } from '../features/cards/DesktopCardList.tsx'
 import { MobileCardList } from '../features/cards/MobileCardList.tsx'
+import { cleanupPendingCardImages } from '../features/cards/cardImage.api.ts'
 import type { BoardScope, Card } from '../features/cards/card.types.ts'
 import { filterCards, getFilterCounts, sortCardsForMobile } from '../features/cards/card.utils.ts'
 import { formatCountdown } from '../features/cards/countdown.ts'
@@ -156,11 +157,23 @@ export function BoardPage() {
   }, [loadProjects, subscribeProjectRealtime])
 
   useEffect(() => {
+    if (!isDesktop) {
+      return undefined
+    }
+
     void loadLinks()
     const unsubscribe = subscribeLinkRealtime()
 
     return unsubscribe
-  }, [loadLinks, subscribeLinkRealtime])
+  }, [isDesktop, loadLinks, subscribeLinkRealtime])
+
+  useEffect(() => {
+    if (!userId) {
+      return
+    }
+
+    void cleanupPendingCardImages().catch(() => undefined)
+  }, [userId])
 
   useEffect(() => {
     if (!isDesktop) {
@@ -211,8 +224,8 @@ export function BoardPage() {
   )
   const boardError =
     activeBoardScope === 'shared'
-      ? error ?? projectError ?? linkError ?? (isDesktop ? textError : null)
-      : error ?? linkError ?? (isDesktop ? textError : null)
+      ? error ?? projectError ?? (isDesktop ? linkError ?? textError : null)
+      : error ?? (isDesktop ? linkError ?? textError : null)
   const scopedCards = useMemo(
     () =>
       cards.filter((card) =>
@@ -315,7 +328,11 @@ export function BoardPage() {
         return
       }
 
-      await deleteProject(project.id)
+      try {
+        await deleteProject(project.id)
+      } catch {
+        return
+      }
 
       if (activeProjectId === project.id) {
         setActiveProjectId(defaultProjectId)
@@ -337,9 +354,9 @@ export function BoardPage() {
 
   const handleRetry = useCallback(() => {
     void loadCards()
-    void loadLinks()
     void loadProjects()
     if (isDesktop) {
+      void loadLinks()
       void loadTexts()
     }
   }, [isDesktop, loadCards, loadLinks, loadProjects, loadTexts])
@@ -385,7 +402,7 @@ export function BoardPage() {
 
   return (
     <>
-      <div className="app-shell flex h-screen gap-3 overflow-hidden bg-[var(--background)] p-3 text-white">
+      <div className="app-shell flex h-[100dvh] gap-3 overflow-hidden bg-[var(--background)] p-3 text-white">
         <Sidebar
           activeFilter={filter}
           activeBoardScope={activeBoardScope}
@@ -411,6 +428,7 @@ export function BoardPage() {
           <DesktopBoard
             camera={camera}
             boardScope={activeBoardScope}
+            collaborationRoomId={activeProjectId}
             cards={visibleCards}
             exportContext={exportContext}
             links={visibleLinks}

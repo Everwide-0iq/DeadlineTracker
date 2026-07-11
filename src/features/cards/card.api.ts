@@ -2,6 +2,9 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { requireSupabase } from '../../lib/supabase.ts'
 import type { Card, CardRow, CreateCardInput, UpdateCardInput } from './card.types.ts'
 
+type CardPositionUpdate = Pick<Card, 'id' | 'x' | 'y'>
+type CardGeometryUpdate = Pick<Card, 'h' | 'id' | 'w' | 'x' | 'y'>
+
 export type CardRealtimeEvent =
   | { type: 'INSERT'; card: Card }
   | { type: 'UPDATE'; card: Card }
@@ -113,6 +116,30 @@ export async function updateCard(id: string, input: UpdateCardInput) {
   }
 
   return mapCardFromRow(data)
+}
+
+export async function updateCardPositions(updates: CardPositionUpdate[]) {
+  const { data, error } = await requireSupabase().rpc('update_card_positions', {
+    payload: updates,
+  })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []).map(mapCardFromRow)
+}
+
+export async function updateCardGeometries(updates: CardGeometryUpdate[]) {
+  const { data, error } = await requireSupabase().rpc('update_card_geometries', {
+    payload: updates,
+  })
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []).map(mapCardFromRow)
 }
 
 export async function deleteCard(id: string) {

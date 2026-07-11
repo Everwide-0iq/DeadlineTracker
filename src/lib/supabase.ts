@@ -153,6 +153,24 @@ export type Database = {
         }
         Relationships: []
       }
+      card_image_cleanup_queue: {
+        Row: {
+          image_path: string
+          requested_by: string
+          created_at: string
+        }
+        Insert: {
+          image_path: string
+          requested_by: string
+          created_at?: string
+        }
+        Update: {
+          image_path?: string
+          requested_by?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           id: string
@@ -183,7 +201,20 @@ export type Database = {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      reorder_projects: {
+        Args: { payload: Json }
+        Returns: Database['public']['Tables']['projects']['Row'][]
+      }
+      update_card_geometries: {
+        Args: { payload: Json }
+        Returns: Database['public']['Tables']['cards']['Row'][]
+      }
+      update_card_positions: {
+        Args: { payload: Json }
+        Returns: Database['public']['Tables']['cards']['Row'][]
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

@@ -49,7 +49,7 @@ If the variables are missing, the app shows a setup screen instead of a blank er
 5. Run `supabase/migrations/0001_initial_schema.sql`.
 6. Make sure Realtime is enabled for `public.cards`, `public.projects`, `public.card_links`, and `public.board_texts`. The migration also creates a private `card-images` Storage bucket and attempts to add these tables to `supabase_realtime`.
 
-If the project existed before personal boards, projects, card links, or board text layers were added, run the migration again. It is written to be idempotent and will add the missing columns, indexes, triggers, functions, RLS policies, and realtime publications.
+If the project already existed, run the migration again after pulling updates. It is written to be idempotent and adds missing columns, indexes, constraints, atomic bulk-update functions, image-cleanup support, triggers, RLS policies, and realtime publications.
 
 ## Vercel Deployment
 
@@ -67,7 +67,8 @@ The project includes `vercel.json` with a rewrite to `index.html`, so React Rout
 ```bash
 npm run typecheck
 npm run lint
-npm run build
+npm run test
+npm run check
 ```
 
 ---
@@ -123,7 +124,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 5. Выполни `supabase/migrations/0001_initial_schema.sql`.
 6. Проверь, что Realtime включён для `public.cards`, `public.projects`, `public.card_links` и `public.board_texts`. Миграция также создаёт приватный Storage bucket `card-images` и сама пытается добавить эти таблицы в `supabase_realtime`.
 
-Если проект был создан до появления личных досок, проектов, связей между карточками или текстовых слоёв, выполни миграцию повторно. Она идемпотентная и добавит недостающие колонки, индексы, triggers, functions, RLS policies и realtime publications.
+Если проект уже был создан, после получения обновлений выполни миграцию повторно. Она идемпотентная и добавит недостающие колонки, индексы, ограничения, атомарные функции массового обновления, очистку изображений, triggers, RLS policies и realtime publications.
 
 ## Деплой на Vercel
 
@@ -141,5 +142,6 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 ```bash
 npm run typecheck
 npm run lint
-npm run build
+npm run test
+npm run check
 ```

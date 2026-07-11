@@ -57,6 +57,11 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 78%, white);
+  outline-offset: 3px;
+}
+
 ::selection {
   background: rgba(255, 70, 61, 0.36);
 }
@@ -458,8 +463,9 @@ button {
   opacity: 0.64;
 }
 
-.desktop-board-scene[data-camera-moving="true"] .deadline-card-underlight {
-  filter: blur(4px);
+.desktop-board-scene[data-camera-moving="true"] .deadline-card-underlight,
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card-underlight {
+  filter: none;
   opacity: 0.28;
   animation-play-state: paused;
 }
@@ -497,8 +503,10 @@ button {
 }
 
 .desktop-board-scene[data-camera-moving="true"] .deadline-card,
-.desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="calm"] {
-  backdrop-filter: blur(12px) saturate(1.02);
+.desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="calm"],
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card,
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card[data-zone="calm"] {
+  backdrop-filter: none;
   transition-duration: 0ms;
 }
 
@@ -521,7 +529,12 @@ button {
 .desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="important"],
 .desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="soon"],
 .desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="critical"],
-.desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="overdue"] {
+.desktop-board-scene[data-camera-moving="true"] .deadline-card[data-zone="overdue"],
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card,
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card[data-zone="important"],
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card[data-zone="soon"],
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card[data-zone="critical"],
+.desktop-board-scene[data-geometry-interacting="true"] .deadline-card[data-zone="overdue"] {
   box-shadow:
     0 0 18px color-mix(in srgb, var(--deadline-glow) 72%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
@@ -863,8 +876,13 @@ button {
 }
 
 .desktop-board-scene[data-camera-moving="true"] .card-image-backdrop {
-  filter: blur(7px) saturate(1.02);
-  opacity: 0.12;
+  filter: none;
+  opacity: 0.08;
+}
+
+.desktop-board-scene[data-geometry-interacting="true"] .card-image-backdrop {
+  filter: none;
+  opacity: 0.08;
 }
 
 .desktop-board-scene[data-camera-moving="true"] .card-image-frame {
@@ -923,8 +941,11 @@ button {
 }
 
 .desktop-board-scene[data-camera-moving="true"] .card-image-shimmer,
+.desktop-board-scene[data-geometry-interacting="true"] .card-image-shimmer,
 .desktop-board-scene[data-camera-moving="true"] .magnetic-guide,
+.desktop-board-scene[data-geometry-interacting="true"] .magnetic-guide,
 .desktop-board-scene[data-camera-moving="true"] .card-link-flow,
+.desktop-board-scene[data-geometry-interacting="true"] .card-link-flow,
 .desktop-board-scene[data-camera-moving="true"] .card-link-draft-path {
   animation-play-state: paused;
 }
@@ -969,7 +990,13 @@ button {
 
 .desktop-board-scene[data-camera-moving="true"] .card-link-glow,
 .desktop-board-scene[data-camera-moving="true"] .card-link-draft-glow {
-  filter: blur(3px);
+  filter: none;
+  opacity: 0.06;
+}
+
+.desktop-board-scene[data-geometry-interacting="true"] .card-link-glow,
+.desktop-board-scene[data-geometry-interacting="true"] .card-link-draft-glow {
+  filter: none;
   opacity: 0.06;
 }
 

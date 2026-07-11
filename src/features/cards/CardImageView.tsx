@@ -81,13 +81,17 @@ export function CardImageView({
             aria-hidden="true"
             alt=""
             className="card-image-backdrop"
+            decoding="async"
             draggable={false}
+            loading="lazy"
             src={url}
           />
           <img
             alt={alt}
             className={cn('card-image-media', imageClassName)}
+            decoding="async"
             draggable={false}
+            loading="lazy"
             src={url}
             onError={() => setIsUnavailable(true)}
             onLoad={() => setIsLoaded(true)}

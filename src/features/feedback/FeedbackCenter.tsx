@@ -1,7 +1,7 @@
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react'
-import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn.ts'
+import { useDialogFocus } from '../../lib/useDialogFocus.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import { useFeedbackStore, type FeedbackTone } from './feedback.store.ts'
@@ -19,30 +19,19 @@ export function FeedbackCenter() {
   const dismissToast = useFeedbackStore((state) => state.dismissToast)
   const resolveConfirm = useFeedbackStore((state) => state.resolveConfirm)
   const toasts = useFeedbackStore((state) => state.toasts)
-
-  useEffect(() => {
-    if (!confirmRequest) {
-      return undefined
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        resolveConfirm(false)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [confirmRequest, resolveConfirm])
+  const confirmDialogRef = useDialogFocus<HTMLElement>({
+    active: Boolean(confirmRequest),
+    onEscape: () => resolveConfirm(false),
+  })
 
   return createPortal(
     <>
-      <div className="feedback-toast-stack">
+      <div aria-atomic="false" aria-live="polite" className="feedback-toast-stack">
         {toasts.map((toast) => {
           const Icon = toneIcon[toast.tone]
 
           return (
-            <article className="feedback-toast" data-tone={toast.tone} key={toast.id}>
+            <article className="feedback-toast" data-tone={toast.tone} key={toast.id} role="status">
               <div className="feedback-toast-icon">
                 <Icon size={17} />
               </div>
@@ -63,9 +52,11 @@ export function FeedbackCenter() {
         <div className="feedback-confirm-backdrop" role="presentation">
           <section
             aria-describedby={confirmRequest.description ? `${confirmRequest.id}-description` : undefined}
+            aria-labelledby={`${confirmRequest.id}-title`}
             aria-modal="true"
             className="feedback-confirm"
             data-tone={confirmRequest.tone}
+            ref={confirmDialogRef}
             role="dialog"
           >
             <div className="feedback-confirm-mark">
@@ -76,7 +67,7 @@ export function FeedbackCenter() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="feedback-confirm-kicker">{t.feedback.confirmation}</p>
-              <h2>{confirmRequest.title}</h2>
+              <h2 id={`${confirmRequest.id}-title`}>{confirmRequest.title}</h2>
               {confirmRequest.description ? (
                 <p id={`${confirmRequest.id}-description`}>{confirmRequest.description}</p>
               ) : null}

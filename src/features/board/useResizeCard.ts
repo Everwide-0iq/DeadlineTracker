@@ -35,6 +35,9 @@ type GroupBounds = {
 }
 
 const minCardWidth = 280
+const maxCardWidth = 3200
+const maxCardHeight = 6000
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
 const roundGeometry = ({ h, w, x, y }: CardGeometry): CardGeometry => ({
   h: Math.round(h),
@@ -76,7 +79,7 @@ const computeResizeGeometry = (
     nextW = start.w - deltaX
   }
 
-  nextW = Math.max(minCardWidth, nextW)
+  nextW = clamp(nextW, minCardWidth, maxCardWidth)
 
   const minHeight = getMinimumHeightForWidth(card, nextW)
 
@@ -88,7 +91,7 @@ const computeResizeGeometry = (
     nextH = start.h - deltaY
   }
 
-  nextH = Math.max(minHeight, nextH)
+  nextH = clamp(nextH, minHeight, maxCardHeight)
 
   return roundGeometry({
     h: nextH,
@@ -176,15 +179,18 @@ const computeGroupResizeGeometry = (
     0.05,
     ...startUpdates.map((update) => minCardWidth / Math.max(update.geometry.w, 1)),
   )
+  const maxScaleX = Math.min(
+    ...startUpdates.map((update) => maxCardWidth / Math.max(update.geometry.w, 1)),
+  )
 
-  scaleX = Math.max(scaleX, minScaleX)
+  scaleX = clamp(scaleX, minScaleX, maxScaleX)
 
   const getScaledGeometry = (update: CardGeometryUpdate, forcedScaleY = scaleY) => {
     const card = cardById.get(update.id)
     const start = update.geometry
-    const nextW = Math.max(minCardWidth, start.w * scaleX)
+    const nextW = clamp(start.w * scaleX, minCardWidth, maxCardWidth)
     const minHeight = card ? getMinimumHeightForWidth(card, nextW) : start.h
-    const nextH = Math.max(minHeight, start.h * forcedScaleY)
+    const nextH = clamp(start.h * forcedScaleY, minHeight, maxCardHeight)
     const x = touchesLeft
       ? startBounds.right - (startBounds.right - start.x) * scaleX
       : startBounds.left + (start.x - startBounds.left) * scaleX
@@ -213,8 +219,11 @@ const computeGroupResizeGeometry = (
       return getMinimumHeightForWidth(card, Math.max(minCardWidth, start.w * scaleX)) / Math.max(start.h, 1)
     }),
   )
+  const maxScaleY = Math.min(
+    ...startUpdates.map((update) => maxCardHeight / Math.max(update.geometry.h, 1)),
+  )
 
-  scaleY = Math.max(scaleY, minScaleY)
+  scaleY = clamp(scaleY, minScaleY, maxScaleY)
 
   return startUpdates.map((update) => ({
     geometry: getScaledGeometry(update, scaleY),
@@ -244,6 +253,7 @@ export function useResizeCard({ cameraZoom, card, enabled }: UseResizeCardOption
       useCardLinkStore.getState().selectLink(null)
       useBoardTextStore.getState().selectText(null)
       const state = useCardStore.getState()
+      state.setGeometryInteracting(true)
       const selectedIds = new Set(state.selectedCardIds)
       const resizeCards =
         selectedIds.has(card.id) && selectedIds.size > 1
@@ -317,7 +327,26 @@ export function useResizeCard({ cameraZoom, card, enabled }: UseResizeCardOption
         void useCardStore
           .getState()
           .persistCardsGeometry(resizeState.latest)
-          .catch(() => undefined)
+          .catch(() => {
+            const state = useCardStore.getState()
+            const attemptedById = new Map(
+              resizeState.latest.map((update) => [update.id, update.geometry]),
+            )
+            const safeRollback = startUpdates.filter((update) => {
+              const current = state.cards.find((item) => item.id === update.id)
+              const attempted = attemptedById.get(update.id)
+              return (
+                current &&
+                attempted &&
+                current.x === attempted.x &&
+                current.y === attempted.y &&
+                current.w === attempted.w &&
+                current.h === attempted.h
+              )
+            })
+
+            state.resizeCardsLocal(safeRollback)
+          })
       }
 
       function removeListeners() {
@@ -332,6 +361,7 @@ export function useResizeCard({ cameraZoom, card, enabled }: UseResizeCardOption
         }
 
         resizeRef.current = null
+        useCardStore.getState().setGeometryInteracting(false)
       }
 
       resizeRef.current = {
