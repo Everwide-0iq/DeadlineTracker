@@ -253,6 +253,10 @@ const ru = {
   },
   link: {
     delete: 'Удалить связь',
+    deleteAll: 'Удалить все связи',
+    deleteAllDescription: (cardTitle: string, count: number) =>
+      `У карточки «${cardTitle}» будет удалено связей: ${count}. Отменить это действие не получится.`,
+    deleteAllTitle: 'Удалить все связи карточки?',
     deleteDescription: 'Визуальная связь между карточками будет удалена.',
     deleteTitle: 'Удалить связь?',
   },
@@ -567,6 +571,10 @@ const en = {
   },
   link: {
     delete: 'Delete link',
+    deleteAll: 'Delete all links',
+    deleteAllDescription: (cardTitle: string, count: number) =>
+      `${count} link${count === 1 ? '' : 's'} connected to “${cardTitle}” will be deleted. This action cannot be undone.`,
+    deleteAllTitle: 'Delete all card links?',
     deleteDescription: 'The visual link between cards will be removed.',
     deleteTitle: 'Delete link?',
   },

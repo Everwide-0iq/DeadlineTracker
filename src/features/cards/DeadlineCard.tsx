@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink } from 'lucide-react'
 import { memo, useEffect, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useDragCard } from '../board/useDragCard.ts'
@@ -57,6 +57,14 @@ function DeadlineCardComponent({
   const selectCard = useCardStore((state) => state.selectCard)
   const toggleCardSelection = useCardStore((state) => state.toggleCardSelection)
   const updateCard = useCardStore((state) => state.updateCard)
+  const deleteLinksForCard = useCardLinkStore((state) => state.deleteLinksForCard)
+  const linkedCount = useCardLinkStore((state) =>
+    state.links.reduce(
+      (count, link) =>
+        link.fromCardId === card.id || link.toCardId === card.id ? count + 1 : count,
+      0,
+    ),
+  )
   const selectLink = useCardLinkStore((state) => state.selectLink)
   const selectText = useBoardTextStore((state) => state.selectText)
   const confirm = useFeedbackStore((state) => state.confirm)
@@ -130,6 +138,24 @@ function DeadlineCardComponent({
     await updateCard(card.id, { status: card.status === 'done' ? 'todo' : 'done' }).catch(
       () => undefined,
     )
+  }
+
+  const handleDeleteAllLinks = async () => {
+    setIsMenuOpen(false)
+    setMenuPosition(null)
+
+    const confirmed = await confirm({
+      confirmLabel: t.link.deleteAll,
+      description: t.link.deleteAllDescription(card.title, linkedCount),
+      title: t.link.deleteAllTitle,
+      tone: 'danger',
+    })
+
+    if (!confirmed) {
+      return
+    }
+
+    await deleteLinksForCard(card.id).catch(() => undefined)
   }
 
   const handleEdit = () => {
@@ -314,7 +340,7 @@ function DeadlineCardComponent({
       {isMenuOpen ? (
         <div
           className={cn(
-            'absolute z-30 min-w-44 rounded-2xl border border-white/10 bg-[#080a0f]/95 p-1.5 shadow-2xl backdrop-blur-xl',
+            'absolute z-30 min-w-56 rounded-2xl border border-white/10 bg-[#080a0f]/95 p-1.5 shadow-2xl backdrop-blur-xl',
             !menuPosition && 'right-5 top-16',
           )}
           data-card-action="true"
@@ -328,6 +354,16 @@ function DeadlineCardComponent({
             <CheckCircle2 size={15} />
             {card.status === 'done' ? t.card.backToWork : t.card.markDone}
           </button>
+          {linkedCount > 0 ? (
+            <button className="menu-item menu-item-danger" type="button" onClick={handleDeleteAllLinks}>
+              <Unlink size={15} />
+              {t.link.deleteAll}
+              <span className="ml-auto rounded-full bg-red-400/10 px-2 py-0.5 text-[11px] text-red-100/70">
+                {linkedCount}
+              </span>
+            </button>
+          ) : null}
+          <div className="mx-2 my-1 h-px bg-white/[0.07]" />
           <button className="menu-item menu-item-danger" type="button" onClick={handleDelete}>
             <Trash2 size={15} />
             {t.card.delete}

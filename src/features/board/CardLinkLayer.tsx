@@ -440,6 +440,15 @@ function CardLinkLayerComponent({
           return (
             <g className="card-link-group" key={link.id}>
               <path
+                className="card-link-hit-area"
+                d={geometry.path}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onSelectLink(link.id)
+                }}
+                onPointerDown={stopLinkPointer}
+              />
+              <path
                 className="card-link-glow"
                 d={geometry.path}
                 stroke={`url(#${gradientId})`}
@@ -448,11 +457,6 @@ function CardLinkLayerComponent({
                 className={isSelected ? 'card-link-path card-link-path-selected' : 'card-link-path'}
                 d={geometry.path}
                 markerEnd={`url(#${markerId})`}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onSelectLink(link.id)
-                }}
-                onPointerDown={stopLinkPointer}
                 stroke={`url(#${gradientId})`}
               />
               <path className="card-link-flow" d={geometry.path} />

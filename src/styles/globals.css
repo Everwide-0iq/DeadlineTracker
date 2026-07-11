@@ -980,10 +980,20 @@ button {
   stroke-linejoin: round;
 }
 
+.card-link-hit-area {
+  fill: none;
+  pointer-events: stroke;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 18;
+  vector-effect: non-scaling-stroke;
+}
+
 .card-link-path {
   stroke-width: 3.25;
   opacity: 0.88;
-  pointer-events: stroke;
+  pointer-events: none;
   transition:
     opacity 160ms ease,
     stroke-width 160ms ease;

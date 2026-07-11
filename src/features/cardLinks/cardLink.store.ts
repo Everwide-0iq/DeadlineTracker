@@ -3,6 +3,7 @@ import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createCardLink as createCardLinkApi,
   deleteCardLink as deleteCardLinkApi,
+  deleteCardLinksForCard as deleteCardLinksForCardApi,
   fetchCardLinks,
   subscribeToCardLinkChanges,
 } from './cardLink.api.ts'
@@ -18,6 +19,7 @@ type CardLinkState = {
   clearSaveError: () => void
   createLink: (input: CreateCardLinkInput, userId: string | null) => Promise<CardLink | null>
   deleteLink: (id: string) => Promise<void>
+  deleteLinksForCard: (cardId: string) => Promise<void>
   loadLinks: () => Promise<void>
   selectLink: (id: string | null) => void
   subscribeRealtime: () => () => void
@@ -114,6 +116,35 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
       await deleteCardLinkApi(id)
     } catch (error) {
       set({ links: previousLinks, saveError: getMessage(error) })
+      throw error
+    }
+  },
+  deleteLinksForCard: async (cardId) => {
+    const removedLinks = get().links.filter(
+      (link) => link.fromCardId === cardId || link.toCardId === cardId,
+    )
+
+    if (removedLinks.length === 0) {
+      return
+    }
+
+    const removedLinkIds = new Set(removedLinks.map((link) => link.id))
+    set((state) => ({
+      links: state.links.filter((link) => !removedLinkIds.has(link.id)),
+      saveError: null,
+      selectedLinkId:
+        state.selectedLinkId && removedLinkIds.has(state.selectedLinkId)
+          ? null
+          : state.selectedLinkId,
+    }))
+
+    try {
+      await deleteCardLinksForCardApi(cardId)
+    } catch (error) {
+      set((state) => ({
+        links: removedLinks.reduce(upsertLink, state.links),
+        saveError: getMessage(error),
+      }))
       throw error
     }
   },

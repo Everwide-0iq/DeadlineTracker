@@ -35,6 +35,8 @@ import {
   toDateTimeLocalValue,
 } from './card.utils.ts'
 
+const cardDescriptionMaxLength = 1800
+
 export function CardEditor() {
   const cards = useCardStore((state) => state.cards)
   const clearSaveError = useCardStore((state) => state.clearSaveError)
@@ -390,7 +392,7 @@ export function CardEditor() {
             <label className="form-field">
               <span>{t.cardEditor.descriptionLabel}</span>
               <textarea
-                maxLength={360}
+                maxLength={cardDescriptionMaxLength}
                 placeholder={t.cardEditor.contextPlaceholder}
                 rows={3}
                 value={description}

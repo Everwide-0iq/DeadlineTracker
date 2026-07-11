@@ -69,6 +69,17 @@ export async function deleteCardLink(id: string) {
   }
 }
 
+export async function deleteCardLinksForCard(cardId: string) {
+  const { error } = await requireSupabase()
+    .from('card_links')
+    .delete()
+    .or(`from_card_id.eq.${cardId},to_card_id.eq.${cardId}`)
+
+  if (error) {
+    throw error
+  }
+}
+
 export function subscribeToCardLinkChanges(onEvent: (event: CardLinkRealtimeEvent) => void) {
   const channel = requireSupabase()
     .channel('fireboard:card-links')
