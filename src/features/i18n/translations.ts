@@ -32,6 +32,8 @@ const ru = {
       zoomIn: 'Приблизить',
       zoomOut: 'Отдалить',
     },
+    createHere: 'Создать здесь',
+    createMenu: 'Меню создания на доске',
     failedCards: 'Не удалось загрузить карточки',
     deadlineList: 'Список дедлайнов',
     listEmptyDescription: 'В списке удобно быстро проверять ближайшие и просроченные задачи.',
@@ -56,12 +58,19 @@ const ru = {
     sync: 'Синхронизация',
   },
   card: {
+    activate: 'Сделать активной',
+    active: 'Активно',
     actions: 'Действия с карточкой',
     backToWork: 'Вернуть в работу',
     createConnection: (side: string) => `Создать связь ${side}`,
     delete: 'Удалить',
     deleteDescription: (title: string) => `Карточка "${title}" исчезнет с текущей доски.`,
+    deleteManyDescription: (count: number) =>
+      `Будут удалены выбранные карточки: ${count}. Вместе с ними исчезнут изображения и связи.`,
+    deleteManyTitle: (count: number) => `Удалить выбранные карточки (${count})?`,
+    deleteSelected: (count: number) => `Удалить выбранные (${count})`,
     deleteTitle: 'Удалить карточку?',
+    deactivate: 'Убрать активность',
     done: 'Готово',
     edit: 'Редактировать',
     markDone: 'Отметить готово',
@@ -211,6 +220,8 @@ const ru = {
     boardTextsMissingWidth:
       'В таблице public.board_texts нет колонки w. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.',
     cardsGeneric: 'Не удалось выполнить операцию с карточками.',
+    cardsMissingActive:
+      'В таблице public.cards нет колонки is_active. Выполни свежую миграцию supabase/migrations/0001_initial_schema.sql.',
     cardsMissingProject:
       'В таблице public.cards не найден столбец project_id. Повтори выполнение миграции supabase/migrations/0001_initial_schema.sql в Supabase SQL Editor.',
     cardsMissingImage:
@@ -351,6 +362,8 @@ const en = {
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
     },
+    createHere: 'Create here',
+    createMenu: 'Board creation menu',
     failedCards: 'Could not load cards',
     deadlineList: 'Deadline list',
     listEmptyDescription: 'The list is great for quickly checking nearby and overdue work.',
@@ -375,12 +388,19 @@ const en = {
     sync: 'Sync',
   },
   card: {
+    activate: 'Mark active',
+    active: 'Active',
     actions: 'Card actions',
     backToWork: 'Reopen',
     createConnection: (side: string) => `Create ${side} link`,
     delete: 'Delete',
     deleteDescription: (title: string) => `Card "${title}" will disappear from the current board.`,
+    deleteManyDescription: (count: number) =>
+      `${count} selected cards will be deleted together with their images and links.`,
+    deleteManyTitle: (count: number) => `Delete ${count} selected cards?`,
+    deleteSelected: (count: number) => `Delete selected (${count})`,
     deleteTitle: 'Delete card?',
+    deactivate: 'Clear active state',
     done: 'Done',
     edit: 'Edit',
     markDone: 'Mark done',
@@ -530,6 +550,8 @@ const en = {
     boardTextsMissingWidth:
       'Column w is missing in public.board_texts. Run the latest supabase/migrations/0001_initial_schema.sql migration.',
     cardsGeneric: 'Could not complete the card operation.',
+    cardsMissingActive:
+      'Column is_active is missing in public.cards. Run the latest supabase/migrations/0001_initial_schema.sql migration.',
     cardsMissingProject:
       'Column project_id was not found in public.cards. Run the latest supabase/migrations/0001_initial_schema.sql migration in Supabase SQL Editor.',
     cardsMissingImage:

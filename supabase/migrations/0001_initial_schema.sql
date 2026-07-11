@@ -57,6 +57,7 @@ create table if not exists public.cards (
   description text,
   deadline_at timestamptz not null,
   status text not null default 'todo' check (status in ('todo', 'done')),
+  is_active boolean not null default false,
   board_scope text not null default 'shared' check (board_scope in ('shared', 'personal')),
   project_id uuid references public.projects(id) on delete cascade,
   image_path text,
@@ -74,6 +75,9 @@ create table if not exists public.cards (
 
 alter table public.cards
 add column if not exists board_scope text not null default 'shared';
+
+alter table public.cards
+add column if not exists is_active boolean not null default false;
 
 alter table public.cards
 add column if not exists project_id uuid references public.projects(id) on delete cascade;

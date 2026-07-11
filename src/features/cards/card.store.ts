@@ -3,7 +3,7 @@ import type { DragGuide } from '../board/dragGuide.types.ts'
 import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createCard as createCardApi,
-  deleteCard as deleteCardApi,
+  deleteCards as deleteCardsApi,
   fetchCards,
   subscribeToCardChanges,
   updateCard as updateCardApi,
@@ -40,6 +40,7 @@ type CardState = {
   closeEditor: () => void
   createCard: (input: CreateCardInput, userId: string | null) => Promise<Card>
   deleteCard: (id: string) => Promise<void>
+  deleteCards: (ids: string[]) => Promise<void>
   loadCards: () => Promise<void>
   moveCardLocal: (id: string, x: number, y: number) => void
   moveCardsLocal: (positions: Array<{ id: string; x: number; y: number }>) => void
@@ -95,6 +96,10 @@ const getMessage = (error: unknown) => {
 
     if (message?.includes("Could not find the 'image_path' column")) {
       return t.errors.cardsMissingImage
+    }
+
+    if (message?.includes("Could not find the 'is_active' column") || message?.includes('is_active')) {
+      return t.errors.cardsMissingActive
     }
 
     if (message) {
@@ -159,27 +164,53 @@ export const useCardStore = create<CardState>((set, get) => ({
       throw error
     }
   },
-  deleteCard: async (id) => {
-    const deletedCard = get().cards.find((card) => card.id === id) ?? null
+  deleteCard: async (id) => get().deleteCards([id]),
+  deleteCards: async (ids) => {
+    const deleteIds = uniqueIds(ids)
+    const deleteIdSet = new Set(deleteIds)
+    const previousCards = get().cards
+    const deletedCards = previousCards.filter((card) => deleteIdSet.has(card.id))
     const previousSelectedCardId = get().selectedCardId
     const previousSelectedCardIds = get().selectedCardIds
+
+    if (deleteIds.length === 0) {
+      return
+    }
+
     set((state) => ({
-      cards: state.cards.filter((card) => card.id !== id),
+      cards: state.cards.filter((card) => !deleteIdSet.has(card.id)),
       saveError: null,
-      selectedCardId: state.selectedCardId === id ? null : state.selectedCardId,
-      selectedCardIds: state.selectedCardIds.filter((cardId) => cardId !== id),
+      selectedCardId: state.selectedCardId && deleteIdSet.has(state.selectedCardId) ? null : state.selectedCardId,
+      selectedCardIds: state.selectedCardIds.filter((cardId) => !deleteIdSet.has(cardId)),
     }))
 
     try {
-      await deleteCardApi(id)
+      await deleteCardsApi(deleteIds)
       void cleanupPendingCardImages().catch(() => undefined)
     } catch (error) {
-      set((state) => ({
-        cards: deletedCard ? upsertCard(state.cards, deletedCard) : state.cards,
-        saveError: getMessage(error),
-        selectedCardId: previousSelectedCardId,
-        selectedCardIds: previousSelectedCardIds,
-      }))
+      set((state) => {
+        const restoredById = new Map(state.cards.map((card) => [card.id, card]))
+        const originalIndexById = new Map(previousCards.map((card, index) => [card.id, index]))
+
+        deletedCards.forEach((card) => {
+          if (!restoredById.has(card.id)) {
+            restoredById.set(card.id, card)
+          }
+        })
+
+        const cards = Array.from(restoredById.values()).sort((left, right) => {
+          const leftIndex = originalIndexById.get(left.id) ?? Number.MAX_SAFE_INTEGER
+          const rightIndex = originalIndexById.get(right.id) ?? Number.MAX_SAFE_INTEGER
+          return leftIndex - rightIndex
+        })
+
+        return {
+          cards,
+          saveError: getMessage(error),
+          selectedCardId: previousSelectedCardId,
+          selectedCardIds: previousSelectedCardIds,
+        }
+      })
       throw error
     }
   },

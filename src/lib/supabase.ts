@@ -20,6 +20,7 @@ export type Database = {
           image_width: number | null
           deadline_at: string
           status: CardStatus
+          is_active: boolean
           board_scope: BoardScope
           project_id: string | null
           x: number
@@ -42,6 +43,7 @@ export type Database = {
           board_scope?: BoardScope
           project_id?: string | null
           status?: CardStatus
+          is_active?: boolean
           x?: number
           y?: number
           w?: number
@@ -61,6 +63,7 @@ export type Database = {
           board_scope?: BoardScope
           project_id?: string | null
           status?: CardStatus
+          is_active?: boolean
           x?: number
           y?: number
           w?: number

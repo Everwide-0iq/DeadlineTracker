@@ -26,6 +26,7 @@ export function mapCardFromRow(row: CardRow): Card {
     imageWidth: row.image_width ?? null,
     deadlineAt: row.deadline_at,
     status: row.status,
+    isActive: row.is_active ?? false,
     boardScope: row.board_scope ?? 'shared',
     projectId: row.project_id ?? null,
     x: row.x,
@@ -51,6 +52,7 @@ function toInsertRow(input: CreateCardInput, userId: string | null) {
     board_scope: input.boardScope,
     project_id: input.projectId,
     status: input.status ?? 'todo',
+    is_active: input.isActive ?? false,
     x: input.x,
     y: input.y,
     w: input.w ?? defaultCardWidth,
@@ -69,6 +71,7 @@ function toUpdateRow(input: UpdateCardInput) {
     ...(input.imageWidth !== undefined ? { image_width: input.imageWidth } : {}),
     ...(input.deadlineAt !== undefined ? { deadline_at: input.deadlineAt } : {}),
     ...(input.status !== undefined ? { status: input.status } : {}),
+    ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
     ...(input.x !== undefined ? { x: input.x } : {}),
     ...(input.y !== undefined ? { y: input.y } : {}),
     ...(input.w !== undefined ? { w: input.w } : {}),
@@ -143,7 +146,17 @@ export async function updateCardGeometries(updates: CardGeometryUpdate[]) {
 }
 
 export async function deleteCard(id: string) {
-  const { error } = await requireSupabase().from('cards').delete().eq('id', id)
+  return deleteCards([id])
+}
+
+export async function deleteCards(ids: string[]) {
+  const uniqueIds = Array.from(new Set(ids))
+
+  if (uniqueIds.length === 0) {
+    return
+  }
+
+  const { error } = await requireSupabase().from('cards').delete().in('id', uniqueIds)
 
   if (error) {
     throw error

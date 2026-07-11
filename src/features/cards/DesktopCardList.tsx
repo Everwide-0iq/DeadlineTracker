@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2, Zap } from 'lucide-react'
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -64,8 +64,9 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
   return (
     <article
       className={cn(
-        'deadline-list-row group grid grid-cols-[minmax(0,1fr)_190px_250px] items-center gap-5 rounded-2xl border px-5 py-4 transition duration-200',
+        'deadline-list-row group grid grid-cols-[minmax(0,1fr)_160px_228px] items-center gap-5 rounded-2xl border px-5 py-4 transition duration-200 2xl:grid-cols-[minmax(0,1fr)_190px_350px]',
         card.status === 'done' && 'opacity-65 saturate-50',
+        card.isActive && 'deadline-list-row-active',
         isCompleting && 'deadline-list-row-completed',
       )}
       style={style}
@@ -104,10 +105,21 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
       </div>
 
       <div className="flex items-center justify-end gap-3">
-        <span className="mr-1 hidden items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--deadline-text)] xl:flex">
+        <span className="mr-1 hidden items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--deadline-text)] 2xl:flex">
           <span className="h-2 w-2 rounded-full bg-[var(--deadline-border)] shadow-[0_0_12px_var(--deadline-glow)]" />
           {visual.label}
         </span>
+        <button
+          aria-label={card.isActive ? t.card.deactivate : t.card.activate}
+          aria-pressed={card.isActive}
+          className="list-action-button card-active-list-button"
+          data-active={card.isActive ? 'true' : 'false'}
+          title={card.isActive ? t.card.deactivate : t.card.activate}
+          type="button"
+          onClick={() => updateCard(card.id, { isActive: !card.isActive }).catch(() => undefined)}
+        >
+          <Zap fill={card.isActive ? 'currentColor' : 'none'} size={17} />
+        </button>
         <button
           aria-label={card.status === 'done' ? t.card.backToWork : t.card.markDone}
           className="list-action-button"

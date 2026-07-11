@@ -1,4 +1,4 @@
-import { CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound } from 'lucide-react'
+import { CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound, Zap } from 'lucide-react'
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -82,23 +82,37 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
       className={cn(
         'deadline-card relative rounded-[18px] border p-4',
         card.status === 'done' && 'deadline-card-done',
+        card.isActive && 'deadline-card-active',
         isCompleting && 'deadline-card-completed',
       )}
       style={style}
     >
+      {card.isActive ? <span aria-hidden="true" className="deadline-card-active-rim" /> : null}
       <div className="relative z-10">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)]">
             {card.status === 'done' ? <CheckCircle2 size={19} /> : <Flame size={19} />}
           </div>
-          <button
-            aria-label={t.card.edit}
-            className="icon-button h-10 w-10"
-            type="button"
-            onClick={() => openEditEditor(card.id)}
-          >
-            <MoreHorizontal size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              aria-label={card.isActive ? t.card.deactivate : t.card.activate}
+              aria-pressed={card.isActive}
+              className="icon-button mobile-active-toggle h-10 w-10"
+              data-active={card.isActive ? 'true' : 'false'}
+              type="button"
+              onClick={() => updateCard(card.id, { isActive: !card.isActive }).catch(() => undefined)}
+            >
+              <Zap fill={card.isActive ? 'currentColor' : 'none'} size={18} />
+            </button>
+            <button
+              aria-label={t.card.edit}
+              className="icon-button h-10 w-10"
+              type="button"
+              onClick={() => openEditEditor(card.id)}
+            >
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
         </div>
 
         <h3

@@ -327,6 +327,7 @@ function BoardTextItemComponent({ cameraZoom, isSelected, text }: BoardTextItemP
   return (
     <article
       aria-label={t.boardText.label}
+      data-board-object="true"
       className="board-text-item group absolute z-[11] select-none"
       data-selected={isSelected ? 'true' : 'false'}
       data-text-root="true"

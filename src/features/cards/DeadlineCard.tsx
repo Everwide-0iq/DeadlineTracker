@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink } from 'lucide-react'
+import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink, Zap } from 'lucide-react'
 import {
   memo,
   useEffect,
@@ -60,9 +60,10 @@ function DeadlineCardComponent({
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
   const now = useCardStore((state) => state.now)
-  const deleteCard = useCardStore((state) => state.deleteCard)
+  const deleteCards = useCardStore((state) => state.deleteCards)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const selectCard = useCardStore((state) => state.selectCard)
+  const selectedCardIds = useCardStore((state) => state.selectedCardIds)
   const toggleCardSelection = useCardStore((state) => state.toggleCardSelection)
   const updateCard = useCardStore((state) => state.updateCard)
   const deleteLinksForCard = useCardLinkStore((state) => state.deleteLinksForCard)
@@ -125,11 +126,15 @@ function DeadlineCardComponent({
   const handleDelete = async () => {
     setIsMenuOpen(false)
     setMenuPosition(null)
+    const ids = isSelected && selectedCardIds.length > 1 ? selectedCardIds : [card.id]
+    const isBulkDelete = ids.length > 1
 
     const confirmed = await confirm({
       confirmLabel: t.card.delete,
-      description: t.card.deleteDescription(card.title),
-      title: t.card.deleteTitle,
+      description: isBulkDelete
+        ? t.card.deleteManyDescription(ids.length)
+        : t.card.deleteDescription(card.title),
+      title: isBulkDelete ? t.card.deleteManyTitle(ids.length) : t.card.deleteTitle,
       tone: 'danger',
     })
 
@@ -137,7 +142,13 @@ function DeadlineCardComponent({
       return
     }
 
-    await deleteCard(card.id).catch(() => undefined)
+    await deleteCards(ids).catch(() => undefined)
+  }
+
+  const handleToggleActive = async () => {
+    setIsMenuOpen(false)
+    setMenuPosition(null)
+    await updateCard(card.id, { isActive: !card.isActive }).catch(() => undefined)
   }
 
   const handleToggleDone = async () => {
@@ -199,7 +210,9 @@ function DeadlineCardComponent({
     event.preventDefault()
     selectLink(null)
     selectText(null)
-    selectCard(card.id)
+    if (!isSelected) {
+      selectCard(card.id)
+    }
 
     const rect = event.currentTarget.getBoundingClientRect()
     setMenuPosition({
@@ -251,16 +264,18 @@ function DeadlineCardComponent({
 
   return (
     <article
-      aria-label={`${card.title}, ${countdown}`}
+      aria-label={`${card.title}, ${countdown}${card.isActive ? `, ${t.card.active}` : ''}`}
       className={cn(
         'deadline-card group absolute z-[12] flex select-none flex-col overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
         card.status === 'done' && 'deadline-card-done',
+        card.isActive && 'deadline-card-active',
         isCompleting && 'deadline-card-completed',
         isConnecting && 'deadline-card-connecting',
         isSelected && 'deadline-card-selected',
         canDrag && 'cursor-grab active:cursor-grabbing',
       )}
       data-zone={visual.zone}
+      data-board-object="true"
       onClick={handleCardClick}
       onContextMenu={handleContextMenu}
       onDoubleClick={() => openEditEditor(card.id)}
@@ -271,6 +286,7 @@ function DeadlineCardComponent({
       style={cardStyle}
       tabIndex={0}
     >
+      {card.isActive ? <span aria-hidden="true" className="deadline-card-active-rim" /> : null}
       <div className="pointer-events-none absolute inset-0 rounded-[18px] opacity-45 deadline-card-noise" />
       {canDrag
         ? resizeDirections.map((direction) => (
@@ -310,7 +326,19 @@ function DeadlineCardComponent({
           <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_22px_var(--deadline-glow)]">
             {card.status === 'done' ? <CheckCircle2 size={21} /> : <Flame size={21} />}
           </div>
-          <div className="relative">
+          <div className="relative flex items-center gap-2">
+            <button
+              aria-label={card.isActive ? t.card.deactivate : t.card.activate}
+              aria-pressed={card.isActive}
+              className="icon-button card-active-toggle h-9 w-9"
+              data-active={card.isActive ? 'true' : 'false'}
+              data-card-action="true"
+              title={card.isActive ? t.card.deactivate : t.card.activate}
+              type="button"
+              onClick={handleToggleActive}
+            >
+              <Zap fill={card.isActive ? 'currentColor' : 'none'} size={17} />
+            </button>
             <button
               aria-label={t.card.actions}
               className="icon-button h-9 w-9"
@@ -390,6 +418,10 @@ function DeadlineCardComponent({
             <CheckCircle2 size={15} />
             {card.status === 'done' ? t.card.backToWork : t.card.markDone}
           </button>
+          <button className="menu-item" type="button" onClick={handleToggleActive}>
+            <Zap fill={card.isActive ? 'currentColor' : 'none'} size={15} />
+            {card.isActive ? t.card.deactivate : t.card.activate}
+          </button>
           {linkedCount > 0 ? (
             <button className="menu-item menu-item-danger" type="button" onClick={handleDeleteAllLinks}>
               <Unlink size={15} />
@@ -402,7 +434,9 @@ function DeadlineCardComponent({
           <div className="mx-2 my-1 h-px bg-white/[0.07]" />
           <button className="menu-item menu-item-danger" type="button" onClick={handleDelete}>
             <Trash2 size={15} />
-            {t.card.delete}
+            {isSelected && selectedCardIds.length > 1
+              ? t.card.deleteSelected(selectedCardIds.length)
+              : t.card.delete}
           </button>
         </div>
       ) : null}

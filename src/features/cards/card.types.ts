@@ -14,6 +14,7 @@ export type Card = {
   imageWidth: number | null
   deadlineAt: string
   status: CardStatus
+  isActive: boolean
   boardScope: BoardScope
   projectId: string | null
   x: number
@@ -35,6 +36,7 @@ export type CardRow = {
   image_width?: number | null
   deadline_at: string
   status: CardStatus
+  is_active?: boolean
   board_scope: BoardScope
   project_id: string | null
   x: number
@@ -58,6 +60,7 @@ export type CreateCardInput = {
   boardScope: BoardScope
   projectId: string | null
   status?: CardStatus
+  isActive?: boolean
   x: number
   y: number
   w?: number
@@ -75,6 +78,7 @@ export type UpdateCardInput = Partial<
     | 'imageWidth'
     | 'deadlineAt'
     | 'status'
+    | 'isActive'
     | 'x'
     | 'y'
     | 'w'

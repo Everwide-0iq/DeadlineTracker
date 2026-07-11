@@ -22,6 +22,7 @@ const createCard = (overrides: Partial<Card> = {}): Card => ({
   imagePath: null,
   imageSize: null,
   imageWidth: null,
+  isActive: false,
   projectId: 'project-1',
   status: 'todo',
   title: 'Task',

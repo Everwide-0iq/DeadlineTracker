@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Download, Plus } from 'lucide-react'
+import { Activity, AlertTriangle, Download, Plus, Type } from 'lucide-react'
 import {
   memo,
   useCallback,
@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent,
 } from 'react'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
@@ -47,8 +48,9 @@ type DesktopBoardProps = {
   isLoading: boolean
   now: number
   onCreateAtCenter: () => void
+  onCreateAtPosition: (x: number, y: number) => void
+  onCreateTextAtPosition: (x: number, y: number) => void
   onRetry: () => void
-  selectedCardId: string | null
   setCamera: (next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => void
   userEmail: string | null
   userId: string | null
@@ -70,6 +72,12 @@ type SelectionBox = {
   currentY: number
   startX: number
   startY: number
+}
+type BoardContextMenu = {
+  screenX: number
+  screenY: number
+  worldX: number
+  worldY: number
 }
 
 const cursorMeasureThrottleMs = 70
@@ -149,7 +157,7 @@ const CardUnderlight = memo(function CardUnderlight({ card, now }: { card: Card;
   const horizontalBleed = Math.max(42, renderSize.w * 0.18)
   const verticalBleed = Math.max(36, renderSize.h * 0.28)
   const style: UnderlightStyle = {
-    '--deadline-border': visual.borderColor,
+    '--deadline-border': card.isActive ? '#65e7ff' : visual.borderColor,
     height: renderSize.h + verticalBleed * 2,
     left: card.x - horizontalBleed,
     top: card.y - verticalBleed,
@@ -160,6 +168,7 @@ const CardUnderlight = memo(function CardUnderlight({ card, now }: { card: Card;
     <div
       aria-hidden="true"
       className="deadline-card-underlight pointer-events-none absolute"
+      data-active={card.isActive ? 'true' : 'false'}
       data-zone={visual.zone}
       style={style}
     />
@@ -269,8 +278,9 @@ export function DesktopBoard({
   isLoading,
   now,
   onCreateAtCenter,
+  onCreateAtPosition,
+  onCreateTextAtPosition,
   onRetry,
-  selectedCardId,
   setCamera,
   userEmail,
   userId,
@@ -287,6 +297,7 @@ export function DesktopBoard({
   const lastCursorMeasureAtRef = useRef(0)
   const viewportRectRef = useRef<DOMRectReadOnly | null>(null)
   const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
+  const [boardContextMenu, setBoardContextMenu] = useState<BoardContextMenu | null>(null)
   const [isPerformanceMode, setIsPerformanceMode] = useState(readPerformanceMode)
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
@@ -299,7 +310,7 @@ export function DesktopBoard({
   const selectedTextId = useBoardTextStore((state) => state.selectedTextId)
   const selectText = useBoardTextStore((state) => state.selectText)
   const textSaveError = useBoardTextStore((state) => state.saveError)
-  const deleteCard = useCardStore((state) => state.deleteCard)
+  const deleteCards = useCardStore((state) => state.deleteCards)
   const dragGuide = useCardStore((state) => state.dragGuide)
   const editor = useCardStore((state) => state.editor)
   const isGeometryInteracting = useCardStore((state) => state.isGeometryInteracting)
@@ -403,6 +414,40 @@ export function DesktopBoard({
     }
   }, [cards, selectCards, selectedCardIds])
 
+  useEffect(() => {
+    if (!boardContextMenu) {
+      return undefined
+    }
+
+    const closeOnOutsidePointer = (event: globalThis.PointerEvent) => {
+      const target = event.target
+
+      if (target instanceof Element && target.closest('[data-board-context-menu="true"]')) {
+        return
+      }
+
+      setBoardContextMenu(null)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setBoardContextMenu(null)
+      }
+    }
+    const closeOnWheel = () => setBoardContextMenu(null)
+
+    window.addEventListener('pointerdown', closeOnOutsidePointer, true)
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('wheel', closeOnWheel, { passive: true })
+
+    return () => {
+      window.removeEventListener('pointerdown', closeOnOutsidePointer, true)
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('wheel', closeOnWheel)
+    }
+  }, [boardContextMenu])
+
+  useEffect(() => setBoardContextMenu(null), [viewKey])
+
   const setCameraMoving = useCallback((value: boolean) => {
     if (isCameraMovingRef.current === value) {
       return
@@ -467,6 +512,7 @@ export function DesktopBoard({
       tasks: cards.map((card) => ({
         title: card.title,
         description: card.description || null,
+        active: card.isActive,
         completed: card.status === 'done',
         status: card.status,
         deadline: formatDate(card.deadlineAt),
@@ -571,13 +617,14 @@ export function DesktopBoard({
         return
       }
 
-      if (!selectedCardId) {
+      if (selectedCardIds.length === 0) {
         return
       }
 
-      const selectedCard = cards.find((card) => card.id === selectedCardId)
+      const selectedIdSet = new Set(selectedCardIds)
+      const selectedCards = cards.filter((card) => selectedIdSet.has(card.id))
 
-      if (!selectedCard) {
+      if (selectedCards.length === 0) {
         return
       }
 
@@ -585,12 +632,18 @@ export function DesktopBoard({
 
       void confirm({
         confirmLabel: t.card.delete,
-        description: t.card.deleteDescription(selectedCard.title),
-        title: t.card.deleteTitle,
+        description:
+          selectedCards.length > 1
+            ? t.card.deleteManyDescription(selectedCards.length)
+            : t.card.deleteDescription(selectedCards[0].title),
+        title:
+          selectedCards.length > 1
+            ? t.card.deleteManyTitle(selectedCards.length)
+            : t.card.deleteTitle,
         tone: 'danger',
       }).then((confirmed) => {
         if (confirmed) {
-          void deleteCard(selectedCard.id).catch(() => undefined)
+          void deleteCards(selectedCards.map((card) => card.id)).catch(() => undefined)
         }
       })
     }
@@ -601,11 +654,11 @@ export function DesktopBoard({
   }, [
     cards,
     confirm,
-    deleteCard,
+    deleteCards,
     deleteLink,
     deleteText,
     editor,
-    selectedCardId,
+    selectedCardIds,
     selectedLinkId,
     selectedTextId,
     t,
@@ -816,6 +869,64 @@ export function DesktopBoard({
     [],
   )
 
+  const handleBoardContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      const target = event.target
+      const targetElement = target instanceof Element ? target : null
+
+      if (
+        targetElement?.closest(
+          '[data-board-object="true"], [data-card-root="true"], [data-card-action="true"], .card-link-group',
+        )
+      ) {
+        setBoardContextMenu(null)
+        return
+      }
+
+      const viewport = viewportRef.current
+
+      if (!viewport) {
+        return
+      }
+
+      const rect = viewportRectRef.current ?? viewport.getBoundingClientRect()
+      viewportRectRef.current = rect
+      const worldPoint = getWorldPointFromClient(event.clientX, event.clientY)
+      const menuWidth = 226
+      const menuHeight = 132
+
+      selectCard(null)
+      selectLink(null)
+      selectText(null)
+      setBoardContextMenu({
+        screenX: clamp(event.clientX - rect.left, 12, Math.max(12, rect.width - menuWidth - 12)),
+        screenY: clamp(event.clientY - rect.top, 12, Math.max(12, rect.height - menuHeight - 12)),
+        worldX: Math.round(worldPoint.x),
+        worldY: Math.round(worldPoint.y),
+      })
+    },
+    [getWorldPointFromClient, selectCard, selectLink, selectText],
+  )
+
+  const createCardFromContext = useCallback(() => {
+    if (!boardContextMenu) {
+      return
+    }
+
+    onCreateAtPosition(boardContextMenu.worldX, boardContextMenu.worldY)
+    setBoardContextMenu(null)
+  }, [boardContextMenu, onCreateAtPosition])
+
+  const createTextFromContext = useCallback(() => {
+    if (!boardContextMenu) {
+      return
+    }
+
+    onCreateTextAtPosition(boardContextMenu.worldX, boardContextMenu.worldY)
+    setBoardContextMenu(null)
+  }, [boardContextMenu, onCreateTextAtPosition])
+
   const handleStartConnection = useCallback(
     (card: Card, side: CardLinkSide, event: PointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0 || event.pointerType === 'touch') {
@@ -980,6 +1091,7 @@ export function DesktopBoard({
     >
       <div
         className="board-viewport absolute inset-0"
+        onContextMenu={handleBoardContextMenu}
         onPointerDown={handlePanStart}
         ref={boardViewportRef}
         style={{
@@ -1031,7 +1143,7 @@ export function DesktopBoard({
             ))}
 
             {renderedCards.map((card) => (
-              <div data-card-root="true" key={card.id}>
+              <div data-board-object="true" data-card-root="true" key={card.id}>
                 <DeadlineCard
                   cameraZoom={camera.zoom}
                   canConnect
@@ -1050,6 +1162,26 @@ export function DesktopBoard({
           ))}
         </div>
       </div>
+
+      {boardContextMenu ? (
+        <div
+          aria-label={t.board.createMenu}
+          className="board-context-menu absolute z-40 w-[226px] rounded-2xl border border-white/10 bg-[#080a0f]/96 p-1.5 shadow-2xl backdrop-blur-xl"
+          data-board-context-menu="true"
+          role="menu"
+          style={{ left: boardContextMenu.screenX, top: boardContextMenu.screenY }}
+        >
+          <div className="board-context-menu-kicker">{t.board.createHere}</div>
+          <button autoFocus className="menu-item" role="menuitem" type="button" onClick={createCardFromContext}>
+            <Plus size={16} />
+            {t.common.createCard}
+          </button>
+          <button className="menu-item" role="menuitem" type="button" onClick={createTextFromContext}>
+            <Type size={16} />
+            {t.boardText.newText}
+          </button>
+        </div>
+      ) : null}
 
       <div className="pointer-events-none absolute left-5 top-5 z-20">
         <BoardControls
@@ -1120,7 +1252,7 @@ export function DesktopBoard({
       ) : null}
 
       {!isLoading && !error && cards.length === 0 && texts.length === 0 ? (
-        <div className="absolute inset-0 z-10 grid place-items-center p-6">
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center p-6">
           <div className="mission-state-card rounded-3xl border border-white/10 bg-black/35 p-7 text-center text-white shadow-2xl backdrop-blur-xl">
             <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 text-[var(--accent)] shadow-glow">
               <Plus size={26} />
@@ -1133,7 +1265,7 @@ export function DesktopBoard({
                 ? t.board.personalEmptyDescription
                 : t.board.cardEmptyDescription}
             </p>
-            <button className="primary-button mx-auto" type="button" onClick={onCreateAtCenter}>
+            <button className="primary-button pointer-events-auto mx-auto" type="button" onClick={onCreateAtCenter}>
               <Plus size={18} />
               {t.common.createCard}
             </button>

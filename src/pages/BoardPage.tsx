@@ -12,7 +12,12 @@ import { DesktopCardList } from '../features/cards/DesktopCardList.tsx'
 import { MobileCardList } from '../features/cards/MobileCardList.tsx'
 import { cleanupPendingCardImages } from '../features/cards/cardImage.api.ts'
 import type { BoardScope, Card } from '../features/cards/card.types.ts'
-import { filterCards, getFilterCounts, sortCardsForMobile } from '../features/cards/card.utils.ts'
+import {
+  defaultCardSize,
+  filterCards,
+  getFilterCounts,
+  sortCardsForMobile,
+} from '../features/cards/card.utils.ts'
 import { formatCountdown } from '../features/cards/countdown.ts'
 import { getDeadlineVisualState } from '../features/cards/deadlineColor.ts'
 import { useFeedbackStore } from '../features/feedback/feedback.store.ts'
@@ -114,7 +119,6 @@ export function BoardPage() {
   const now = useCardStore((state) => state.now)
   const openCreateEditor = useCardStore((state) => state.openCreateEditor)
   const editor = useCardStore((state) => state.editor)
-  const selectedCardId = useCardStore((state) => state.selectedCardId)
   const setFilter = useCardStore((state) => state.setFilter)
   const subscribeRealtime = useCardStore((state) => state.subscribeRealtime)
   const linkError = useCardLinkStore((state) => state.error)
@@ -305,6 +309,30 @@ export function BoardPage() {
     )
   }, [activeBoardScope, activeProjectId, camera, openCreateTextEditor])
 
+  const openCreateAtPosition = useCallback(
+    (x: number, y: number) => {
+      openCreateEditor(
+        Math.round(x - defaultCardSize.w / 2),
+        Math.round(y - defaultCardSize.h / 2),
+        activeBoardScope,
+        activeBoardScope === 'shared' ? activeProjectId : null,
+      )
+    },
+    [activeBoardScope, activeProjectId, openCreateEditor],
+  )
+
+  const openCreateTextAtPosition = useCallback(
+    (x: number, y: number) => {
+      openCreateTextEditor(
+        Math.round(x - 180),
+        y,
+        activeBoardScope,
+        activeBoardScope === 'shared' ? activeProjectId : null,
+      )
+    },
+    [activeBoardScope, activeProjectId, openCreateTextEditor],
+  )
+
   const handleCreateProject = useCallback(
     async (input: { color: string; name: string }) => {
       const project = await createProject(input, userId)
@@ -437,8 +465,9 @@ export function BoardPage() {
             isLoading={isLoading}
             now={now}
             onCreateAtCenter={openCreateAtCenter}
+            onCreateAtPosition={openCreateAtPosition}
+            onCreateTextAtPosition={openCreateTextAtPosition}
             onRetry={handleRetry}
-            selectedCardId={selectedCardId}
             setCamera={setCamera}
             userEmail={userEmail}
             userId={userId}
