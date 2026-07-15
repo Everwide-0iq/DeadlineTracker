@@ -1,22 +1,34 @@
 import { memo, useMemo, type PointerEvent } from 'react'
-import type { CardLink, CardLinkSide } from '../cardLinks/cardLink.types.ts'
-import type { Card } from '../cards/card.types.ts'
-import { getCardRenderSize } from '../cards/card.utils.ts'
-import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
+import {
+  getLinkSource,
+  getLinkTarget,
+  type BoardLinkEndpoint,
+  type BoardLinkNodeKind,
+  type CardLink,
+  type CardLinkSide,
+} from '../cardLinks/cardLink.types.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 
 export type DraftCardLink = {
-  fromCardId: string
-  fromSide: CardLinkSide
+  from: BoardLinkEndpoint
   pointer: Point
 }
 
+export type BoardLinkNodeMetric = {
+  color: string
+  h: number
+  id: string
+  kind: BoardLinkNodeKind
+  w: number
+  x: number
+  y: number
+}
+
 type CardLinkLayerProps = {
-  cards: Card[]
   draftLink: DraftCardLink | null
   links: CardLink[]
-  now: number
+  nodes: BoardLinkNodeMetric[]
   selectedLinkId: string | null
   onDeleteLink: (id: string) => void
   onSelectLink: (id: string | null) => void
@@ -34,8 +46,8 @@ type Rect = {
   top: number
 }
 
-type CardRect = Rect & {
-  id: string
+type NodeRect = Rect & {
+  key: string
 }
 
 type LinkGeometry = {
@@ -56,15 +68,15 @@ const sideVector: Record<CardLinkSide, Point> = {
 
 const isHorizontalSide = (side: CardLinkSide) => side === 'left' || side === 'right'
 
-function getCardRect(card: Card): CardRect {
-  const size = getCardRenderSize(card)
+const getNodeKey = (kind: BoardLinkNodeKind, id: string) => `${kind}:${id}`
 
+function getNodeRect(node: BoardLinkNodeMetric): NodeRect {
   return {
-    bottom: card.y + size.h,
-    id: card.id,
-    left: card.x,
-    right: card.x + size.w,
-    top: card.y,
+    bottom: node.y + node.h,
+    key: getNodeKey(node.kind, node.id),
+    left: node.x,
+    right: node.x + node.w,
+    top: node.y,
   }
 }
 
@@ -77,10 +89,10 @@ function expandRect(rect: Rect, margin: number): Rect {
   }
 }
 
-function expandCardRect(rect: CardRect, margin: number): CardRect {
+function expandNodeRect(rect: NodeRect, margin: number): NodeRect {
   return {
     ...expandRect(rect, margin),
-    id: rect.id,
+    key: rect.key,
   }
 }
 
@@ -141,9 +153,9 @@ function axisSegmentIntersectsRect(from: Point, to: Point, rect: Rect) {
 
 function scoreRoute(
   points: Point[],
-  obstacles: CardRect[],
-  sourceCardId: string,
-  targetCardId: string,
+  obstacles: NodeRect[],
+  sourceKey: string,
+  targetKey: string,
 ) {
   let intersections = 0
   let routeLeft = Number.POSITIVE_INFINITY
@@ -160,8 +172,8 @@ function scoreRoute(
 
   for (const obstacle of obstacles) {
     if (
-      obstacle.id === sourceCardId ||
-      obstacle.id === targetCardId ||
+      obstacle.key === sourceKey ||
+      obstacle.key === targetKey ||
       obstacle.right < routeLeft ||
       obstacle.left > routeRight ||
       obstacle.bottom < routeTop ||
@@ -184,16 +196,16 @@ function scoreRoute(
 
 function getBestRoute(
   candidates: Point[][],
-  obstacles: CardRect[],
-  sourceCardId: string,
-  targetCardId: string,
+  obstacles: NodeRect[],
+  sourceKey: string,
+  targetKey: string,
 ) {
   let bestRoute: Point[] = []
   let bestScore = Number.POSITIVE_INFINITY
 
   for (const candidate of candidates) {
     const route = dedupePoints(candidate)
-    const score = scoreRoute(route, obstacles, sourceCardId, targetCardId)
+    const score = scoreRoute(route, obstacles, sourceKey, targetKey)
 
     if (score < bestScore) {
       bestRoute = route
@@ -268,11 +280,11 @@ function getPointAtHalfLength(points: Point[]) {
 }
 
 function getLinkGeometry(
-  sourceRect: CardRect,
+  sourceRect: NodeRect,
   sourceSide: CardLinkSide,
-  targetRect: CardRect,
+  targetRect: NodeRect,
   targetSide: CardLinkSide,
-  expandedCardRects: CardRect[],
+  expandedNodeRects: NodeRect[],
 ): LinkGeometry {
   const start = getAnchorPointFromRect(sourceRect, sourceSide)
   const end = getAnchorPointFromRect(targetRect, targetSide)
@@ -306,7 +318,7 @@ function getLinkGeometry(
     )
   }
 
-  const points = getBestRoute(candidates, expandedCardRects, sourceRect.id, targetRect.id)
+  const points = getBestRoute(candidates, expandedNodeRects, sourceRect.key, targetRect.key)
 
   return {
     midpoint: getPointAtHalfLength(points),
@@ -315,7 +327,7 @@ function getLinkGeometry(
   }
 }
 
-function getDraftGeometry(sourceRect: CardRect, sourceSide: CardLinkSide, pointer: Point): LinkGeometry {
+function getDraftGeometry(sourceRect: NodeRect, sourceSide: CardLinkSide, pointer: Point): LinkGeometry {
   const start = getAnchorPointFromRect(sourceRect, sourceSide)
   const startOut = offsetPoint(start, sourceSide)
   const middle = isHorizontalSide(sourceSide)
@@ -341,10 +353,9 @@ function stopLinkPointer(event: PointerEvent<SVGPathElement>) {
 }
 
 function CardLinkLayerComponent({
-  cards,
   draftLink,
   links,
-  now,
+  nodes,
   selectedLinkId,
   onDeleteLink,
   onSelectLink,
@@ -352,69 +363,71 @@ function CardLinkLayerComponent({
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
   const hasLinkWork = links.length > 0 || Boolean(draftLink)
-  const cardById = useMemo(
-    () => (hasLinkWork ? new Map(cards.map((card) => [card.id, card])) : new Map<string, Card>()),
-    [cards, hasLinkWork],
+  const nodeByKey = useMemo(
+    () => hasLinkWork
+      ? new Map(nodes.map((node) => [getNodeKey(node.kind, node.id), node]))
+      : new Map<string, BoardLinkNodeMetric>(),
+    [hasLinkWork, nodes],
   )
-  const cardRectById = useMemo(
+  const nodeRectByKey = useMemo(
     () =>
       hasLinkWork
-        ? new Map(cards.map((card) => [card.id, getCardRect(card)]))
-        : new Map<string, CardRect>(),
-    [cards, hasLinkWork],
+        ? new Map(nodes.map((node) => [getNodeKey(node.kind, node.id), getNodeRect(node)]))
+        : new Map<string, NodeRect>(),
+    [hasLinkWork, nodes],
   )
-  const cardRects = useMemo(() => Array.from(cardRectById.values()), [cardRectById])
-  const expandedCardRects = useMemo(
-    () => cardRects.map((rect) => expandCardRect(rect, 14)),
-    [cardRects],
+  const nodeRects = useMemo(() => Array.from(nodeRectByKey.values()), [nodeRectByKey])
+  const expandedNodeRects = useMemo(
+    () => nodeRects.map((rect) => expandNodeRect(rect, 14)),
+    [nodeRects],
   )
 
   const linkGeometries = useMemo(
     () =>
       links.flatMap((link) => {
-        const sourceCard = cardById.get(link.fromCardId)
-        const targetCard = cardById.get(link.toCardId)
-        const sourceRect = cardRectById.get(link.fromCardId)
-        const targetRect = cardRectById.get(link.toCardId)
+        const source = getLinkSource(link)
+        const target = getLinkTarget(link)
+        if (!source || !target) return []
+        const sourceNode = nodeByKey.get(getNodeKey(source.kind, source.id))
+        const targetNode = nodeByKey.get(getNodeKey(target.kind, target.id))
+        const sourceRect = nodeRectByKey.get(getNodeKey(source.kind, source.id))
+        const targetRect = nodeRectByKey.get(getNodeKey(target.kind, target.id))
 
-        if (!sourceCard || !targetCard || !sourceRect || !targetRect) {
+        if (!sourceNode || !targetNode || !sourceRect || !targetRect) {
           return []
         }
 
         const geometry = getLinkGeometry(
           sourceRect,
-          link.fromSide,
+          source.side,
           targetRect,
-          link.toSide,
-          expandedCardRects,
+          target.side,
+          expandedNodeRects,
         )
 
         return [
           {
             geometry,
             link,
-            sourceCard,
-            targetCard,
+            sourceNode,
+            targetNode,
           },
         ]
       }),
-    [cardById, cardRectById, expandedCardRects, links],
+    [expandedNodeRects, links, nodeByKey, nodeRectByKey],
   )
 
   const renderedLinks = useMemo(
     () =>
-      linkGeometries.map(({ geometry, link, sourceCard, targetCard }) => {
-        const sourceVisual = getDeadlineVisualState(sourceCard.deadlineAt, sourceCard.status, now, language)
-        const targetVisual = getDeadlineVisualState(targetCard.deadlineAt, targetCard.status, now, language)
-
+      linkGeometries.map(({ geometry, link, sourceNode, targetNode }) => {
         return {
           geometry,
           link,
-          sourceColor: sourceVisual.borderColor,
-          targetColor: targetVisual.borderColor,
+          sourceColor: sourceNode.color,
+          targetColor: targetNode.color,
         }
       }),
-    [language, linkGeometries, now],
+    [linkGeometries],
   )
 
   const draft = useMemo(() => {
@@ -422,20 +435,18 @@ function CardLinkLayerComponent({
       return null
     }
 
-    const sourceCard = cardById.get(draftLink.fromCardId)
-    const sourceRect = cardRectById.get(draftLink.fromCardId)
+    const sourceNode = nodeByKey.get(getNodeKey(draftLink.from.kind, draftLink.from.id))
+    const sourceRect = nodeRectByKey.get(getNodeKey(draftLink.from.kind, draftLink.from.id))
 
-    if (!sourceCard || !sourceRect) {
+    if (!sourceNode || !sourceRect) {
       return null
     }
 
-    const sourceVisual = getDeadlineVisualState(sourceCard.deadlineAt, sourceCard.status, now, language)
-
     return {
-      color: sourceVisual.borderColor,
-      geometry: getDraftGeometry(sourceRect, draftLink.fromSide, draftLink.pointer),
+      color: sourceNode.color,
+      geometry: getDraftGeometry(sourceRect, draftLink.from.side, draftLink.pointer),
     }
-  }, [cardById, cardRectById, draftLink, language, now])
+  }, [draftLink, nodeByKey, nodeRectByKey])
 
   const selectedRenderedLink = renderedLinks.find(({ link }) => link.id === selectedLinkId)
 

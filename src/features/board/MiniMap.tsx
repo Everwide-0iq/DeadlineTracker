@@ -1,14 +1,15 @@
 import {
   memo,
   useMemo,
+  useRef,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import type { Card } from '../cards/card.types.ts'
-import { getCardRenderSize } from '../cards/card.utils.ts'
-import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
+import type { BoardCursor } from './useBoardCollaboration.ts'
+import type { BoardLinkNodeMetric } from './CardLinkLayer.tsx'
+import { useBoardMotionStore } from './boardMotion.store.ts'
 import type { BoardCamera } from './useBoardCamera.ts'
 
 type ViewportSize = {
@@ -25,20 +26,10 @@ type WorldBounds = {
 
 type MiniMapProps = {
   camera: BoardCamera
-  cards: Card[]
-  now: number
+  cursors: BoardCursor[]
+  nodes: BoardLinkNodeMetric[]
   setCamera: (next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => void
   viewportSize: ViewportSize
-}
-
-type MiniMapCardMetric = {
-  color: string
-  glowColor: string
-  h: number
-  id: string
-  w: number
-  x: number
-  y: number
 }
 
 const mapSize = {
@@ -63,17 +54,17 @@ function getViewportBounds(camera: BoardCamera, viewportSize: ViewportSize): Wor
 }
 
 function getMiniMapGeometry(
-  cardMetrics: MiniMapCardMetric[],
+  nodeMetrics: BoardLinkNodeMetric[],
   camera: BoardCamera,
   viewportSize: ViewportSize,
 ) {
   const viewportBounds = getViewportBounds(camera, viewportSize)
-  const cardBounds = cardMetrics.reduce<WorldBounds>(
-    (acc, card) => ({
-      maxX: Math.max(acc.maxX, card.x + card.w),
-      maxY: Math.max(acc.maxY, card.y + card.h),
-      minX: Math.min(acc.minX, card.x),
-      minY: Math.min(acc.minY, card.y),
+  const cardBounds = nodeMetrics.reduce<WorldBounds>(
+    (acc, node) => ({
+      maxX: Math.max(acc.maxX, node.x + node.w),
+      maxY: Math.max(acc.maxY, node.y + node.h),
+      minX: Math.min(acc.minX, node.x),
+      minY: Math.min(acc.minY, node.y),
     }),
     viewportBounds,
   )
@@ -103,28 +94,19 @@ function getMiniMapGeometry(
   }
 }
 
-function MiniMapComponent({ camera, cards, now, setCamera, viewportSize }: MiniMapProps) {
+function MiniMapComponent({ camera, cursors, nodes, setCamera, viewportSize }: MiniMapProps) {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
-  const cardMetrics = useMemo(
-    () =>
-      cards.map((card) => {
-        const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
-        const renderSize = getCardRenderSize(card)
-
-        return {
-          color: visual.borderColor,
-          glowColor: visual.glowColor,
-          h: renderSize.h,
-          id: card.id,
-          w: renderSize.w,
-          x: card.x,
-          y: card.y,
-        }
-      }),
-    [cards, language, now],
+  const liveCamera = useBoardMotionStore((state) => state.liveCamera)
+  const displayCamera = liveCamera ?? camera
+  const geometry = useMemo(
+    () => getMiniMapGeometry(nodes, displayCamera, viewportSize),
+    [displayCamera, nodes, viewportSize],
   )
-  const geometry = getMiniMapGeometry(cardMetrics, camera, viewportSize)
+  const pointerInteractionRef = useRef<{
+    geometry: ReturnType<typeof getMiniMapGeometry>
+    pointerId: number
+  } | null>(null)
 
   const toMapX = (worldX: number) => geometry.offsetX + (worldX - geometry.bounds.minX) * geometry.scale
   const toMapY = (worldY: number) => geometry.offsetY + (worldY - geometry.bounds.minY) * geometry.scale
@@ -140,19 +122,23 @@ function MiniMapComponent({ camera, cards, now, setCamera, viewportSize }: MiniM
     14,
   )
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === 'mouse' && event.button !== 0) {
-      return
-    }
-
-    event.preventDefault()
-    event.stopPropagation()
-
+  const moveCameraToPointer = (
+    event: ReactPointerEvent<HTMLDivElement>,
+    interactionGeometry = geometry,
+  ) => {
     const rect = event.currentTarget.getBoundingClientRect()
-    const localX = clamp(event.clientX - rect.left - geometry.offsetX, 0, geometry.renderedWidth)
-    const localY = clamp(event.clientY - rect.top - geometry.offsetY, 0, geometry.renderedHeight)
-    const targetWorldX = geometry.bounds.minX + localX / geometry.scale
-    const targetWorldY = geometry.bounds.minY + localY / geometry.scale
+    const localX = clamp(
+      event.clientX - rect.left - interactionGeometry.offsetX,
+      0,
+      interactionGeometry.renderedWidth,
+    )
+    const localY = clamp(
+      event.clientY - rect.top - interactionGeometry.offsetY,
+      0,
+      interactionGeometry.renderedHeight,
+    )
+    const targetWorldX = interactionGeometry.bounds.minX + localX / interactionGeometry.scale
+    const targetWorldY = interactionGeometry.bounds.minY + localY / interactionGeometry.scale
     const width = Math.max(viewportSize.width, 1)
     const height = Math.max(viewportSize.height, 1)
 
@@ -161,6 +147,41 @@ function MiniMapComponent({ camera, cards, now, setCamera, viewportSize }: MiniM
       x: width / 2 - targetWorldX * current.zoom,
       y: height / 2 - targetWorldY * current.zoom,
     }))
+  }
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    pointerInteractionRef.current = { geometry, pointerId: event.pointerId }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    moveCameraToPointer(event, geometry)
+  }
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const interaction = pointerInteractionRef.current
+
+    if (!interaction || interaction.pointerId !== event.pointerId) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    moveCameraToPointer(event, interaction.geometry)
+  }
+
+  const finishPointerInteraction = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pointerInteractionRef.current?.pointerId !== event.pointerId) {
+      return
+    }
+
+    pointerInteractionRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -186,32 +207,45 @@ function MiniMapComponent({ camera, cards, now, setCamera, viewportSize }: MiniM
     <div className="pointer-events-auto absolute right-6 top-6 z-20 hidden rounded-2xl border border-white/10 bg-black/35 p-3 shadow-2xl backdrop-blur-xl xl:block">
       <div
         aria-label={t.board.minimap}
-        className="relative cursor-crosshair overflow-hidden rounded-xl border border-white/[0.08] bg-[#05080d]"
+        className="relative touch-none cursor-crosshair overflow-hidden rounded-xl border border-white/[0.08] bg-[#05080d] active:cursor-grabbing"
         onKeyDown={handleKeyDown}
+        onLostPointerCapture={finishPointerInteraction}
+        onPointerCancel={finishPointerInteraction}
         onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={finishPointerInteraction}
         role="button"
         style={{ height: mapSize.height, width: mapSize.width }}
         tabIndex={0}
       >
-        {cardMetrics.map((card) => {
-          const left = toMapX(card.x)
-          const top = toMapY(card.y)
+        {nodes.map((node) => {
+          const left = toMapX(node.x)
+          const top = toMapY(node.y)
 
           return (
             <div
-              className="absolute rounded-[3px]"
-              key={card.id}
+              className="mini-map-node absolute rounded-[3px]"
+              data-kind={node.kind}
+              key={`${node.kind}:${node.id}`}
               style={{
-                backgroundColor: card.color,
-                boxShadow: `0 0 10px ${card.glowColor}`,
-                height: Math.max(card.h * geometry.scale, 4),
+                backgroundColor: node.color,
+                boxShadow: `0 0 9px color-mix(in srgb, ${node.color} 72%, transparent)`,
+                height: Math.max(node.h * geometry.scale, 4),
                 left,
                 top,
-                width: Math.max(card.w * geometry.scale, 6),
+                width: Math.max(node.w * geometry.scale, 6),
               }}
             />
           )
         })}
+        {cursors.map((cursor) => (
+          <span
+            aria-hidden="true"
+            className="mini-map-cursor"
+            key={cursor.clientId}
+            style={{ backgroundColor: cursor.color, left: toMapX(cursor.x), top: toMapY(cursor.y) }}
+          />
+        ))}
         <div
           className="absolute rounded border border-[var(--accent)]/80 bg-[var(--accent)]/10 shadow-[0_0_16px_rgb(255_70_61_/_0.28)]"
           style={{

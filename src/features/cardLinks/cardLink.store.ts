@@ -4,6 +4,7 @@ import {
   createCardLink as createCardLinkApi,
   deleteCardLink as deleteCardLinkApi,
   deleteCardLinksForCard as deleteCardLinksForCardApi,
+  deleteCardLinksForTodoBlock as deleteCardLinksForTodoBlockApi,
   fetchCardLinks,
   subscribeToCardLinkChanges,
 } from './cardLink.api.ts'
@@ -20,6 +21,7 @@ type CardLinkState = {
   createLink: (input: CreateCardLinkInput, userId: string | null) => Promise<CardLink | null>
   deleteLink: (id: string) => Promise<void>
   deleteLinksForCard: (cardId: string) => Promise<void>
+  deleteLinksForTodoBlock: (blockId: string) => Promise<void>
   loadLinks: () => Promise<void>
   selectLink: (id: string | null) => void
   subscribeRealtime: () => () => void
@@ -64,10 +66,10 @@ const upsertLink = (links: CardLink[], link: CardLink) => {
 const findMatchingLink = (links: CardLink[], input: CreateCardLinkInput) =>
   links.find(
     (link) =>
-      link.fromCardId === input.fromCardId &&
-      link.fromSide === input.fromSide &&
-      link.toCardId === input.toCardId &&
-      link.toSide === input.toSide,
+      (input.from.kind === 'card' ? link.fromCardId : link.fromTodoBlockId) === input.from.id &&
+      link.fromSide === input.from.side &&
+      (input.to.kind === 'card' ? link.toCardId : link.toTodoBlockId) === input.to.id &&
+      link.toSide === input.to.side,
   ) ?? null
 
 export const useCardLinkStore = create<CardLinkState>((set, get) => ({
@@ -79,7 +81,7 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
   selectedLinkId: null,
   clearSaveError: () => set({ saveError: null }),
   createLink: async (input, userId) => {
-    if (input.fromCardId === input.toCardId) {
+    if (input.from.kind === input.to.kind && input.from.id === input.to.id) {
       return null
     }
 
@@ -145,6 +147,24 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
         links: removedLinks.reduce(upsertLink, state.links),
         saveError: getMessage(error),
       }))
+      throw error
+    }
+  },
+  deleteLinksForTodoBlock: async (blockId) => {
+    const removedLinks = get().links.filter(
+      (link) => link.fromTodoBlockId === blockId || link.toTodoBlockId === blockId,
+    )
+    if (removedLinks.length === 0) return
+    const removedIds = new Set(removedLinks.map((link) => link.id))
+    set((state) => ({
+      links: state.links.filter((link) => !removedIds.has(link.id)),
+      saveError: null,
+      selectedLinkId: state.selectedLinkId && removedIds.has(state.selectedLinkId) ? null : state.selectedLinkId,
+    }))
+    try {
+      await deleteCardLinksForTodoBlockApi(blockId)
+    } catch (error) {
+      set((state) => ({ links: removedLinks.reduce(upsertLink, state.links), saveError: getMessage(error) }))
       throw error
     }
   },

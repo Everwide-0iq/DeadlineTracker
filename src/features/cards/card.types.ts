@@ -17,6 +17,7 @@ export type Card = {
   isActive: boolean
   activeBy: string | null
   completedAt: string | null
+  completedBy: string | null
   boardScope: BoardScope
   projectId: string | null
   x: number
@@ -41,6 +42,7 @@ export type CardRow = {
   is_active?: boolean
   active_by?: string | null
   completed_at?: string | null
+  completed_by?: string | null
   board_scope: BoardScope
   project_id: string | null
   x: number

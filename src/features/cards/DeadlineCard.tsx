@@ -32,6 +32,7 @@ import { formatCompletionDate } from './completion.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
+import { useTodoStore } from '../todos/todo.store.ts'
 
 type DeadlineCardProps = {
   cameraZoom: number
@@ -87,11 +88,15 @@ function DeadlineCardComponent({
   )
   const selectLink = useCardLinkStore((state) => state.selectLink)
   const selectText = useBoardTextStore((state) => state.selectText)
+  const selectTodoBlocks = useTodoStore((state) => state.selectBlocks)
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
   const activeProfile = useProfileStore((state) =>
     card.activeBy ? state.profiles[card.activeBy] ?? null : null,
+  )
+  const completedProfile = useProfileStore((state) =>
+    card.completedBy ? state.profiles[card.completedBy] ?? null : null,
   )
   const dragPointerDown = useDragCard({ cameraZoom, card, enabled: canDrag })
   const resizePointerDown = useResizeCard({ cameraZoom, card, enabled: canDrag })
@@ -108,6 +113,8 @@ function DeadlineCardComponent({
         ? t.card.takeActivity
         : t.card.activate
   const completionDate = formatCompletionDate(card.completedAt, language)
+  const completedOwnerName = completedProfile?.nickname ?? t.card.activeOwnerUnknown
+  const completedOwnerColor = completedProfile?.activeColor ?? defaultActiveColor
   const resizeZoom = Math.max(cameraZoom, 0.1)
   const resizeEdgeSize = 16 / resizeZoom
   const resizeCornerSize = 24 / resizeZoom
@@ -266,6 +273,7 @@ function DeadlineCardComponent({
       return
     }
 
+    selectTodoBlocks([])
     selectCard(card.id)
   }
 
@@ -274,6 +282,7 @@ function DeadlineCardComponent({
     selectLink(null)
     selectText(null)
     if (!isSelected) {
+      selectTodoBlocks([])
       selectCard(card.id)
     }
 
@@ -302,6 +311,7 @@ function DeadlineCardComponent({
       if (event.ctrlKey || event.metaKey || event.shiftKey) {
         toggleCardSelection(card.id)
       } else {
+        selectTodoBlocks([])
         selectCard(card.id)
       }
     }
@@ -387,8 +397,9 @@ function DeadlineCardComponent({
               aria-label={t.card.createConnection(side)}
               className={cn('card-link-handle', `card-link-handle-${side}`)}
               data-card-action="true"
-              data-card-id={card.id}
               data-card-link-handle="true"
+              data-link-node-id={card.id}
+              data-link-node-kind="card"
               data-card-side={side}
               key={side}
               tabIndex={-1}
@@ -500,8 +511,19 @@ function DeadlineCardComponent({
           </div>
           {card.status === 'done' ? (
             <div className="deadline-card-completion-date">
-              <CalendarCheck2 size={15} />
-              <span>{completionDate ? t.card.completedAt(completionDate) : t.card.completionUnknown}</span>
+              <ProfileAvatar
+                avatarPath={completedProfile?.avatarPath}
+                className="completion-avatar-pulse"
+                color={completedOwnerColor}
+                name={completedOwnerName}
+                size={22}
+              />
+              <CalendarCheck2 size={14} />
+              <span>
+                {completionDate
+                  ? t.card.completedBy(completedOwnerName, completionDate)
+                  : t.card.completionUnknown}
+              </span>
             </div>
           ) : null}
         </div>

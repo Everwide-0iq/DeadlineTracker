@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Download, Plus, Type } from 'lucide-react'
+import { Activity, AlertTriangle, Download, Plus } from 'lucide-react'
 import {
   memo,
   useCallback,
@@ -11,7 +11,11 @@ import {
   type PointerEvent,
 } from 'react'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
-import type { CardLink, CardLinkSide } from '../cardLinks/cardLink.types.ts'
+import type {
+  BoardLinkEndpoint,
+  CardLink,
+  CardLinkSide,
+} from '../cardLinks/cardLink.types.ts'
 import { BoardTextItem } from '../boardTexts/BoardTextItem.tsx'
 import { useBoardTextStore } from '../boardTexts/boardText.store.ts'
 import type { BoardText } from '../boardTexts/boardText.types.ts'
@@ -28,8 +32,14 @@ import { usePreferencesStore } from '../preferences/preferences.store.ts'
 import { ProfileAvatar } from '../profile/ProfileAvatar.tsx'
 import { useProfileStore } from '../profile/profile.store.ts'
 import { defaultActiveColor, type UserProfile } from '../profile/profile.types.ts'
+import { TodoBlock } from '../todos/TodoBlock.tsx'
+import { useTodoStore } from '../todos/todo.store.ts'
+import type { TodoBlock as TodoBlockModel, TodoItem } from '../todos/todo.types.ts'
+import { getTodoBlockStatus, getTodoBlockRenderHeight } from '../todos/todo.utils.ts'
+import { AddMenuItems } from './AddMenu.tsx'
 import { BoardControls } from './BoardControls.tsx'
-import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
+import { CardLinkLayer, type BoardLinkNodeMetric, type DraftCardLink } from './CardLinkLayer.tsx'
+import { useBoardMotionStore } from './boardMotion.store.ts'
 import type { DragGuide } from './dragGuide.types.ts'
 import { HeatHorizon } from './HeatHorizon.tsx'
 import { MiniMap } from './MiniMap.tsx'
@@ -41,6 +51,8 @@ type DesktopBoardProps = {
   boardScope: BoardScope
   collaborationRoomId: string
   cards: Card[]
+  todoBlocks: TodoBlockModel[]
+  todoItems: TodoItem[]
   exportContext: {
     boardName: string
     filterName: string
@@ -53,6 +65,7 @@ type DesktopBoardProps = {
   onCreateAtCenter: () => void
   onCreateAtPosition: (x: number, y: number) => void
   onCreateTextAtPosition: (x: number, y: number) => void
+  onCreateTodoAtPosition: (x: number, y: number) => void
   onRetry: () => void
   setCamera: (next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => void
   userEmail: string | null
@@ -232,16 +245,26 @@ function RemoteCursor({ cursor }: { cursor: BoardCursor }) {
       style={{ left: cursor.x, top: cursor.y, '--member-color': cursor.color } as SceneStyle}
     >
       <span className="remote-cursor-point" />
-      <span className="remote-cursor-label">{cursor.name}</span>
+      <span className="remote-cursor-label">
+        <ProfileAvatar
+          avatarPath={cursor.avatarPath}
+          color={cursor.color}
+          name={cursor.name}
+          size={20}
+        />
+        {cursor.name}
+      </span>
     </div>
   )
 }
 
 const PresenceCluster = memo(function PresenceCluster({
   members,
+  onFocusMember,
   self,
 }: {
   members: BoardMember[]
+  onFocusMember: (clientId: string) => void
   self: BoardMember
 }) {
   const language = useI18nStore((state) => state.language)
@@ -255,15 +278,21 @@ const PresenceCluster = memo(function PresenceCluster({
         {members.length + 1} {t.board.online}
       </div>
       <div className="flex items-center">
-        {visibleMembers.map((member) => (
-          <ProfileAvatar
-            avatarPath={member.avatarPath}
-            className="-ml-1 first:ml-0"
-            color={member.color}
+        {visibleMembers.map((member) => member.clientId === self.clientId ? (
+          <span className="-ml-1 first:ml-0" key={member.clientId} title={member.name}>
+            <ProfileAvatar avatarPath={member.avatarPath} color={member.color} name={member.name} size={32} />
+          </span>
+        ) : (
+          <button
+            aria-label={member.name}
+            className="presence-avatar-button -ml-1 first:ml-0"
             key={member.clientId}
-            name={member.name}
-            size={32}
-          />
+            title={member.name}
+            type="button"
+            onClick={() => onFocusMember(member.clientId)}
+          >
+            <ProfileAvatar avatarPath={member.avatarPath} color={member.color} name={member.name} size={32} />
+          </button>
         ))}
       </div>
     </aside>
@@ -275,6 +304,8 @@ export function DesktopBoard({
   boardScope,
   collaborationRoomId,
   cards,
+  todoBlocks,
+  todoItems,
   exportContext,
   links,
   texts,
@@ -284,6 +315,7 @@ export function DesktopBoard({
   onCreateAtCenter,
   onCreateAtPosition,
   onCreateTextAtPosition,
+  onCreateTodoAtPosition,
   onRetry,
   setCamera,
   userEmail,
@@ -307,6 +339,7 @@ export function DesktopBoard({
   const togglePerformanceMode = usePreferencesStore((state) => state.togglePerformanceMode)
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
+  const [todoHeightById, setTodoHeightById] = useState<Record<string, number>>({})
   const createLink = useCardLinkStore((state) => state.createLink)
   const deleteLink = useCardLinkStore((state) => state.deleteLink)
   const linkSaveError = useCardLinkStore((state) => state.saveError)
@@ -325,9 +358,16 @@ export function DesktopBoard({
   const selectCard = useCardStore((state) => state.selectCard)
   const selectedCardIds = useCardStore((state) => state.selectedCardIds)
   const selectCards = useCardStore((state) => state.selectCards)
+  const deleteTodoBlocks = useTodoStore((state) => state.deleteBlocks)
+  const selectedTodoBlockIds = useTodoStore((state) => state.selectedBlockIds)
+  const expandedTodoBlockIds = useTodoStore((state) => state.expandedBlockIds)
+  const selectTodoBlocks = useTodoStore((state) => state.selectBlocks)
+  const todoSaveError = useTodoStore((state) => state.saveError)
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
+  const setLiveCamera = useBoardMotionStore((state) => state.setLiveCamera)
+  const clearLiveCamera = useBoardMotionStore((state) => state.clearLiveCamera)
   const { members, remoteCursors, self, sendCursor } = useBoardCollaboration({
     enabled: boardScope === 'shared',
     fallbackName: t.board.memberFallback,
@@ -343,11 +383,26 @@ export function DesktopBoard({
   const displayCameraX = Math.round(camera.x * devicePixelRatio) / devicePixelRatio
   const displayCameraY = Math.round(camera.y * devicePixelRatio) / devicePixelRatio
   const cardById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards])
+  const todoBlockById = useMemo(() => new Map(todoBlocks.map((block) => [block.id, block])), [todoBlocks])
+  const todoItemsByBlock = useMemo(() => {
+    const grouped = new Map<string, TodoItem[]>()
+    for (const item of todoItems) {
+      const current = grouped.get(item.blockId)
+      if (current) current.push(item)
+      else grouped.set(item.blockId, [item])
+    }
+    for (const items of grouped.values()) {
+      items.sort((left, right) => left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt))
+    }
+    return grouped
+  }, [todoItems])
   const cardRenderSizeById = useMemo(
     () => new Map(cards.map((card) => [card.id, getCardRenderSize(card)])),
     [cards],
   )
   const selectedCardIdSet = useMemo(() => new Set(selectedCardIds), [selectedCardIds])
+  const selectedTodoIdSet = useMemo(() => new Set(selectedTodoBlockIds), [selectedTodoBlockIds])
+  const expandedTodoIdSet = useMemo(() => new Set(expandedTodoBlockIds), [expandedTodoBlockIds])
   const visibleWorldBounds = useMemo(
     () => getViewportWorldBounds(camera, viewportSize),
     [camera, viewportSize],
@@ -362,6 +417,50 @@ export function DesktopBoard({
       }),
     [cardRenderSizeById, cards, visibleWorldBounds],
   )
+  const renderedTodoBlocks = useMemo(
+    () => todoBlocks.filter((block) => {
+      const itemCount = todoItemsByBlock.get(block.id)?.length ?? 0
+      const height = todoHeightById[block.id] ?? getTodoBlockRenderHeight(itemCount, expandedTodoIdSet.has(block.id))
+      return intersectsBounds(block.x, block.y, block.w, height, visibleWorldBounds)
+    }),
+    [expandedTodoIdSet, todoBlocks, todoHeightById, todoItemsByBlock, visibleWorldBounds],
+  )
+  const linkNodes = useMemo<BoardLinkNodeMetric[]>(() => {
+    const cardNodes = cards.map((card) => {
+      const size = cardRenderSizeById.get(card.id) ?? getCardRenderSize(card)
+      const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
+      return { color: visual.borderColor, h: size.h, id: card.id, kind: 'card' as const, w: size.w, x: card.x, y: card.y }
+    })
+    const todoNodes = todoBlocks.map((block) => {
+      const items = todoItemsByBlock.get(block.id) ?? []
+      const status = getTodoBlockStatus(items, block.id)
+      const visual = block.deadlineAt
+        ? getDeadlineVisualState(block.deadlineAt, status.isDone ? 'done' : 'todo', now, language)
+        : { borderColor: '#55d9e8' }
+      return {
+        color: visual.borderColor,
+        h: todoHeightById[block.id] ?? getTodoBlockRenderHeight(items.length, expandedTodoIdSet.has(block.id)),
+        id: block.id,
+        kind: 'todo' as const,
+        w: block.w,
+        x: block.x,
+        y: block.y,
+      }
+    })
+    return [...cardNodes, ...todoNodes]
+  }, [cardRenderSizeById, cards, expandedTodoIdSet, language, now, todoBlocks, todoHeightById, todoItemsByBlock])
+  const todoLinkCountById = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const link of links) {
+      if (link.fromTodoBlockId) {
+        counts.set(link.fromTodoBlockId, (counts.get(link.fromTodoBlockId) ?? 0) + 1)
+      }
+      if (link.toTodoBlockId) {
+        counts.set(link.toTodoBlockId, (counts.get(link.toTodoBlockId) ?? 0) + 1)
+      }
+    }
+    return counts
+  }, [links])
   const renderedTexts = useMemo(
     () => texts.filter((text) => isTextInBounds(text, visibleWorldBounds)),
     [texts, visibleWorldBounds],
@@ -405,6 +504,13 @@ export function DesktopBoard({
     }
   }, [])
 
+  const measureTodoBlock = useCallback((id: string, height: number) => {
+    const roundedHeight = Math.max(1, Math.round(height))
+    setTodoHeightById((current) =>
+      current[id] === roundedHeight ? current : { ...current, [id]: roundedHeight },
+    )
+  }, [])
+
   useEffect(() => {
     cameraRef.current = camera
     applyCameraToDom(camera)
@@ -422,6 +528,13 @@ export function DesktopBoard({
       selectCards(nextSelectedIds)
     }
   }, [cards, selectCards, selectedCardIds])
+
+  useEffect(() => {
+    if (selectedTodoBlockIds.length === 0) return
+    const visibleIds = new Set(todoBlocks.map((block) => block.id))
+    const next = selectedTodoBlockIds.filter((id) => visibleIds.has(id))
+    if (next.length !== selectedTodoBlockIds.length) selectTodoBlocks(next)
+  }, [selectTodoBlocks, selectedTodoBlockIds, todoBlocks])
 
   useEffect(() => {
     if (!boardContextMenu) {
@@ -480,7 +593,8 @@ export function DesktopBoard({
   const beginCameraMove = useCallback(() => {
     clearCameraMoveTimer()
     setCameraMoving(true)
-  }, [clearCameraMoveTimer, setCameraMoving])
+    setLiveCamera(cameraRef.current)
+  }, [clearCameraMoveTimer, setCameraMoving, setLiveCamera])
 
   const settleCameraMoveSoon = useCallback((commitCamera = false) => {
     clearCameraMoveTimer()
@@ -490,8 +604,9 @@ export function DesktopBoard({
         setCamera(cameraRef.current)
       }
       setCameraMoving(false)
+      clearLiveCamera()
     }, cameraMoveSettleMs)
-  }, [clearCameraMoveTimer, setCamera, setCameraMoving])
+  }, [clearCameraMoveTimer, clearLiveCamera, setCamera, setCameraMoving])
 
   const handleExportBoard = useCallback(() => {
     const exportedAt = new Date()
@@ -519,6 +634,7 @@ export function DesktopBoard({
       },
       filter: exportContext.filterName,
       tasks: cards.map((card) => ({
+        type: 'card',
         title: card.title,
         description: card.description || null,
         active: card.isActive,
@@ -526,6 +642,23 @@ export function DesktopBoard({
         status: card.status,
         deadline: formatDate(card.deadlineAt),
       })),
+      todoBlocks: todoBlocks.map((block) => {
+        const items = todoItemsByBlock.get(block.id) ?? []
+        const status = getTodoBlockStatus(items, block.id)
+        return {
+          type: 'todo',
+          title: block.title,
+          completed: status.isDone,
+          progress: { completed: status.completed, total: status.total },
+          deadline: block.deadlineAt ? formatDate(block.deadlineAt) : null,
+          items: items.map((item) => ({
+            title: item.title,
+            description: item.description || null,
+            active: item.isActive,
+            completed: item.isDone,
+          })),
+        }
+      }),
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8',
@@ -542,14 +675,15 @@ export function DesktopBoard({
     link.click()
     link.remove()
     window.setTimeout(() => window.URL.revokeObjectURL(url), 0)
-  }, [boardScope, cards, exportContext.boardName, exportContext.filterName, language])
+  }, [boardScope, cards, exportContext.boardName, exportContext.filterName, language, todoBlocks, todoItemsByBlock])
 
   useEffect(() => {
     return () => {
       linkDraftCleanupRef.current?.()
       clearCameraMoveTimer()
+      clearLiveCamera()
     }
-  }, [clearCameraMoveTimer])
+  }, [clearCameraMoveTimer, clearLiveCamera])
 
   useEffect(() => {
     const viewport = viewportRef.current
@@ -626,14 +760,16 @@ export function DesktopBoard({
         return
       }
 
-      if (selectedCardIds.length === 0) {
+      if (selectedCardIds.length === 0 && selectedTodoBlockIds.length === 0) {
         return
       }
 
       const selectedIdSet = new Set(selectedCardIds)
       const selectedCards = cards.filter((card) => selectedIdSet.has(card.id))
+      const selectedTodoSet = new Set(selectedTodoBlockIds)
+      const selectedTodos = todoBlocks.filter((block) => selectedTodoSet.has(block.id))
 
-      if (selectedCards.length === 0) {
+      if (selectedCards.length === 0 && selectedTodos.length === 0) {
         return
       }
 
@@ -642,17 +778,26 @@ export function DesktopBoard({
       void confirm({
         confirmLabel: t.card.delete,
         description:
-          selectedCards.length > 1
-            ? t.card.deleteManyDescription(selectedCards.length)
-            : t.card.deleteDescription(selectedCards[0].title),
+          selectedTodos.length > 0
+            ? `${selectedCards.length + selectedTodos.length} ${t.common.confirm.toLowerCase()}`
+            : selectedCards.length > 1
+              ? t.card.deleteManyDescription(selectedCards.length)
+              : t.card.deleteDescription(selectedCards[0].title),
         title:
-          selectedCards.length > 1
-            ? t.card.deleteManyTitle(selectedCards.length)
-            : t.card.deleteTitle,
+          selectedTodos.length > 0
+            ? t.todo.deleteBlockTitle
+            : selectedCards.length > 1
+              ? t.card.deleteManyTitle(selectedCards.length)
+              : t.card.deleteTitle,
         tone: 'danger',
       }).then((confirmed) => {
         if (confirmed) {
-          void deleteCards(selectedCards.map((card) => card.id)).catch(() => undefined)
+          if (selectedCards.length > 0) {
+            void deleteCards(selectedCards.map((card) => card.id)).catch(() => undefined)
+          }
+          if (selectedTodos.length > 0) {
+            void deleteTodoBlocks(selectedTodos.map((block) => block.id)).catch(() => undefined)
+          }
         }
       })
     }
@@ -664,14 +809,17 @@ export function DesktopBoard({
     cards,
     confirm,
     deleteCards,
+    deleteTodoBlocks,
     deleteLink,
     deleteText,
     editor,
     selectedCardIds,
+    selectedTodoBlockIds,
     selectedLinkId,
     selectedTextId,
     t,
     texts,
+    todoBlocks,
   ])
 
   const zoomAtPoint = useCallback(
@@ -700,9 +848,10 @@ export function DesktopBoard({
 
       cameraRef.current = nextCamera
       applyCameraToDom(nextCamera)
+      setLiveCamera(nextCamera)
       settleCameraMoveSoon(true)
     },
-    [applyCameraToDom, beginCameraMove, settleCameraMoveSoon],
+    [applyCameraToDom, beginCameraMove, setLiveCamera, settleCameraMoveSoon],
   )
 
   useEffect(() => {
@@ -718,9 +867,10 @@ export function DesktopBoard({
   }, [zoomAtPoint])
 
   const getSelectedIdsInBox = useCallback(
-    (box: SelectionBox, baseIds: string[]) => {
+    (box: SelectionBox, baseCardIds: string[], baseTodoIds: string[]) => {
       const bounds = getSelectionBounds(box)
-      const nextIds = new Set(baseIds)
+      const nextCardIds = new Set(baseCardIds)
+      const nextTodoIds = new Set(baseTodoIds)
 
       for (const card of cards) {
         const renderSize = cardRenderSizeById.get(card.id)
@@ -729,13 +879,26 @@ export function DesktopBoard({
           renderSize &&
           intersectsBounds(card.x, card.y, renderSize.w, renderSize.h, bounds)
         ) {
-          nextIds.add(card.id)
+          nextCardIds.add(card.id)
         }
       }
 
-      return Array.from(nextIds)
+      for (const block of todoBlocks) {
+        const itemCount = todoItemsByBlock.get(block.id)?.length ?? 0
+        const height =
+          todoHeightById[block.id] ??
+          getTodoBlockRenderHeight(itemCount, expandedTodoIdSet.has(block.id))
+        if (intersectsBounds(block.x, block.y, block.w, height, bounds)) {
+          nextTodoIds.add(block.id)
+        }
+      }
+
+      return {
+        cardIds: Array.from(nextCardIds),
+        todoIds: Array.from(nextTodoIds),
+      }
     },
-    [cardRenderSizeById, cards],
+    [cardRenderSizeById, cards, expandedTodoIdSet, todoBlocks, todoHeightById, todoItemsByBlock],
   )
 
   const handlePanStart = (event: PointerEvent<HTMLDivElement>) => {
@@ -746,7 +909,7 @@ export function DesktopBoard({
     const target = event.target
     const targetElement = target instanceof Element ? target : null
 
-    if (targetElement?.closest('[data-card-root="true"]')) {
+    if (targetElement?.closest('[data-board-object="true"]')) {
       return
     }
 
@@ -760,7 +923,8 @@ export function DesktopBoard({
       selectText(null)
 
       const startPoint = getWorldPointFromClient(event.clientX, event.clientY)
-      const baseIds = [...selectedCardIds]
+      const baseCardIds = [...selectedCardIds]
+      const baseTodoIds = [...selectedTodoBlockIds]
       let frameId: number | null = null
       let pendingBox: SelectionBox = {
         currentX: startPoint.x,
@@ -774,7 +938,9 @@ export function DesktopBoard({
       const flushSelection = () => {
         frameId = null
         setSelectionBox(pendingBox)
-        selectCards(getSelectedIdsInBox(pendingBox, baseIds))
+        const next = getSelectedIdsInBox(pendingBox, baseCardIds, baseTodoIds)
+        selectCards(next.cardIds)
+        selectTodoBlocks(next.todoIds)
       }
 
       const handleMove = (moveEvent: globalThis.PointerEvent) => {
@@ -799,7 +965,9 @@ export function DesktopBoard({
           window.cancelAnimationFrame(frameId)
         }
 
-        selectCards(getSelectedIdsInBox(pendingBox, baseIds))
+        const next = getSelectedIdsInBox(pendingBox, baseCardIds, baseTodoIds)
+        selectCards(next.cardIds)
+        selectTodoBlocks(next.todoIds)
         setSelectionBox(null)
       }
 
@@ -811,6 +979,7 @@ export function DesktopBoard({
 
     event.preventDefault()
     selectCard(null)
+    selectTodoBlocks([])
     selectLink(null)
     selectText(null)
     beginCameraMove()
@@ -825,6 +994,7 @@ export function DesktopBoard({
       frameId = null
       cameraRef.current = pendingCamera
       applyCameraToDom(pendingCamera)
+      setLiveCamera(pendingCamera)
     }
 
     const handleMove = (moveEvent: globalThis.PointerEvent) => {
@@ -848,10 +1018,12 @@ export function DesktopBoard({
         window.cancelAnimationFrame(frameId)
         cameraRef.current = pendingCamera
         applyCameraToDom(pendingCamera)
+        setLiveCamera(pendingCamera)
       }
 
       setCamera(pendingCamera)
       setCameraMoving(false)
+      clearLiveCamera()
     }
 
     window.addEventListener('pointermove', handleMove)
@@ -903,9 +1075,10 @@ export function DesktopBoard({
       viewportRectRef.current = rect
       const worldPoint = getWorldPointFromClient(event.clientX, event.clientY)
       const menuWidth = 226
-      const menuHeight = 132
+      const menuHeight = 248
 
       selectCard(null)
+      selectTodoBlocks([])
       selectLink(null)
       selectText(null)
       setBoardContextMenu({
@@ -915,7 +1088,7 @@ export function DesktopBoard({
         worldY: Math.round(worldPoint.y),
       })
     },
-    [getWorldPointFromClient, selectCard, selectLink, selectText],
+    [getWorldPointFromClient, selectCard, selectLink, selectText, selectTodoBlocks],
   )
 
   const createCardFromContext = useCallback(() => {
@@ -936,8 +1109,17 @@ export function DesktopBoard({
     setBoardContextMenu(null)
   }, [boardContextMenu, onCreateTextAtPosition])
 
+  const createTodoFromContext = useCallback(() => {
+    if (!boardContextMenu) {
+      return
+    }
+
+    onCreateTodoAtPosition(boardContextMenu.worldX, boardContextMenu.worldY)
+    setBoardContextMenu(null)
+  }, [boardContextMenu, onCreateTodoAtPosition])
+
   const handleStartConnection = useCallback(
-    (card: Card, side: CardLinkSide, event: PointerEvent<HTMLButtonElement>) => {
+    (from: BoardLinkEndpoint, event: PointerEvent<HTMLButtonElement>) => {
       if (event.button !== 0 || event.pointerType === 'touch') {
         return
       }
@@ -945,13 +1127,13 @@ export function DesktopBoard({
       event.preventDefault()
       event.stopPropagation()
       selectCard(null)
+      selectTodoBlocks([])
       selectLink(null)
       selectText(null)
       linkDraftCleanupRef.current?.()
 
       setDraftLink({
-        fromCardId: card.id,
-        fromSide: side,
+        from,
         pointer: getWorldPointFromClient(event.clientX, event.clientY),
       })
 
@@ -961,8 +1143,7 @@ export function DesktopBoard({
       const flushDraftLink = () => {
         frameId = null
         setDraftLink({
-          fromCardId: card.id,
-          fromSide: side,
+          from,
           pointer: pendingPointer,
         })
       }
@@ -982,30 +1163,32 @@ export function DesktopBoard({
       function handleUp(upEvent: globalThis.PointerEvent) {
         const target = document.elementFromPoint(upEvent.clientX, upEvent.clientY) as HTMLElement | null
         const handle = target?.closest('[data-card-link-handle="true"]') as HTMLElement | null
-        const targetCardId = handle?.dataset.cardId ?? null
+        const targetId = handle?.dataset.linkNodeId ?? null
+        const targetKind = handle?.dataset.linkNodeKind === 'todo' ? 'todo' : 'card'
         const targetSide = handle?.dataset.cardSide as CardLinkSide | undefined
 
         removeListeners()
         setDraftLink(null)
 
-        if (!targetCardId || !targetSide || targetCardId === card.id) {
+        if (!targetId || !targetSide || (targetKind === from.kind && targetId === from.id)) {
           return
         }
 
-        const targetCard = cardById.get(targetCardId)
-
-        if (!targetCard) {
+        const sourceNode =
+          from.kind === 'card' ? cardById.get(from.id) : todoBlockById.get(from.id)
+        const targetNode =
+          targetKind === 'card' ? cardById.get(targetId) : todoBlockById.get(targetId)
+        if (!sourceNode || !targetNode) {
           return
         }
 
         void createLink(
           {
             boardScope,
-            fromCardId: card.id,
-            fromSide: side,
-            projectId: boardScope === 'shared' ? card.projectId ?? defaultProjectId : null,
-            toCardId: targetCard.id,
-            toSide: targetSide,
+            from,
+            projectId:
+              boardScope === 'shared' ? sourceNode.projectId ?? defaultProjectId : null,
+            to: { id: targetId, kind: targetKind, side: targetSide },
           },
           userId,
         ).catch(() => undefined)
@@ -1034,7 +1217,30 @@ export function DesktopBoard({
       window.addEventListener('pointerup', handleUp)
       window.addEventListener('pointercancel', handleCancel)
     },
-    [boardScope, cardById, createLink, getWorldPointFromClient, selectCard, selectLink, selectText, userId],
+    [
+      boardScope,
+      cardById,
+      createLink,
+      getWorldPointFromClient,
+      selectCard,
+      selectLink,
+      selectText,
+      selectTodoBlocks,
+      todoBlockById,
+      userId,
+    ],
+  )
+
+  const handleStartCardConnection = useCallback(
+    (card: Card, side: CardLinkSide, event: PointerEvent<HTMLButtonElement>) =>
+      handleStartConnection({ id: card.id, kind: 'card', side }, event),
+    [handleStartConnection],
+  )
+
+  const handleStartTodoConnection = useCallback(
+    (block: TodoBlockModel, side: CardLinkSide, event: PointerEvent<HTMLButtonElement>) =>
+      handleStartConnection({ id: block.id, kind: 'todo', side }, event),
+    [handleStartConnection],
   )
 
   const handleScenePointerMove = useCallback(
@@ -1076,6 +1282,22 @@ export function DesktopBoard({
       })
     },
     [confirm, deleteLink, t.link],
+  )
+
+  const focusRemoteMember = useCallback(
+    (clientId: string) => {
+      const cursor = remoteCursors.find((candidate) => candidate.clientId === clientId)
+      if (!cursor || viewportSize.width === 0 || viewportSize.height === 0) {
+        return
+      }
+
+      setCamera((current) => ({
+        ...current,
+        x: viewportSize.width / 2 - cursor.x * current.zoom,
+        y: viewportSize.height / 2 - cursor.y * current.zoom,
+      }))
+    },
+    [remoteCursors, setCamera, viewportSize.height, viewportSize.width],
   )
 
   const handleZoomIn = useCallback(() => zoomBy(1.1), [zoomBy])
@@ -1121,14 +1343,14 @@ export function DesktopBoard({
               ))}
 
             <CardLinkLayer
-              cards={cards}
               draftLink={draftLink}
               links={links}
-              now={now}
+              nodes={linkNodes}
               selectedLinkId={selectedLinkId}
               onDeleteLink={handleDeleteLink}
               onSelectLink={(id) => {
                 selectCard(null)
+                selectTodoBlocks([])
                 selectText(null)
                 selectLink(id)
               }}
@@ -1152,9 +1374,26 @@ export function DesktopBoard({
                   card={card}
                   isConnecting={Boolean(draftLink)}
                   isSelected={selectedCardIdSet.has(card.id)}
-                  onStartConnection={handleStartConnection}
+                  onStartConnection={handleStartCardConnection}
                 />
               </div>
+            ))}
+
+            {renderedTodoBlocks.map((block) => (
+              <TodoBlock
+                block={block}
+                cameraZoom={camera.zoom}
+                canConnect
+                canDrag
+                isConnecting={Boolean(draftLink)}
+                isSelected={selectedTodoIdSet.has(block.id)}
+                items={todoItemsByBlock.get(block.id) ?? []}
+                key={block.id}
+                linkedCount={todoLinkCountById.get(block.id) ?? 0}
+                now={now}
+                onMeasure={measureTodoBlock}
+                onStartConnection={handleStartTodoConnection}
+              />
             ))}
           </div>
 
@@ -1173,14 +1412,11 @@ export function DesktopBoard({
           style={{ left: boardContextMenu.screenX, top: boardContextMenu.screenY }}
         >
           <div className="board-context-menu-kicker">{t.board.createHere}</div>
-          <button autoFocus className="menu-item" role="menuitem" type="button" onClick={createCardFromContext}>
-            <Plus size={16} />
-            {t.common.createCard}
-          </button>
-          <button className="menu-item" role="menuitem" type="button" onClick={createTextFromContext}>
-            <Type size={16} />
-            {t.boardText.newText}
-          </button>
+          <AddMenuItems
+            onAddCard={createCardFromContext}
+            onAddText={createTextFromContext}
+            onAddTodo={createTodoFromContext}
+          />
         </div>
       ) : null}
 
@@ -1218,13 +1454,15 @@ export function DesktopBoard({
 
       <MiniMap
         camera={camera}
-        cards={cards}
-        now={now}
+        cursors={remoteCursors}
+        nodes={linkNodes}
         setCamera={setCamera}
         viewportSize={viewportSize}
       />
 
-      {boardScope === 'shared' ? <PresenceCluster members={members} self={self} /> : null}
+      {boardScope === 'shared' ? (
+        <PresenceCluster members={members} onFocusMember={focusRemoteMember} self={self} />
+      ) : null}
 
       <HeatHorizon cards={cards} now={now} />
 
@@ -1252,7 +1490,7 @@ export function DesktopBoard({
         </div>
       ) : null}
 
-      {!isLoading && !error && cards.length === 0 && texts.length === 0 ? (
+      {!isLoading && !error && cards.length === 0 && todoBlocks.length === 0 && texts.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center p-6">
           <div className="mission-state-card rounded-3xl border border-white/10 bg-black/35 p-7 text-center text-white shadow-2xl backdrop-blur-xl">
             <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 text-[var(--accent)] shadow-glow">
@@ -1279,9 +1517,9 @@ export function DesktopBoard({
         {t.board.sync}: {t.board.realtime[realtimeStatus]}
       </div>
 
-      {saveError || linkSaveError || textSaveError ? (
+      {saveError || linkSaveError || textSaveError || todoSaveError ? (
         <div className="absolute bottom-5 left-5 z-20 max-w-md rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-100 backdrop-blur-xl">
-          {saveError ?? linkSaveError ?? textSaveError}
+          {saveError ?? linkSaveError ?? textSaveError ?? todoSaveError}
         </div>
       ) : null}
     </main>

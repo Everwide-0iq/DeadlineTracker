@@ -23,6 +23,7 @@ export type Database = {
           is_active: boolean
           active_by: string | null
           completed_at: string | null
+          completed_by: string | null
           board_scope: BoardScope
           project_id: string | null
           x: number
@@ -48,6 +49,7 @@ export type Database = {
           is_active?: boolean
           active_by?: string | null
           completed_at?: string | null
+          completed_by?: string | null
           x?: number
           y?: number
           w?: number
@@ -70,6 +72,7 @@ export type Database = {
           is_active?: boolean
           active_by?: string | null
           completed_at?: string | null
+          completed_by?: string | null
           x?: number
           y?: number
           w?: number
@@ -107,9 +110,11 @@ export type Database = {
       card_links: {
         Row: {
           id: string
-          from_card_id: string
+          from_card_id: string | null
+          from_todo_block_id: string | null
           from_side: CardLinkSide
-          to_card_id: string
+          to_card_id: string | null
+          to_todo_block_id: string | null
           to_side: CardLinkSide
           board_scope: BoardScope
           project_id: string | null
@@ -119,9 +124,11 @@ export type Database = {
         }
         Insert: {
           id?: string
-          from_card_id: string
+          from_card_id?: string | null
+          from_todo_block_id?: string | null
           from_side: CardLinkSide
-          to_card_id: string
+          to_card_id?: string | null
+          to_todo_block_id?: string | null
           to_side: CardLinkSide
           board_scope?: BoardScope
           project_id?: string | null
@@ -130,14 +137,132 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          from_card_id?: string
+          from_card_id?: string | null
+          from_todo_block_id?: string | null
           from_side?: CardLinkSide
-          to_card_id?: string
+          to_card_id?: string | null
+          to_todo_block_id?: string | null
           to_side?: CardLinkSide
           board_scope?: BoardScope
           project_id?: string | null
           created_by?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      todo_blocks: {
+        Row: {
+          id: string
+          title: string
+          deadline_at: string | null
+          board_scope: BoardScope
+          project_id: string | null
+          x: number
+          y: number
+          w: number
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          deadline_at?: string | null
+          board_scope?: BoardScope
+          project_id?: string | null
+          x?: number
+          y?: number
+          w?: number
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          title?: string
+          deadline_at?: string | null
+          board_scope?: BoardScope
+          project_id?: string | null
+          x?: number
+          y?: number
+          w?: number
+          created_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      todo_items: {
+        Row: {
+          id: string
+          block_id: string
+          title: string
+          description: string | null
+          is_done: boolean
+          is_active: boolean
+          active_by: string | null
+          completed_at: string | null
+          completed_by: string | null
+          sort_order: number
+          image_path: string | null
+          image_width: number | null
+          image_height: number | null
+          image_size: number | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          block_id: string
+          title: string
+          description?: string | null
+          is_done?: boolean
+          is_active?: boolean
+          active_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          sort_order?: number
+          image_path?: string | null
+          image_width?: number | null
+          image_height?: number | null
+          image_size?: number | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          block_id?: string
+          title?: string
+          description?: string | null
+          is_done?: boolean
+          is_active?: boolean
+          active_by?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
+          sort_order?: number
+          image_path?: string | null
+          image_width?: number | null
+          image_height?: number | null
+          image_size?: number | null
+          created_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      todo_image_cleanup_queue: {
+        Row: {
+          image_path: string
+          requested_by: string
+          created_at: string
+        }
+        Insert: {
+          image_path: string
+          requested_by: string
+          created_at?: string
+        }
+        Update: {
+          image_path?: string
+          requested_by?: string
+          created_at?: string
         }
         Relationships: []
       }
@@ -247,6 +372,18 @@ export type Database = {
       update_card_positions: {
         Args: { payload: Json }
         Returns: Database['public']['Tables']['cards']['Row'][]
+      }
+      update_todo_block_geometries: {
+        Args: { payload: Json }
+        Returns: Database['public']['Tables']['todo_blocks']['Row'][]
+      }
+      update_todo_block_positions: {
+        Args: { payload: Json }
+        Returns: Database['public']['Tables']['todo_blocks']['Row'][]
+      }
+      reorder_todo_items: {
+        Args: { target_block_id: string; payload: Json }
+        Returns: Database['public']['Tables']['todo_items']['Row'][]
       }
     }
     Enums: Record<string, never>

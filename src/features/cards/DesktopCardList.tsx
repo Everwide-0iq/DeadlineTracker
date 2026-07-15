@@ -1,5 +1,5 @@
 import { AlertTriangle, CalendarCheck2, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2, Zap } from 'lucide-react'
-import { memo, type CSSProperties } from 'react'
+import { memo, useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -15,14 +15,22 @@ import { formatCountdown } from './countdown.ts'
 import { formatCompletionDate } from './completion.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
+import { AddMenu } from '../board/AddMenu.tsx'
+import { TodoListBlock } from '../todos/TodoListBlock.tsx'
+import type { TodoBlock, TodoItem } from '../todos/todo.types.ts'
+import { getTodoBlockStatus } from '../todos/todo.utils.ts'
 
 type DesktopCardListProps = {
   boardScope: BoardScope
   cards: Card[]
+  todoBlocks: TodoBlock[]
+  todoItems: TodoItem[]
   error: string | null
   isLoading: boolean
   now: number
   onCreate: () => void
+  onCreateText: () => void
+  onCreateTodo: () => void
   onRetry: () => void
   viewKey: string
 }
@@ -46,6 +54,9 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
   const activeProfile = useProfileStore((state) =>
     card.activeBy ? state.profiles[card.activeBy] ?? null : null,
   )
+  const completedProfile = useProfileStore((state) =>
+    card.completedBy ? state.profiles[card.completedBy] ?? null : null,
+  )
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const isCompleting = useCompletionAnimation(card.status === 'done')
@@ -58,6 +69,8 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
         ? t.card.takeActivity
         : t.card.activate
   const completionDate = formatCompletionDate(card.completedAt, language)
+  const completedOwnerName = completedProfile?.nickname ?? t.card.activeOwnerUnknown
+  const completedOwnerColor = completedProfile?.activeColor ?? defaultActiveColor
   const style: RowStyle = {
     '--active-color': activeColor,
     '--deadline-bg': visual.backgroundColor,
@@ -133,8 +146,19 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
         </div>
         {card.status === 'done' ? (
           <div className="deadline-list-completion-date">
+            <ProfileAvatar
+              avatarPath={completedProfile?.avatarPath}
+              className="completion-avatar-pulse"
+              color={completedOwnerColor}
+              name={completedOwnerName}
+              size={20}
+            />
             <CalendarCheck2 size={13} />
-            <span>{completionDate ? t.card.completedAt(completionDate) : t.card.completionUnknown}</span>
+            <span>
+              {completionDate
+                ? t.card.completedBy(completedOwnerName, completionDate)
+                : t.card.completionUnknown}
+            </span>
           </div>
         ) : null}
       </div>
@@ -192,15 +216,45 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
 export function DesktopCardList({
   boardScope,
   cards,
+  todoBlocks,
+  todoItems,
   error,
   isLoading,
   now,
   onCreate,
+  onCreateText,
+  onCreateTodo,
   onRetry,
   viewKey,
 }: DesktopCardListProps) {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
+  const itemsByBlock = useMemo(() => {
+    const grouped = new Map<string, TodoItem[]>()
+    for (const item of todoItems) {
+      const current = grouped.get(item.blockId)
+      if (current) current.push(item)
+      else grouped.set(item.blockId, [item])
+    }
+    return grouped
+  }, [todoItems])
+  const entries = useMemo(() => [
+    ...cards.map((card) => ({ completed: card.status === 'done', createdAt: card.createdAt, deadlineAt: card.deadlineAt, id: card.id, kind: 'card' as const, value: card })),
+    ...todoBlocks.map((block) => ({
+      completed: getTodoBlockStatus(itemsByBlock.get(block.id) ?? [], block.id).isDone,
+      createdAt: block.createdAt,
+      deadlineAt: block.deadlineAt,
+      id: block.id,
+      kind: 'todo' as const,
+      value: block,
+    })),
+  ].sort((left, right) => {
+    if (left.completed !== right.completed) return left.completed ? 1 : -1
+    if (!left.deadlineAt && !right.deadlineAt) return left.createdAt.localeCompare(right.createdAt)
+    if (!left.deadlineAt) return 1
+    if (!right.deadlineAt) return -1
+    return new Date(left.deadlineAt).getTime() - new Date(right.deadlineAt).getTime()
+  }), [cards, itemsByBlock, todoBlocks])
 
   return (
     <main className="relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b]/95 shadow-2xl">
@@ -214,10 +268,12 @@ export function DesktopCardList({
               {boardScope === 'personal' ? t.board.personalOverview : t.board.quickOverview}
             </h2>
           </div>
-          <button className="primary-button" type="button" onClick={onCreate}>
-            <Plus size={18} />
-            {t.common.createCard}
-          </button>
+          <AddMenu
+            className="desktop-list-add-menu w-56"
+            onAddCard={onCreate}
+            onAddText={onCreateText}
+            onAddTodo={onCreateTodo}
+          />
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
@@ -238,7 +294,7 @@ export function DesktopCardList({
             </div>
           ) : null}
 
-          {!isLoading && !error && cards.length === 0 ? (
+          {!isLoading && !error && entries.length === 0 ? (
             <div className="mission-state-card mx-auto mt-28 max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center text-white">
               <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 text-[var(--accent)] shadow-glow">
                 <Plus size={26} />
@@ -258,10 +314,17 @@ export function DesktopCardList({
             </div>
           ) : null}
 
-          {!isLoading && !error && cards.length > 0 ? (
+          {!isLoading && !error && entries.length > 0 ? (
             <section className="deadline-list-transition space-y-3" key={viewKey}>
-              {cards.map((card) => (
-                <DeadlineListRow card={card} key={card.id} now={now} />
+              {entries.map((entry) => entry.kind === 'card' ? (
+                <DeadlineListRow card={entry.value} key={`card:${entry.id}`} now={now} />
+              ) : (
+                <TodoListBlock
+                  block={entry.value}
+                  items={itemsByBlock.get(entry.id) ?? []}
+                  key={`todo:${entry.id}`}
+                  now={now}
+                />
               ))}
             </section>
           ) : null}

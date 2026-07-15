@@ -6,6 +6,7 @@ const createCard = (overrides: Partial<Card> = {}): Card => ({
   activeBy: 'user-1',
   boardScope: 'shared',
   completedAt: null,
+  completedBy: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   createdBy: 'user-1',
   deadlineAt: '2026-07-20T12:00:00.000Z',

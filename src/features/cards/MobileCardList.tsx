@@ -1,5 +1,5 @@
 import { CalendarCheck2, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound, Zap } from 'lucide-react'
-import { memo, type CSSProperties } from 'react'
+import { memo, useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -19,11 +19,16 @@ import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../p
 import { ProfileAvatar } from '../profile/ProfileAvatar.tsx'
 import { useProfileStore } from '../profile/profile.store.ts'
 import { defaultActiveColor, getFallbackNickname, type UserProfile } from '../profile/profile.types.ts'
+import { AddMenu } from '../board/AddMenu.tsx'
+import { TodoListBlock } from '../todos/TodoListBlock.tsx'
+import type { TodoBlock, TodoItem } from '../todos/todo.types.ts'
 
 type MobileCardListProps = {
   activeProjectId: string
   boardScope: BoardScope
   cards: Card[]
+  todoBlocks: TodoBlock[]
+  todoItems: TodoItem[]
   counts: FilterCounts
   error: string | null
   filter: BoardFilter
@@ -33,6 +38,7 @@ type MobileCardListProps = {
   projectCardCounts: Record<string, number>
   projectDeadlines: Record<string, ProjectDeadlineSummary | undefined>
   onCreate: () => void
+  onCreateTodo: () => void
   onCreateProject: () => void
   onDeleteProject: (project: Project) => void
   onBoardScopeChange: (scope: BoardScope) => void
@@ -65,6 +71,9 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
   const activeProfile = useProfileStore((state) =>
     card.activeBy ? state.profiles[card.activeBy] ?? null : null,
   )
+  const completedProfile = useProfileStore((state) =>
+    card.completedBy ? state.profiles[card.completedBy] ?? null : null,
+  )
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const isCompleting = useCompletionAnimation(card.status === 'done')
@@ -77,6 +86,8 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
         ? t.card.takeActivity
         : t.card.activate
   const completionDate = formatCompletionDate(card.completedAt, language)
+  const completedOwnerName = completedProfile?.nickname ?? t.card.activeOwnerUnknown
+  const completedOwnerColor = completedProfile?.activeColor ?? defaultActiveColor
   const style: CardStyle = {
     '--active-color': activeColor,
     '--deadline-bg': visual.backgroundColor,
@@ -183,8 +194,19 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
 
         {card.status === 'done' ? (
           <div className="mobile-completion-date">
+            <ProfileAvatar
+              avatarPath={completedProfile?.avatarPath}
+              className="completion-avatar-pulse"
+              color={completedOwnerColor}
+              name={completedOwnerName}
+              size={21}
+            />
             <CalendarCheck2 size={14} />
-            <span>{completionDate ? t.card.completedAt(completionDate) : t.card.completionUnknown}</span>
+            <span>
+              {completionDate
+                ? t.card.completedBy(completedOwnerName, completionDate)
+                : t.card.completionUnknown}
+            </span>
           </div>
         ) : null}
 
@@ -211,6 +233,8 @@ export function MobileCardList({
   activeProjectId,
   boardScope,
   cards,
+  todoBlocks,
+  todoItems,
   counts,
   error,
   filter,
@@ -220,6 +244,7 @@ export function MobileCardList({
   projectCardCounts,
   projectDeadlines,
   onCreate,
+  onCreateTodo,
   onCreateProject,
   onDeleteProject,
   onBoardScopeChange,
@@ -236,6 +261,16 @@ export function MobileCardList({
   const t = translations[language]
   const profileName = profile?.nickname ?? getFallbackNickname(userEmail, t.profile.memberFallback)
   const profileColor = profile?.activeColor ?? defaultActiveColor
+  const itemsByBlock = useMemo(() => {
+    const grouped = new Map<string, TodoItem[]>()
+    for (const item of todoItems) {
+      const current = grouped.get(item.blockId)
+      if (current) current.push(item)
+      else grouped.set(item.blockId, [item])
+    }
+    return grouped
+  }, [todoItems])
+  const hasEntries = cards.length > 0 || todoBlocks.length > 0
 
   return (
     <main className="app-shell min-h-screen bg-[var(--background)] px-4 pb-44 pt-4 text-white">
@@ -331,7 +366,7 @@ export function MobileCardList({
         </div>
       ) : null}
 
-      {!isLoading && !error && cards.length === 0 ? (
+      {!isLoading && !error && !hasEntries ? (
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center">
           <h2 className="mb-2 text-2xl font-black">
             {boardScope === 'personal' ? t.board.addFirstPersonal : t.board.addFirstCard}
@@ -349,23 +384,27 @@ export function MobileCardList({
       ) : null}
 
       <section className="space-y-4">
+        {todoBlocks.map((block) => (
+          <TodoListBlock
+            block={block}
+            items={itemsByBlock.get(block.id) ?? []}
+            key={`todo:${block.id}`}
+            now={now}
+          />
+        ))}
         {cards.map((card) => (
           <MobileDeadlineCard card={card} key={card.id} now={now} />
         ))}
       </section>
 
-      {!isLoading && !error && cards.length > 0 ? (
-        <button
-          aria-label={boardScope === 'personal' ? t.mobile.newTask : t.mobile.newCard}
-          className="mobile-create-button fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2.5 rounded-full px-4 py-3 text-sm font-black text-white"
-          type="button"
-          onClick={onCreate}
-        >
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--accent)] shadow-[0_0_18px_rgb(255_255_255_/_0.16)]">
-            <Plus size={21} strokeWidth={3} />
-          </span>
-          <span className="whitespace-nowrap">{boardScope === 'personal' ? t.mobile.newTask : t.mobile.newCard}</span>
-        </button>
+      {!isLoading && !error && hasEntries ? (
+        <AddMenu
+          allowText={false}
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2"
+          mobile
+          onAddCard={onCreate}
+          onAddTodo={onCreateTodo}
+        />
       ) : null}
     </main>
   )

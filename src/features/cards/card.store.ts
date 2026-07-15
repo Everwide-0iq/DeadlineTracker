@@ -140,11 +140,13 @@ export const applyOptimisticCardPatch = (card: Card, input: UpdateCardInput): Ca
     next.isActive = false
     next.activeBy = null
     next.completedAt = card.status === 'done' ? card.completedAt : updatedAt
+    next.completedBy = card.status === 'done' ? card.completedBy : next.completedBy
     return next
   }
 
   if (input.status === 'todo' && card.status === 'done') {
     next.completedAt = null
+    next.completedBy = null
   }
 
   if (input.isActive === false) {

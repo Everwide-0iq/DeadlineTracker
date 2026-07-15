@@ -11,8 +11,10 @@ export function mapCardLinkFromRow(row: CardLinkRow): CardLink {
   return {
     id: row.id,
     fromCardId: row.from_card_id,
+    fromTodoBlockId: row.from_todo_block_id ?? null,
     fromSide: row.from_side,
     toCardId: row.to_card_id,
+    toTodoBlockId: row.to_todo_block_id ?? null,
     toSide: row.to_side,
     boardScope: row.board_scope,
     projectId: row.project_id,
@@ -24,10 +26,12 @@ export function mapCardLinkFromRow(row: CardLinkRow): CardLink {
 
 function toInsertRow(input: CreateCardLinkInput, userId: string | null) {
   return {
-    from_card_id: input.fromCardId,
-    from_side: input.fromSide,
-    to_card_id: input.toCardId,
-    to_side: input.toSide,
+    from_card_id: input.from.kind === 'card' ? input.from.id : null,
+    from_todo_block_id: input.from.kind === 'todo' ? input.from.id : null,
+    from_side: input.from.side,
+    to_card_id: input.to.kind === 'card' ? input.to.id : null,
+    to_todo_block_id: input.to.kind === 'todo' ? input.to.id : null,
+    to_side: input.to.side,
     board_scope: input.boardScope,
     project_id: input.projectId,
     created_by: userId,
@@ -78,6 +82,15 @@ export async function deleteCardLinksForCard(cardId: string) {
   if (error) {
     throw error
   }
+}
+
+export async function deleteCardLinksForTodoBlock(blockId: string) {
+  const { error } = await requireSupabase()
+    .from('card_links')
+    .delete()
+    .or(`from_todo_block_id.eq.${blockId},to_todo_block_id.eq.${blockId}`)
+
+  if (error) throw error
 }
 
 export function subscribeToCardLinkChanges(onEvent: (event: CardLinkRealtimeEvent) => void) {

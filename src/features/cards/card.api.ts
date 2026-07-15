@@ -29,6 +29,7 @@ export function mapCardFromRow(row: CardRow): Card {
     isActive: row.is_active ?? false,
     activeBy: row.active_by ?? null,
     completedAt: row.completed_at ?? null,
+    completedBy: row.completed_by ?? null,
     boardScope: row.board_scope ?? 'shared',
     projectId: row.project_id ?? null,
     x: row.x,

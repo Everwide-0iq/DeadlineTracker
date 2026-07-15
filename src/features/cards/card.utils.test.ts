@@ -25,6 +25,7 @@ const createCard = (overrides: Partial<Card> = {}): Card => ({
   isActive: false,
   activeBy: null,
   completedAt: null,
+  completedBy: null,
   projectId: 'project-1',
   status: 'todo',
   title: 'Task',

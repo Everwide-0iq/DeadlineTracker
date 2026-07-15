@@ -7,6 +7,7 @@ import { useBoardCamera } from '../features/board/useBoardCamera.ts'
 import { useAuthStore } from '../features/auth/auth.store.ts'
 import { useBoardTextStore } from '../features/boardTexts/boardText.store.ts'
 import { useCardLinkStore } from '../features/cardLinks/cardLink.store.ts'
+import { getLinkSource, getLinkTarget } from '../features/cardLinks/cardLink.types.ts'
 import { useCardStore } from '../features/cards/card.store.ts'
 import { DesktopCardList } from '../features/cards/DesktopCardList.tsx'
 import { MobileCardList } from '../features/cards/MobileCardList.tsx'
@@ -35,6 +36,14 @@ import { getProjectDisplayName } from '../features/projects/project.utils.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { readStorageValue, writeStorageValue } from '../lib/storage.ts'
 import { useProfileStore } from '../features/profile/profile.store.ts'
+import { useTodoStore } from '../features/todos/todo.store.ts'
+import type { TodoBlock, TodoItem } from '../features/todos/todo.types.ts'
+import {
+  defaultTodoBlockWidth,
+  getTodoBlockStatus,
+  matchesTodoFilter,
+} from '../features/todos/todo.utils.ts'
+import { cleanupPendingTodoImages } from '../features/todos/todoImage.api.ts'
 
 const CardEditor = lazy(() =>
   import('../features/cards/CardEditor.tsx').then((module) => ({ default: module.CardEditor })),
@@ -47,6 +56,12 @@ const BoardTextEditor = lazy(() =>
 )
 const ProfileSettings = lazy(() =>
   import('../features/profile/ProfileSettings.tsx').then((module) => ({ default: module.ProfileSettings })),
+)
+const TodoBlockEditor = lazy(() =>
+  import('../features/todos/TodoBlockEditor.tsx').then((module) => ({ default: module.TodoBlockEditor })),
+)
+const TodoItemEditor = lazy(() =>
+  import('../features/todos/TodoItemEditor.tsx').then((module) => ({ default: module.TodoItemEditor })),
 )
 
 function ModalFallback() {
@@ -62,8 +77,15 @@ function ModalFallback() {
   )
 }
 
-function getProjectDeadlineSummaries(cards: Card[], now: number, language: Language) {
-  const nearestByProject = cards.reduce<Record<string, Card>>((acc, card) => {
+function getProjectDeadlineSummaries(
+  cards: Card[],
+  todoBlocks: TodoBlock[],
+  todoItems: TodoItem[],
+  now: number,
+  language: Language,
+) {
+  type DeadlineCandidate = Pick<Card, 'deadlineAt' | 'status' | 'title'>
+  const nearestByProject = cards.reduce<Record<string, DeadlineCandidate>>((acc, card) => {
     if (card.status === 'done') {
       return acc
     }
@@ -83,6 +105,30 @@ function getProjectDeadlineSummaries(cards: Card[], now: number, language: Langu
 
     return acc
   }, {})
+
+  const itemsByBlock = new Map<string, TodoItem[]>()
+  for (const item of todoItems) {
+    const current = itemsByBlock.get(item.blockId)
+    if (current) current.push(item)
+    else itemsByBlock.set(item.blockId, [item])
+  }
+
+  for (const block of todoBlocks) {
+    if (!block.deadlineAt) continue
+    const status = getTodoBlockStatus(itemsByBlock.get(block.id) ?? [], block.id)
+    if (status.isDone) continue
+    const deadlineTime = new Date(block.deadlineAt).getTime()
+    if (Number.isNaN(deadlineTime)) continue
+    const projectId = block.projectId ?? defaultProjectId
+    const current = nearestByProject[projectId]
+    if (!current || deadlineTime < new Date(current.deadlineAt).getTime()) {
+      nearestByProject[projectId] = {
+        deadlineAt: block.deadlineAt,
+        status: 'todo',
+        title: block.title,
+      }
+    }
+  }
 
   return Object.fromEntries(
     Object.entries(nearestByProject).map<[string, ProjectDeadlineSummary]>(([projectId, card]) => {
@@ -136,6 +182,15 @@ export function BoardPage() {
   const loadTexts = useBoardTextStore((state) => state.loadTexts)
   const openCreateTextEditor = useBoardTextStore((state) => state.openCreateEditor)
   const subscribeTextRealtime = useBoardTextStore((state) => state.subscribeRealtime)
+  const todoBlocks = useTodoStore((state) => state.blocks)
+  const todoItems = useTodoStore((state) => state.items)
+  const todoBlockEditor = useTodoStore((state) => state.blockEditor)
+  const todoItemEditor = useTodoStore((state) => state.itemEditor)
+  const todoError = useTodoStore((state) => state.error)
+  const isTodoLoading = useTodoStore((state) => state.isLoading)
+  const loadTodos = useTodoStore((state) => state.loadTodos)
+  const openCreateTodoEditor = useTodoStore((state) => state.openCreateBlockEditor)
+  const subscribeTodoRealtime = useTodoStore((state) => state.subscribeRealtime)
   const createProject = useProjectStore((state) => state.createProject)
   const deleteProject = useProjectStore((state) => state.deleteProject)
   const loadProjects = useProjectStore((state) => state.loadProjects)
@@ -161,6 +216,13 @@ export function BoardPage() {
 
     return unsubscribe
   }, [loadCards, subscribeRealtime])
+
+  useEffect(() => {
+    void loadTodos()
+    const unsubscribe = subscribeTodoRealtime()
+
+    return unsubscribe
+  }, [loadTodos, subscribeTodoRealtime])
 
   useEffect(() => {
     void loadProjects()
@@ -197,6 +259,7 @@ export function BoardPage() {
     }
 
     void cleanupPendingCardImages().catch(() => undefined)
+    void cleanupPendingTodoImages().catch(() => undefined)
   }, [userId])
 
   useEffect(() => {
@@ -233,23 +296,46 @@ export function BoardPage() {
   }, [activeBoardScope, activeProjectId, projects])
 
   const sharedCards = useMemo(() => cards.filter((card) => card.boardScope === 'shared'), [cards])
+  const sharedTodoBlocks = useMemo(
+    () => todoBlocks.filter((block) => block.boardScope === 'shared'),
+    [todoBlocks],
+  )
+  const todoItemsByBlock = useMemo(() => {
+    const grouped = new Map<string, TodoItem[]>()
+    for (const item of todoItems) {
+      const current = grouped.get(item.blockId)
+      if (current) current.push(item)
+      else grouped.set(item.blockId, [item])
+    }
+    for (const items of grouped.values()) {
+      items.sort((left, right) => left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt))
+    }
+    return grouped
+  }, [todoItems])
   const projectCardCounts = useMemo(
-    () =>
-      sharedCards.reduce<Record<string, number>>((acc, card) => {
+    () => {
+      const counts = sharedCards.reduce<Record<string, number>>((acc, card) => {
         const projectId = card.projectId ?? defaultProjectId
         acc[projectId] = (acc[projectId] ?? 0) + 1
         return acc
-      }, {}),
-    [sharedCards],
+      }, {})
+      for (const block of sharedTodoBlocks) {
+        const projectId = block.projectId ?? defaultProjectId
+        counts[projectId] = (counts[projectId] ?? 0) + 1
+      }
+      return counts
+    },
+    [sharedCards, sharedTodoBlocks],
   )
   const projectDeadlines = useMemo(
-    () => getProjectDeadlineSummaries(sharedCards, now, language),
-    [language, now, sharedCards],
+    () => getProjectDeadlineSummaries(sharedCards, sharedTodoBlocks, todoItems, now, language),
+    [language, now, sharedCards, sharedTodoBlocks, todoItems],
   )
   const boardError =
     activeBoardScope === 'shared'
-      ? error ?? projectError ?? (isDesktop ? linkError ?? textError : null)
-      : error ?? (isDesktop ? linkError ?? textError : null)
+      ? error ?? todoError ?? projectError ?? (isDesktop ? linkError ?? textError : null)
+      : error ?? todoError ?? (isDesktop ? linkError ?? textError : null)
+  const boardIsLoading = isLoading || isTodoLoading
   const scopedCards = useMemo(
     () =>
       cards.filter((card) =>
@@ -259,15 +345,68 @@ export function BoardPage() {
       ),
     [activeBoardScope, activeProjectId, cards, userId],
   )
-  const counts = useMemo(() => getFilterCounts(scopedCards, now), [now, scopedCards])
+  const scopedTodoBlocks = useMemo(
+    () =>
+      todoBlocks.filter((block) =>
+        activeBoardScope === 'personal'
+          ? block.boardScope === 'personal' && block.createdBy === userId
+          : block.boardScope === 'shared' && (block.projectId ?? defaultProjectId) === activeProjectId,
+      ),
+    [activeBoardScope, activeProjectId, todoBlocks, userId],
+  )
+  const scopedTodoBlockIds = useMemo(
+    () => new Set(scopedTodoBlocks.map((block) => block.id)),
+    [scopedTodoBlocks],
+  )
+  const scopedTodoItems = useMemo(
+    () => todoItems.filter((item) => scopedTodoBlockIds.has(item.blockId)),
+    [scopedTodoBlockIds, todoItems],
+  )
+  const counts = useMemo(() => {
+    const next = getFilterCounts(scopedCards, now)
+    for (const block of scopedTodoBlocks) {
+      const status = getTodoBlockStatus(todoItemsByBlock.get(block.id) ?? [], block.id)
+      for (const currentFilter of ['all', 'today', 'week', 'overdue', 'done'] as const) {
+        if (matchesTodoFilter(block, status, currentFilter, now)) {
+          next[currentFilter] += 1
+        }
+      }
+    }
+    return next
+  }, [now, scopedCards, scopedTodoBlocks, todoItemsByBlock])
   const visibleCards = useMemo(() => filterCards(scopedCards, filter, now), [filter, now, scopedCards])
+  const visibleTodoBlocks = useMemo(
+    () =>
+      scopedTodoBlocks.filter((block) =>
+        matchesTodoFilter(
+          block,
+          getTodoBlockStatus(todoItemsByBlock.get(block.id) ?? [], block.id),
+          filter,
+          now,
+        ),
+      ),
+    [filter, now, scopedTodoBlocks, todoItemsByBlock],
+  )
   const visibleCardIds = useMemo(() => new Set(visibleCards.map((card) => card.id)), [visibleCards])
+  const visibleTodoBlockIds = useMemo(
+    () => new Set(visibleTodoBlocks.map((block) => block.id)),
+    [visibleTodoBlocks],
+  )
+  const visibleTodoItems = useMemo(
+    () => scopedTodoItems.filter((item) => visibleTodoBlockIds.has(item.blockId)),
+    [scopedTodoItems, visibleTodoBlockIds],
+  )
   const visibleLinks = useMemo(
     () =>
       links.filter((link) => {
-        if (!visibleCardIds.has(link.fromCardId) || !visibleCardIds.has(link.toCardId)) {
+        const source = getLinkSource(link)
+        const target = getLinkTarget(link)
+        if (!source || !target) {
           return false
         }
+        const sourceVisible = source.kind === 'card' ? visibleCardIds.has(source.id) : visibleTodoBlockIds.has(source.id)
+        const targetVisible = target.kind === 'card' ? visibleCardIds.has(target.id) : visibleTodoBlockIds.has(target.id)
+        if (!sourceVisible || !targetVisible) return false
 
         if (activeBoardScope === 'personal') {
           return link.boardScope === 'personal' && link.createdBy === userId
@@ -275,7 +414,7 @@ export function BoardPage() {
 
         return link.boardScope === 'shared' && link.projectId === activeProjectId
       }),
-    [activeBoardScope, activeProjectId, links, userId, visibleCardIds],
+    [activeBoardScope, activeProjectId, links, userId, visibleCardIds, visibleTodoBlockIds],
   )
   const visibleTexts = useMemo(
     () =>
@@ -302,6 +441,18 @@ export function BoardPage() {
     [activeBoardScope, activeProject, filter, t],
   )
   const mobileCards = useMemo(() => sortCardsForMobile(visibleCards, now), [now, visibleCards])
+  const mobileTodoBlocks = useMemo(
+    () => [...visibleTodoBlocks].sort((left, right) => {
+      const leftDone = getTodoBlockStatus(todoItemsByBlock.get(left.id) ?? [], left.id).isDone
+      const rightDone = getTodoBlockStatus(todoItemsByBlock.get(right.id) ?? [], right.id).isDone
+      if (leftDone !== rightDone) return leftDone ? 1 : -1
+      if (!left.deadlineAt && !right.deadlineAt) return left.createdAt.localeCompare(right.createdAt)
+      if (!left.deadlineAt) return 1
+      if (!right.deadlineAt) return -1
+      return new Date(left.deadlineAt).getTime() - new Date(right.deadlineAt).getTime()
+    }),
+    [todoItemsByBlock, visibleTodoBlocks],
+  )
   const viewKey = `${activeBoardScope}:${activeBoardScope === 'shared' ? activeProjectId : 'personal'}:${filter}`
 
   const openCreateAtCenter = useCallback(() => {
@@ -330,6 +481,17 @@ export function BoardPage() {
     )
   }, [activeBoardScope, activeProjectId, camera, openCreateTextEditor])
 
+  const openCreateTodoAtCenter = useCallback(() => {
+    if (isDesktop) setDesktopViewMode('board')
+    const position = isDesktop ? getBoardCenterPosition(camera) : { x: 0, y: 0 }
+    openCreateTodoEditor(
+      Math.round(position.x - defaultTodoBlockWidth / 2),
+      Math.round(position.y - 160),
+      activeBoardScope,
+      activeBoardScope === 'shared' ? activeProjectId : null,
+    )
+  }, [activeBoardScope, activeProjectId, camera, isDesktop, openCreateTodoEditor])
+
   const openCreateAtPosition = useCallback(
     (x: number, y: number) => {
       openCreateEditor(
@@ -352,6 +514,18 @@ export function BoardPage() {
       )
     },
     [activeBoardScope, activeProjectId, openCreateTextEditor],
+  )
+
+  const openCreateTodoAtPosition = useCallback(
+    (x: number, y: number) => {
+      openCreateTodoEditor(
+        Math.round(x - defaultTodoBlockWidth / 2),
+        Math.round(y - 160),
+        activeBoardScope,
+        activeBoardScope === 'shared' ? activeProjectId : null,
+      )
+    },
+    [activeBoardScope, activeProjectId, openCreateTodoEditor],
   )
 
   const handleCreateProject = useCallback(
@@ -403,12 +577,13 @@ export function BoardPage() {
 
   const handleRetry = useCallback(() => {
     void loadCards()
+    void loadTodos()
     void loadProjects()
     if (isDesktop) {
       void loadLinks()
       void loadTexts()
     }
-  }, [isDesktop, loadCards, loadLinks, loadProjects, loadTexts])
+  }, [isDesktop, loadCards, loadLinks, loadProjects, loadTexts, loadTodos])
 
   if (!isDesktop) {
     return (
@@ -416,17 +591,20 @@ export function BoardPage() {
         <MobileCardList
           activeProjectId={activeProjectId}
           cards={mobileCards}
+          todoBlocks={mobileTodoBlocks}
+          todoItems={visibleTodoItems}
           boardScope={activeBoardScope}
           counts={counts}
           error={boardError}
           filter={filter}
-          isLoading={isLoading}
+          isLoading={boardIsLoading}
           now={now}
           projects={projects}
           projectCardCounts={projectCardCounts}
           projectDeadlines={projectDeadlines}
           onCreateProject={() => setIsProjectEditorOpen(true)}
           onCreate={openCreateAtCenter}
+          onCreateTodo={openCreateTodoAtCenter}
           onDeleteProject={handleDeleteProject}
           onBoardScopeChange={setActiveBoardScope}
           onFilterChange={setFilter}
@@ -440,6 +618,8 @@ export function BoardPage() {
         />
         <Suspense fallback={<ModalFallback />}>
           {editor ? <CardEditor /> : null}
+          {todoBlockEditor ? <TodoBlockEditor /> : null}
+          {todoItemEditor ? <TodoItemEditor /> : null}
           {isProjectEditorOpen ? (
             <ProjectEditor
               isOpen={isProjectEditorOpen}
@@ -473,6 +653,7 @@ export function BoardPage() {
           projectDeadlines={projectDeadlines}
           onBoardScopeChange={setActiveBoardScope}
           onCreate={openCreateAtCenter}
+          onCreateTodo={openCreateTodoAtCenter}
           onCreateProject={() => setIsProjectEditorOpen(true)}
           onCreateText={openCreateTextAtCenter}
           onDeleteProject={handleDeleteProject}
@@ -492,15 +673,18 @@ export function BoardPage() {
             boardScope={activeBoardScope}
             collaborationRoomId={activeProjectId}
             cards={visibleCards}
+            todoBlocks={visibleTodoBlocks}
+            todoItems={visibleTodoItems}
             exportContext={exportContext}
             links={visibleLinks}
             texts={visibleTexts}
             error={boardError}
-            isLoading={isLoading}
+            isLoading={boardIsLoading}
             now={now}
             onCreateAtCenter={openCreateAtCenter}
             onCreateAtPosition={openCreateAtPosition}
             onCreateTextAtPosition={openCreateTextAtPosition}
+            onCreateTodoAtPosition={openCreateTodoAtPosition}
             onRetry={handleRetry}
             setCamera={setCamera}
             userEmail={userEmail}
@@ -512,11 +696,15 @@ export function BoardPage() {
         ) : (
           <DesktopCardList
             cards={mobileCards}
+            todoBlocks={mobileTodoBlocks}
+            todoItems={visibleTodoItems}
             boardScope={activeBoardScope}
             error={boardError}
-            isLoading={isLoading}
+            isLoading={boardIsLoading}
             now={now}
             onCreate={openCreateAtCenter}
+            onCreateText={openCreateTextAtCenter}
+            onCreateTodo={openCreateTodoAtCenter}
             onRetry={handleRetry}
             viewKey={viewKey}
           />
@@ -524,6 +712,8 @@ export function BoardPage() {
         <Suspense fallback={<ModalFallback />}>
           {editor ? <CardEditor /> : null}
           {textEditor ? <BoardTextEditor /> : null}
+          {todoBlockEditor ? <TodoBlockEditor /> : null}
+          {todoItemEditor ? <TodoItemEditor /> : null}
           {isProjectEditorOpen ? (
             <ProjectEditor
               isOpen={isProjectEditorOpen}

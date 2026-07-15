@@ -8,9 +8,7 @@ import {
   List,
   LockKeyhole,
   LogOut,
-  Plus,
   Settings2,
-  Type,
   UsersRound,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
@@ -25,6 +23,7 @@ import { ProjectList } from '../../features/projects/ProjectList.tsx'
 import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../../features/projects/project.types.ts'
 import { ProfileAvatar } from '../../features/profile/ProfileAvatar.tsx'
 import { defaultActiveColor, getFallbackNickname, type UserProfile } from '../../features/profile/profile.types.ts'
+import { AddMenu } from '../../features/board/AddMenu.tsx'
 
 type SidebarProps = {
   activeFilter: BoardFilter
@@ -36,6 +35,7 @@ type SidebarProps = {
   projectCardCounts: Record<string, number>
   onBoardScopeChange: (scope: BoardScope) => void
   onCreate: () => void
+  onCreateTodo: () => void
   onCreateProject: () => void
   onCreateText: () => void
   onDeleteProject: (project: Project) => void
@@ -68,6 +68,7 @@ export function Sidebar({
   projectCardCounts,
   onBoardScopeChange,
   onCreate,
+  onCreateTodo,
   onCreateProject,
   onCreateText,
   onDeleteProject,
@@ -129,19 +130,12 @@ export function Sidebar({
         </div>
       </div>
 
-      <button className="primary-button mb-3 w-full shrink-0 justify-center py-3 text-base" type="button" onClick={onCreate}>
-        <Plus size={21} />
-        {activeBoardScope === 'personal' ? t.sidebar.newPersonalTask : t.sidebar.newCard}
-      </button>
-
-      <button
-        className="secondary-button mb-3 w-full shrink-0 justify-center py-2.5 text-sm"
-        type="button"
-        onClick={onCreateText}
-      >
-        <Type size={18} />
-        {t.boardText.newText}
-      </button>
+      <AddMenu
+        className="mb-3 shrink-0"
+        onAddCard={onCreate}
+        onAddText={onCreateText}
+        onAddTodo={onCreateTodo}
+      />
 
       {activeBoardScope === 'shared' ? (
         <ProjectList
