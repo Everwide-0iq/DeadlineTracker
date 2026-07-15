@@ -23,8 +23,11 @@ import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
-import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
 import { defaultProjectId } from '../projects/project.types.ts'
+import { usePreferencesStore } from '../preferences/preferences.store.ts'
+import { ProfileAvatar } from '../profile/ProfileAvatar.tsx'
+import { useProfileStore } from '../profile/profile.store.ts'
+import { defaultActiveColor, type UserProfile } from '../profile/profile.types.ts'
 import { BoardControls } from './BoardControls.tsx'
 import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
 import type { DragGuide } from './dragGuide.types.ts'
@@ -54,6 +57,7 @@ type DesktopBoardProps = {
   setCamera: (next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => void
   userEmail: string | null
   userId: string | null
+  userProfile: UserProfile | null
   viewKey: string
   zoomBy: (factor: number) => void
 }
@@ -83,7 +87,6 @@ type BoardContextMenu = {
 const cursorMeasureThrottleMs = 70
 const cameraMoveSettleMs = 180
 const viewportOverscan = 720
-const performanceModeStorageKey = 'fireboard.performance-mode.v1'
 
 const getExportLocale = (language: 'en' | 'ru') => (language === 'ru' ? 'ru-RU' : 'en-US')
 
@@ -100,8 +103,6 @@ const formatExportDate = (date: Date, language: 'en' | 'ru') =>
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date)
-
-const readPerformanceMode = () => readStorageValue(performanceModeStorageKey) === 'true'
 
 const getViewportWorldBounds = (
   camera: BoardCamera,
@@ -152,12 +153,15 @@ const isTextInBounds = (text: BoardText, bounds: WorldBounds) =>
 
 const CardUnderlight = memo(function CardUnderlight({ card, now }: { card: Card; now: number }) {
   const language = useI18nStore((state) => state.language)
+  const activeProfile = useProfileStore((state) =>
+    card.activeBy ? state.profiles[card.activeBy] ?? null : null,
+  )
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)
   const horizontalBleed = Math.max(42, renderSize.w * 0.18)
   const verticalBleed = Math.max(36, renderSize.h * 0.28)
   const style: UnderlightStyle = {
-    '--deadline-border': card.isActive ? '#65e7ff' : visual.borderColor,
+    '--deadline-border': card.isActive ? activeProfile?.activeColor ?? defaultActiveColor : visual.borderColor,
     height: renderSize.h + verticalBleed * 2,
     left: card.x - horizontalBleed,
     top: card.y - verticalBleed,
@@ -252,14 +256,14 @@ const PresenceCluster = memo(function PresenceCluster({
       </div>
       <div className="flex items-center">
         {visibleMembers.map((member) => (
-          <div
-            className="-ml-1 grid h-8 w-8 place-items-center rounded-full border border-black/60 text-xs font-black text-black first:ml-0"
+          <ProfileAvatar
+            avatarPath={member.avatarPath}
+            className="-ml-1 first:ml-0"
+            color={member.color}
             key={member.clientId}
-            style={{ backgroundColor: member.color }}
-            title={member.email}
-          >
-            {member.name.slice(0, 1).toUpperCase()}
-          </div>
+            name={member.name}
+            size={32}
+          />
         ))}
       </div>
     </aside>
@@ -284,6 +288,7 @@ export function DesktopBoard({
   setCamera,
   userEmail,
   userId,
+  userProfile,
   viewKey,
   zoomBy,
 }: DesktopBoardProps) {
@@ -298,7 +303,8 @@ export function DesktopBoard({
   const viewportRectRef = useRef<DOMRectReadOnly | null>(null)
   const [draftLink, setDraftLink] = useState<DraftCardLink | null>(null)
   const [boardContextMenu, setBoardContextMenu] = useState<BoardContextMenu | null>(null)
-  const [isPerformanceMode, setIsPerformanceMode] = useState(readPerformanceMode)
+  const isPerformanceMode = usePreferencesStore((state) => state.performanceMode)
+  const togglePerformanceMode = usePreferencesStore((state) => state.togglePerformanceMode)
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
   const [viewportSize, setViewportSize] = useState({ height: 0, width: 0 })
   const createLink = useCardLinkStore((state) => state.createLink)
@@ -326,8 +332,11 @@ export function DesktopBoard({
     enabled: boardScope === 'shared',
     fallbackName: t.board.memberFallback,
     roomId: collaborationRoomId,
+    userAvatarPath: userProfile?.avatarPath,
+    userColor: userProfile?.activeColor,
     userEmail,
     userId,
+    userName: userProfile?.nickname,
   })
   const gridSize = clamp(34 * camera.zoom, 18, 72)
   const devicePixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
@@ -1071,14 +1080,6 @@ export function DesktopBoard({
 
   const handleZoomIn = useCallback(() => zoomBy(1.1), [zoomBy])
   const handleZoomOut = useCallback(() => zoomBy(0.9), [zoomBy])
-  const togglePerformanceMode = useCallback(() => {
-    setIsPerformanceMode((current) => {
-      const next = !current
-      writeStorageValue(performanceModeStorageKey, String(next))
-      return next
-    })
-  }, [])
-
   return (
     <main
       className="desktop-board-scene relative min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/10 bg-[#05070b] shadow-2xl"
@@ -1113,11 +1114,11 @@ export function DesktopBoard({
           ) : null}
 
           <div className="board-content-transition" key={viewKey}>
-            {isPerformanceMode
-              ? null
-              : renderedCards.map((card) => (
+            {renderedCards
+              .filter((card) => !isPerformanceMode || card.isActive)
+              .map((card) => (
                   <CardUnderlight card={card} key={`light-${card.id}`} now={now} />
-                ))}
+              ))}
 
             <CardLinkLayer
               cards={cards}

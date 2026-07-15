@@ -8,6 +8,14 @@ set
   file_size_limit = 2097152,
   allowed_mime_types = array['image/webp'];
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars', 'avatars', false, 524288, array['image/webp'])
+on conflict (id) do update
+set
+  public = false,
+  file_size_limit = 524288,
+  allowed_mime_types = array['image/webp'];
+
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -51,6 +59,104 @@ from ranked_projects
 where public.projects.id = ranked_projects.id
   and public.projects.sort_order = 0;
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  nickname text not null,
+  avatar_path text,
+  active_color text not null default '#65e7ff',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint profiles_nickname_check check (
+    nickname = btrim(nickname)
+    and char_length(nickname) between 1 and 32
+    and nickname !~ '[[:cntrl:]]'
+  ),
+  constraint profiles_avatar_path_check check (
+    avatar_path is null or (
+      char_length(avatar_path) between 8 and 512
+      and split_part(avatar_path, '/', 1) = id::text
+      and lower(avatar_path) like '%.webp'
+    )
+  ),
+  constraint profiles_active_color_check check (active_color ~ '^#[0-9A-Fa-f]{6}$')
+);
+
+alter table public.profiles
+add column if not exists avatar_path text;
+
+alter table public.profiles
+add column if not exists active_color text not null default '#65e7ff';
+
+insert into public.profiles (id, nickname)
+select
+  user_record.id,
+  coalesce(
+    nullif(
+      left(
+        btrim(
+          regexp_replace(
+            coalesce(
+              user_record.raw_user_meta_data ->> 'nickname',
+              split_part(coalesce(user_record.email, ''), '@', 1)
+            ),
+            '[[:cntrl:]]',
+            '',
+            'g'
+          )
+        ),
+        32
+      ),
+      ''
+    ),
+    'Member'
+  )
+from auth.users as user_record
+on conflict (id) do nothing;
+
+create or replace function public.create_profile_for_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  default_nickname text;
+begin
+  default_nickname = coalesce(
+    nullif(
+      left(
+        btrim(
+          regexp_replace(
+            coalesce(
+              new.raw_user_meta_data ->> 'nickname',
+              split_part(coalesce(new.email, ''), '@', 1)
+            ),
+            '[[:cntrl:]]',
+            '',
+            'g'
+          )
+        ),
+        32
+      ),
+      ''
+    ),
+    'Member'
+  );
+
+  insert into public.profiles (id, nickname)
+  values (new.id, default_nickname)
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists create_profile_after_signup on auth.users;
+create trigger create_profile_after_signup
+after insert on auth.users
+for each row
+execute function public.create_profile_for_new_user();
+
 create table if not exists public.cards (
   id uuid primary key default gen_random_uuid(),
   title text not null,
@@ -58,6 +164,8 @@ create table if not exists public.cards (
   deadline_at timestamptz not null,
   status text not null default 'todo' check (status in ('todo', 'done')),
   is_active boolean not null default false,
+  active_by uuid references public.profiles(id) on delete set null,
+  completed_at timestamptz,
   board_scope text not null default 'shared' check (board_scope in ('shared', 'personal')),
   project_id uuid references public.projects(id) on delete cascade,
   image_path text,
@@ -78,6 +186,12 @@ add column if not exists board_scope text not null default 'shared';
 
 alter table public.cards
 add column if not exists is_active boolean not null default false;
+
+alter table public.cards
+add column if not exists active_by uuid references public.profiles(id) on delete set null;
+
+alter table public.cards
+add column if not exists completed_at timestamptz;
 
 alter table public.cards
 add column if not exists project_id uuid references public.projects(id) on delete cascade;
@@ -121,10 +235,37 @@ update public.cards
 set project_id = null
 where board_scope = 'personal';
 
+update public.cards
+set active_by = null
+where not is_active;
+
+update public.cards
+set
+  is_active = false,
+  active_by = null
+where status = 'done';
+
+update public.cards
+set completed_at = null
+where status <> 'done';
+
 do $$
 begin
   alter table public.cards
   add constraint cards_board_scope_check check (board_scope in ('shared', 'personal'));
+exception
+  when duplicate_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter table public.cards
+  add constraint cards_activity_state_check check (
+    (is_active or active_by is null)
+    and (status <> 'done' or (not is_active and active_by is null))
+    and (status = 'done' or completed_at is null)
+  );
 exception
   when duplicate_object then null;
 end;
@@ -379,12 +520,15 @@ $$;
 create index if not exists projects_created_at_idx on public.projects (created_at);
 create index if not exists projects_created_by_idx on public.projects (created_by);
 create index if not exists projects_sort_order_idx on public.projects (sort_order);
+create index if not exists profiles_updated_at_idx on public.profiles (updated_at);
 create index if not exists cards_deadline_at_idx on public.cards (deadline_at);
 create index if not exists cards_status_idx on public.cards (status);
 create index if not exists cards_created_at_idx on public.cards (created_at);
 create index if not exists cards_board_scope_idx on public.cards (board_scope);
 create index if not exists cards_project_id_idx on public.cards (project_id);
 create index if not exists cards_created_by_idx on public.cards (created_by);
+create index if not exists cards_active_by_idx on public.cards (active_by) where active_by is not null;
+create index if not exists cards_completed_at_idx on public.cards (completed_at) where completed_at is not null;
 create index if not exists cards_image_path_idx on public.cards (image_path) where image_path is not null;
 create index if not exists card_links_from_card_id_idx on public.card_links (from_card_id);
 create index if not exists card_links_to_card_id_idx on public.card_links (to_card_id);
@@ -433,6 +577,65 @@ begin
   new.created_by = old.created_by;
   new.created_at = old.created_at;
   new.board_scope = old.board_scope;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_profile_identity()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.id = old.id;
+  new.created_at = old.created_at;
+  return new;
+end;
+$$;
+
+create or replace function public.normalize_card_state()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status = 'done' then
+    new.is_active = false;
+    new.active_by = null;
+
+    if tg_op = 'INSERT' then
+      new.completed_at = now();
+    elsif old.status is distinct from 'done' then
+      new.completed_at = now();
+    else
+      new.completed_at = old.completed_at;
+    end if;
+
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.completed_at = null;
+  else
+    if old.status = 'done' then
+      new.completed_at = null;
+    else
+      new.completed_at = old.completed_at;
+    end if;
+  end if;
+
+  if not new.is_active then
+    new.active_by = null;
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.active_by = auth.uid();
+  elsif new.is_active is distinct from old.is_active
+    or new.active_by is distinct from old.active_by then
+    new.active_by = auth.uid();
+  else
+    new.active_by = old.active_by;
+  end if;
+
   return new;
 end;
 $$;
@@ -561,6 +764,18 @@ before update on public.cards
 for each row
 execute function public.protect_card_ownership();
 
+drop trigger if exists normalize_cards_state on public.cards;
+create trigger normalize_cards_state
+before insert or update on public.cards
+for each row
+execute function public.normalize_card_state();
+
+drop trigger if exists protect_profiles_identity on public.profiles;
+create trigger protect_profiles_identity
+before update on public.profiles
+for each row
+execute function public.protect_profile_identity();
+
 drop trigger if exists protect_card_links_ownership on public.card_links;
 create trigger protect_card_links_ownership
 before update on public.card_links
@@ -600,6 +815,12 @@ execute function public.validate_card_link_scope();
 drop trigger if exists set_projects_updated_at on public.projects;
 create trigger set_projects_updated_at
 before update on public.projects
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_profiles_updated_at on public.profiles;
+create trigger set_profiles_updated_at
+before update on public.profiles
 for each row
 execute function public.set_updated_at();
 
@@ -859,6 +1080,7 @@ drop function if exists public.get_activity_actor_label() cascade;
 drop table if exists public.activity_events cascade;
 
 alter table public.projects enable row level security;
+alter table public.profiles enable row level security;
 alter table public.cards enable row level security;
 alter table public.card_links enable row level security;
 alter table public.board_texts enable row level security;
@@ -897,6 +1119,32 @@ on public.projects
 for delete
 to authenticated
 using (id <> '00000000-0000-0000-0000-000000000001');
+
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+create policy "profiles_select_authenticated"
+on public.profiles
+for select
+to authenticated
+using (true);
+
+drop policy if exists "profiles_insert_own" on public.profiles;
+create policy "profiles_insert_own"
+on public.profiles
+for insert
+to authenticated
+with check (id = auth.uid());
+
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_update_own"
+on public.profiles
+for update
+to authenticated
+using (id = auth.uid())
+with check (id = auth.uid());
+
+revoke all on table public.profiles from anon;
+revoke delete on table public.profiles from authenticated;
+grant select, insert, update on table public.profiles to authenticated;
 
 drop policy if exists "cards_select_authenticated" on public.cards;
 create policy "cards_select_authenticated"
@@ -1097,9 +1345,46 @@ using (
   )
 );
 
+drop policy if exists "avatars_select_authenticated" on storage.objects;
+create policy "avatars_select_authenticated"
+on storage.objects
+for select
+to authenticated
+using (bucket_id = 'avatars');
+
+drop policy if exists "avatars_insert_own_folder" on storage.objects;
+create policy "avatars_insert_own_folder"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'avatars'
+  and (storage.foldername(name))[1] = (select auth.uid()::text)
+  and lower(name) like '%.webp'
+);
+
+drop policy if exists "avatars_delete_own_folder" on storage.objects;
+create policy "avatars_delete_own_folder"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'avatars'
+  and (storage.foldername(name))[1] = (select auth.uid()::text)
+);
+
 do $$
 begin
   alter publication supabase_realtime add table public.projects;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.profiles;
 exception
   when duplicate_object then null;
   when undefined_object then null;

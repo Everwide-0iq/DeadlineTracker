@@ -17,3 +17,11 @@ export async function signOut() {
     throw error
   }
 }
+
+export async function updatePassword(password: string) {
+  const { error } = await requireSupabase().auth.updateUser({ password })
+
+  if (error) {
+    throw error
+  }
+}

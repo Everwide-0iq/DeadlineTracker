@@ -52,6 +52,8 @@ const getMinimumHeightForWidth = (card: Card, width: number) =>
     imageHeight: card.imageHeight,
     imagePath: card.imagePath,
     imageWidth: card.imageWidth,
+    isActive: card.isActive,
+    status: card.status,
     title: card.title,
     w: width,
   })

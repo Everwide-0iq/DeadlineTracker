@@ -23,6 +23,8 @@ const createCard = (overrides: Partial<Card> = {}): Card => ({
   imageSize: null,
   imageWidth: null,
   isActive: false,
+  activeBy: null,
+  completedAt: null,
   projectId: 'project-1',
   status: 'todo',
   title: 'Task',
@@ -56,6 +58,26 @@ describe('card sizing', () => {
     })
 
     expect(longHeight).toBeGreaterThan(shortHeight)
+  })
+
+  it('reserves metadata space for active and completed cards', () => {
+    const baseHeight = getCardContentHeight({ description: null, title: 'Task', w: 340 })
+    const activeHeight = getCardContentHeight({
+      description: null,
+      isActive: true,
+      status: 'todo',
+      title: 'Task',
+      w: 340,
+    })
+    const completedHeight = getCardContentHeight({
+      description: null,
+      status: 'done',
+      title: 'Task',
+      w: 340,
+    })
+
+    expect(activeHeight).toBeGreaterThan(baseHeight)
+    expect(completedHeight).toBeGreaterThan(baseHeight)
   })
 
   it('respects a manually enlarged card', () => {

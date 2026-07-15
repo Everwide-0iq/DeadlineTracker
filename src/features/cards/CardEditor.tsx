@@ -300,6 +300,8 @@ export function CardEditor() {
         imageHeight: nextImageHeight,
         imagePath: nextImagePath,
         imageWidth: nextImageWidth,
+        isActive: status === 'done' ? false : card?.isActive,
+        status,
         title: trimmedTitle,
         w: card?.w ?? defaultCardSize.w,
       })

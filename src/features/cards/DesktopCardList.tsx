@@ -1,13 +1,18 @@
-import { AlertTriangle, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2, Zap } from 'lucide-react'
+import { AlertTriangle, CalendarCheck2, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2, Zap } from 'lucide-react'
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useAuthStore } from '../auth/auth.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
+import { ProfileAvatar } from '../profile/ProfileAvatar.tsx'
+import { useProfileStore } from '../profile/profile.store.ts'
+import { defaultActiveColor } from '../profile/profile.types.ts'
 import { useCardStore } from './card.store.ts'
 import { CardImageView } from './CardImageView.tsx'
 import type { BoardScope, Card } from './card.types.ts'
 import { formatCountdown } from './countdown.ts'
+import { formatCompletionDate } from './completion.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
 
@@ -32,14 +37,29 @@ type DeadlineListRowProps = {
 const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineListRowProps) {
   const deleteCard = useCardStore((state) => state.deleteCard)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
+  const toggleCardActive = useCardStore((state) => state.toggleCardActive)
   const updateCard = useCardStore((state) => state.updateCard)
+  const userId = useAuthStore((state) => state.user?.id ?? null)
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
+  const activeProfile = useProfileStore((state) =>
+    card.activeBy ? state.profiles[card.activeBy] ?? null : null,
+  )
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const isCompleting = useCompletionAnimation(card.status === 'done')
+  const activeColor = activeProfile?.activeColor ?? defaultActiveColor
+  const activeOwnerName = activeProfile?.nickname ?? t.card.activeOwnerUnknown
+  const activeActionLabel =
+    card.isActive && card.activeBy === userId
+      ? t.card.deactivate
+      : card.isActive
+        ? t.card.takeActivity
+        : t.card.activate
+  const completionDate = formatCompletionDate(card.completedAt, language)
   const style: RowStyle = {
+    '--active-color': activeColor,
     '--deadline-bg': visual.backgroundColor,
     '--deadline-border': visual.borderColor,
     '--deadline-glow': visual.glowColor,
@@ -96,12 +116,27 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
           <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-white/42">
             {card.description || t.card.noDescription}
           </p>
+          {card.isActive ? (
+            <div className="deadline-list-active-owner">
+              <ProfileAvatar avatarPath={activeProfile?.avatarPath} color={activeColor} name={activeOwnerName} size={20} />
+              <Zap fill="currentColor" size={12} />
+              <span>{t.card.activeBy(activeOwnerName)}</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-[var(--deadline-text)]">
-        <Clock3 size={20} />
-        <span className="text-2xl font-black">{countdown}</span>
+      <div className="flex min-w-0 flex-col gap-1.5 text-[var(--deadline-text)]">
+        <div className="flex items-center gap-3">
+          <Clock3 size={20} />
+          <span className="text-2xl font-black">{countdown}</span>
+        </div>
+        {card.status === 'done' ? (
+          <div className="deadline-list-completion-date">
+            <CalendarCheck2 size={13} />
+            <span>{completionDate ? t.card.completedAt(completionDate) : t.card.completionUnknown}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-end gap-3">
@@ -110,13 +145,14 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
           {visual.label}
         </span>
         <button
-          aria-label={card.isActive ? t.card.deactivate : t.card.activate}
+          aria-label={activeActionLabel}
           aria-pressed={card.isActive}
           className="list-action-button card-active-list-button"
           data-active={card.isActive ? 'true' : 'false'}
-          title={card.isActive ? t.card.deactivate : t.card.activate}
+          title={activeActionLabel}
           type="button"
-          onClick={() => updateCard(card.id, { isActive: !card.isActive }).catch(() => undefined)}
+          disabled={card.status === 'done'}
+          onClick={() => toggleCardActive(card.id, userId).catch(() => undefined)}
         >
           <Zap fill={card.isActive ? 'currentColor' : 'none'} size={17} />
         </button>

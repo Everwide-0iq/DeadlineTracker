@@ -1,6 +1,7 @@
-import { CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound, Zap } from 'lucide-react'
+import { CalendarCheck2, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound, Zap } from 'lucide-react'
 import { memo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { useAuthStore } from '../auth/auth.store.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { LanguageToggle } from '../i18n/LanguageToggle.tsx'
 import { useI18nStore } from '../i18n/i18n.store.ts'
@@ -10,10 +11,14 @@ import { CardImageView } from './CardImageView.tsx'
 import type { BoardFilter, BoardScope, Card, FilterCounts } from './card.types.ts'
 import { boardFilters } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
+import { formatCompletionDate } from './completion.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
 import { ProjectList } from '../projects/ProjectList.tsx'
 import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../projects/project.types.ts'
+import { ProfileAvatar } from '../profile/ProfileAvatar.tsx'
+import { useProfileStore } from '../profile/profile.store.ts'
+import { defaultActiveColor, getFallbackNickname, type UserProfile } from '../profile/profile.types.ts'
 
 type MobileCardListProps = {
   activeProjectId: string
@@ -35,7 +40,10 @@ type MobileCardListProps = {
   onProjectChange: (projectId: string) => void
   onMoveProject: (project: Project, direction: ProjectMoveDirection) => void
   onLogout: () => void
+  onOpenProfile: () => void
   onRetry: () => void
+  profile: UserProfile | null
+  userEmail: string | null
 }
 
 type CardStyle = CSSProperties & Record<`--${string}`, string | number>
@@ -48,14 +56,29 @@ type MobileDeadlineCardProps = {
 const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: MobileDeadlineCardProps) {
   const deleteCard = useCardStore((state) => state.deleteCard)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
+  const toggleCardActive = useCardStore((state) => state.toggleCardActive)
   const updateCard = useCardStore((state) => state.updateCard)
+  const userId = useAuthStore((state) => state.user?.id ?? null)
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
+  const activeProfile = useProfileStore((state) =>
+    card.activeBy ? state.profiles[card.activeBy] ?? null : null,
+  )
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const isCompleting = useCompletionAnimation(card.status === 'done')
+  const activeColor = activeProfile?.activeColor ?? defaultActiveColor
+  const activeOwnerName = activeProfile?.nickname ?? t.card.activeOwnerUnknown
+  const activeActionLabel =
+    card.isActive && card.activeBy === userId
+      ? t.card.deactivate
+      : card.isActive
+        ? t.card.takeActivity
+        : t.card.activate
+  const completionDate = formatCompletionDate(card.completedAt, language)
   const style: CardStyle = {
+    '--active-color': activeColor,
     '--deadline-bg': visual.backgroundColor,
     '--deadline-border': visual.borderColor,
     '--deadline-glow': visual.glowColor,
@@ -95,12 +118,14 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
           </div>
           <div className="flex items-center gap-2">
             <button
-              aria-label={card.isActive ? t.card.deactivate : t.card.activate}
+              aria-label={activeActionLabel}
               aria-pressed={card.isActive}
               className="icon-button mobile-active-toggle h-10 w-10"
               data-active={card.isActive ? 'true' : 'false'}
+              title={activeActionLabel}
               type="button"
-              onClick={() => updateCard(card.id, { isActive: !card.isActive }).catch(() => undefined)}
+              disabled={card.status === 'done'}
+              onClick={() => toggleCardActive(card.id, userId).catch(() => undefined)}
             >
               <Zap fill={card.isActive ? 'currentColor' : 'none'} size={18} />
             </button>
@@ -114,6 +139,14 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
             </button>
           </div>
         </div>
+
+        {card.isActive ? (
+          <div className="deadline-card-active-owner mobile-active-owner">
+            <ProfileAvatar avatarPath={activeProfile?.avatarPath} color={activeColor} name={activeOwnerName} size={22} />
+            <Zap fill="currentColor" size={13} />
+            <span>{t.card.activeBy(activeOwnerName)}</span>
+          </div>
+        ) : null}
 
         <h3
           className={cn(
@@ -147,6 +180,13 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
           <span className="h-2.5 w-2.5 rounded-full bg-[var(--deadline-border)] shadow-[0_0_12px_var(--deadline-glow)]" />
           {visual.label}
         </div>
+
+        {card.status === 'done' ? (
+          <div className="mobile-completion-date">
+            <CalendarCheck2 size={14} />
+            <span>{completionDate ? t.card.completedAt(completionDate) : t.card.completionUnknown}</span>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -187,10 +227,15 @@ export function MobileCardList({
   onProjectChange,
   onMoveProject,
   onLogout,
+  onOpenProfile,
   onRetry,
+  profile,
+  userEmail,
 }: MobileCardListProps) {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
+  const profileName = profile?.nickname ?? getFallbackNickname(userEmail, t.profile.memberFallback)
+  const profileColor = profile?.activeColor ?? defaultActiveColor
 
   return (
     <main className="app-shell min-h-screen bg-[var(--background)] px-4 pb-44 pt-4 text-white">
@@ -202,9 +247,16 @@ export function MobileCardList({
             </div>
             <div>
               <h1 className="text-2xl font-black">Fireboard</h1>
-              <p className="text-xs text-white/40">
-                {boardScope === 'personal' ? t.mobile.personalCards : t.mobile.cards}: {counts.all}
-              </p>
+              <button
+                aria-label={t.profile.openSettings}
+                className="mobile-profile-trigger"
+                title={userEmail ?? profileName}
+                type="button"
+                onClick={onOpenProfile}
+              >
+                <ProfileAvatar avatarPath={profile?.avatarPath} color={profileColor} name={profileName} size={20} />
+                <span>{profileName}</span>
+              </button>
             </div>
           </div>
           <div className="flex items-center gap-2">

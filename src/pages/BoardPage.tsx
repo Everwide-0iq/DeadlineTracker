@@ -34,6 +34,7 @@ import {
 import { getProjectDisplayName } from '../features/projects/project.utils.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { readStorageValue, writeStorageValue } from '../lib/storage.ts'
+import { useProfileStore } from '../features/profile/profile.store.ts'
 
 const CardEditor = lazy(() =>
   import('../features/cards/CardEditor.tsx').then((module) => ({ default: module.CardEditor })),
@@ -43,6 +44,9 @@ const ProjectEditor = lazy(() =>
 )
 const BoardTextEditor = lazy(() =>
   import('../features/boardTexts/BoardTextEditor.tsx').then((module) => ({ default: module.BoardTextEditor })),
+)
+const ProfileSettings = lazy(() =>
+  import('../features/profile/ProfileSettings.tsx').then((module) => ({ default: module.ProfileSettings })),
 )
 
 function ModalFallback() {
@@ -111,6 +115,7 @@ export function BoardPage() {
     return readStorageValue('fireboard.activeProjectId') ?? defaultProjectId
   })
   const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false)
+  const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false)
   const cards = useCardStore((state) => state.cards)
   const error = useCardStore((state) => state.error)
   const filter = useCardStore((state) => state.filter)
@@ -141,6 +146,10 @@ export function BoardPage() {
   const logout = useAuthStore((state) => state.logout)
   const userEmail = useAuthStore((state) => state.user?.email ?? null)
   const userId = useAuthStore((state) => state.user?.id ?? null)
+  const clearProfiles = useProfileStore((state) => state.clear)
+  const loadProfiles = useProfileStore((state) => state.loadProfiles)
+  const profiles = useProfileStore((state) => state.profiles)
+  const subscribeProfileRealtime = useProfileStore((state) => state.subscribeRealtime)
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
@@ -170,6 +179,17 @@ export function BoardPage() {
 
     return unsubscribe
   }, [isDesktop, loadLinks, subscribeLinkRealtime])
+
+  useEffect(() => {
+    if (!userId) {
+      clearProfiles()
+      return undefined
+    }
+
+    void loadProfiles(userId, userEmail)
+    const unsubscribe = subscribeProfileRealtime()
+    return unsubscribe
+  }, [clearProfiles, loadProfiles, subscribeProfileRealtime, userEmail, userId])
 
   useEffect(() => {
     if (!userId) {
@@ -270,6 +290,7 @@ export function BoardPage() {
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
   )
+  const currentProfile = userId ? profiles[userId] ?? null : null
   const exportContext = useMemo(
     () => ({
       boardName:
@@ -412,7 +433,10 @@ export function BoardPage() {
           onMoveProject={handleMoveProject}
           onProjectChange={setActiveProjectId}
           onLogout={handleLogout}
+          onOpenProfile={() => setIsProfileSettingsOpen(true)}
           onRetry={handleRetry}
+          profile={currentProfile}
+          userEmail={userEmail}
         />
         <Suspense fallback={<ModalFallback />}>
           {editor ? <CardEditor /> : null}
@@ -421,6 +445,14 @@ export function BoardPage() {
               isOpen={isProjectEditorOpen}
               onClose={() => setIsProjectEditorOpen(false)}
               onCreate={handleCreateProject}
+            />
+          ) : null}
+          {isProfileSettingsOpen && userId ? (
+            <ProfileSettings
+              isOpen={isProfileSettingsOpen}
+              userEmail={userEmail}
+              userId={userId}
+              onClose={() => setIsProfileSettingsOpen(false)}
             />
           ) : null}
         </Suspense>
@@ -446,10 +478,12 @@ export function BoardPage() {
           onDeleteProject={handleDeleteProject}
           onFilterChange={setFilter}
           onLogout={handleLogout}
+          onOpenProfile={() => setIsProfileSettingsOpen(true)}
           onMoveProject={handleMoveProject}
           onProjectChange={setActiveProjectId}
           onViewModeChange={setDesktopViewMode}
           userEmail={userEmail}
+          profile={currentProfile}
           viewMode={desktopViewMode}
         />
         {desktopViewMode === 'board' ? (
@@ -471,6 +505,7 @@ export function BoardPage() {
             setCamera={setCamera}
             userEmail={userEmail}
             userId={userId}
+            userProfile={currentProfile}
             viewKey={viewKey}
             zoomBy={zoomBy}
           />
@@ -494,6 +529,14 @@ export function BoardPage() {
               isOpen={isProjectEditorOpen}
               onClose={() => setIsProjectEditorOpen(false)}
               onCreate={handleCreateProject}
+            />
+          ) : null}
+          {isProfileSettingsOpen && userId ? (
+            <ProfileSettings
+              isOpen={isProfileSettingsOpen}
+              userEmail={userEmail}
+              userId={userId}
+              onClose={() => setIsProfileSettingsOpen(false)}
             />
           ) : null}
         </Suspense>

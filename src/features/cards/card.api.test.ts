@@ -15,6 +15,8 @@ const createRow = (overrides: Partial<CardRow> = {}): CardRow => ({
   image_size: null,
   image_width: null,
   is_active: false,
+  active_by: null,
+  completed_at: null,
   project_id: 'project-1',
   status: 'todo',
   title: 'Task',
@@ -32,5 +34,15 @@ describe('mapCardFromRow', () => {
 
   it('keeps legacy rows inactive until the migration is applied', () => {
     expect(mapCardFromRow(createRow({ is_active: undefined })).isActive).toBe(false)
+  })
+
+  it('maps activity ownership and completion time', () => {
+    const completedAt = '2026-07-11T12:30:00.000Z'
+    const card = mapCardFromRow(
+      createRow({ active_by: 'user-2', completed_at: completedAt, is_active: true }),
+    )
+
+    expect(card.activeBy).toBe('user-2')
+    expect(card.completedAt).toBe(completedAt)
   })
 })

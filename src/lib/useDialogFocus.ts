@@ -6,6 +6,9 @@ type UseDialogFocusOptions = {
 }
 
 const dialogStack: symbol[] = []
+let scrollLockCount = 0
+let previousBodyOverflow = ''
+let previousRootOverflow = ''
 const focusableSelector = [
   'button:not([disabled])',
   'input:not([disabled])',
@@ -14,6 +17,26 @@ const focusableSelector = [
   '[href]',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
+
+function lockDocumentScroll() {
+  if (scrollLockCount === 0) {
+    previousBodyOverflow = document.body.style.overflow
+    previousRootOverflow = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+  }
+
+  scrollLockCount += 1
+}
+
+function unlockDocumentScroll() {
+  scrollLockCount = Math.max(0, scrollLockCount - 1)
+
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = previousBodyOverflow
+    document.documentElement.style.overflow = previousRootOverflow
+  }
+}
 
 export function useDialogFocus<T extends HTMLElement>({
   active,
@@ -33,6 +56,7 @@ export function useDialogFocus<T extends HTMLElement>({
     const dialogId = dialogIdRef.current
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
     dialogStack.push(dialogId)
+    lockDocumentScroll()
 
     const focusFrame = window.requestAnimationFrame(() => {
       const focusable = containerRef.current?.querySelector<HTMLElement>(focusableSelector)
@@ -86,6 +110,8 @@ export function useDialogFocus<T extends HTMLElement>({
       if (stackIndex !== -1) {
         dialogStack.splice(stackIndex, 1)
       }
+
+      unlockDocumentScroll()
 
       if (previouslyFocused?.isConnected) {
         previouslyFocused.focus({ preventScroll: true })

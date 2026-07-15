@@ -32,6 +32,8 @@ type CardContentSizeInput = {
   imageHeight?: number | null
   imagePath?: string | null
   imageWidth?: number | null
+  isActive?: boolean
+  status?: Card['status']
   title: string
   w?: number
 }
@@ -81,6 +83,8 @@ export function getCardContentHeight({
   imageHeight,
   imagePath,
   imageWidth,
+  isActive,
+  status,
   title,
   w,
 }: CardContentSizeInput) {
@@ -97,8 +101,9 @@ export function getCardContentHeight({
   const descriptionHeight =
     descriptionLines > 0 ? descriptionLines * descriptionLineHeight + descriptionBlockMargin : 0
   const imageExtraHeight = getImagePreviewHeight(contentWidth, imagePath, imageWidth, imageHeight)
+  const stateMetadataHeight = (isActive ? 34 : 0) + (status === 'done' ? 28 : 0)
   const minimumContentHeight =
-    cardFixedChromeHeight + titleHeight + descriptionHeight + imageExtraHeight
+    cardFixedChromeHeight + titleHeight + descriptionHeight + imageExtraHeight + stateMetadataHeight
 
   return Math.ceil(
     Math.max(
@@ -109,7 +114,7 @@ export function getCardContentHeight({
 }
 
 export function getCardRenderSize(
-  card: Pick<Card, 'description' | 'h' | 'imageHeight' | 'imagePath' | 'imageWidth' | 'title' | 'w'>,
+  card: Pick<Card, 'description' | 'h' | 'imageHeight' | 'imagePath' | 'imageWidth' | 'isActive' | 'status' | 'title' | 'w'>,
 ) {
   const width = card.w || defaultCardSize.w
 
@@ -120,6 +125,8 @@ export function getCardRenderSize(
       imageHeight: card.imageHeight,
       imagePath: card.imagePath,
       imageWidth: card.imageWidth,
+      isActive: card.isActive,
+      status: card.status,
       title: card.title,
       w: width,
     }),

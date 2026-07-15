@@ -9,6 +9,7 @@ import {
   LockKeyhole,
   LogOut,
   Plus,
+  Settings2,
   Type,
   UsersRound,
 } from 'lucide-react'
@@ -22,6 +23,8 @@ import { translations } from '../../features/i18n/translations.ts'
 import type { DesktopViewMode } from '../../features/board/board.types.ts'
 import { ProjectList } from '../../features/projects/ProjectList.tsx'
 import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../../features/projects/project.types.ts'
+import { ProfileAvatar } from '../../features/profile/ProfileAvatar.tsx'
+import { defaultActiveColor, getFallbackNickname, type UserProfile } from '../../features/profile/profile.types.ts'
 
 type SidebarProps = {
   activeFilter: BoardFilter
@@ -38,10 +41,12 @@ type SidebarProps = {
   onDeleteProject: (project: Project) => void
   onFilterChange: (filter: BoardFilter) => void
   onLogout: () => void
+  onOpenProfile: () => void
   onMoveProject: (project: Project, direction: ProjectMoveDirection) => void
   onProjectChange: (projectId: string) => void
   onViewModeChange: (mode: DesktopViewMode) => void
   userEmail: string | null
+  profile: UserProfile | null
   viewMode: DesktopViewMode
 }
 
@@ -68,14 +73,18 @@ export function Sidebar({
   onDeleteProject,
   onFilterChange,
   onLogout,
+  onOpenProfile,
   onMoveProject,
   onProjectChange,
   onViewModeChange,
   userEmail,
+  profile,
   viewMode,
 }: SidebarProps) {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
+  const profileName = profile?.nickname ?? getFallbackNickname(userEmail, t.profile.memberFallback)
+  const profileColor = profile?.activeColor ?? defaultActiveColor
 
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-black/35 p-5 shadow-2xl backdrop-blur-xl">
@@ -85,7 +94,17 @@ export function Sidebar({
         </div>
         <div className="min-w-0">
           <h1 className="text-3xl font-black tracking-normal text-white">Fireboard</h1>
-          <p className="mt-1 max-w-40 truncate text-xs text-white/35">{userEmail ?? t.sidebar.sharedBoard}</p>
+          <button
+            aria-label={t.profile.openSettings}
+            className="sidebar-profile-trigger"
+            title={userEmail ?? profileName}
+            type="button"
+            onClick={onOpenProfile}
+          >
+            <ProfileAvatar avatarPath={profile?.avatarPath} color={profileColor} name={profileName} size={22} />
+            <span>{profileName}</span>
+            <Settings2 size={12} />
+          </button>
         </div>
       </div>
 

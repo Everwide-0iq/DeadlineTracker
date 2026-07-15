@@ -15,6 +15,8 @@ export type Card = {
   deadlineAt: string
   status: CardStatus
   isActive: boolean
+  activeBy: string | null
+  completedAt: string | null
   boardScope: BoardScope
   projectId: string | null
   x: number
@@ -37,6 +39,8 @@ export type CardRow = {
   deadline_at: string
   status: CardStatus
   is_active?: boolean
+  active_by?: string | null
+  completed_at?: string | null
   board_scope: BoardScope
   project_id: string | null
   x: number
@@ -61,6 +65,7 @@ export type CreateCardInput = {
   projectId: string | null
   status?: CardStatus
   isActive?: boolean
+  activeBy?: string | null
   x: number
   y: number
   w?: number
@@ -79,6 +84,7 @@ export type UpdateCardInput = Partial<
     | 'deadlineAt'
     | 'status'
     | 'isActive'
+    | 'activeBy'
     | 'x'
     | 'y'
     | 'w'

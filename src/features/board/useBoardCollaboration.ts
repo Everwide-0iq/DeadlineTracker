@@ -5,6 +5,7 @@ type SupabaseClient = ReturnType<typeof requireSupabase>
 type BoardChannel = ReturnType<SupabaseClient['channel']>
 
 export type BoardMember = {
+  avatarPath?: string | null
   clientId: string
   color: string
   email: string
@@ -23,8 +24,11 @@ type UseBoardCollaborationOptions = {
   enabled: boolean
   fallbackName: string
   roomId: string
+  userAvatarPath?: string | null
+  userColor?: string | null
   userEmail: string | null
   userId: string | null
+  userName?: string | null
 }
 
 const cursorThrottleMs = 70
@@ -81,8 +85,11 @@ export function useBoardCollaboration({
   enabled,
   fallbackName,
   roomId,
+  userAvatarPath = null,
+  userColor = null,
   userEmail,
   userId,
+  userName = null,
 }: UseBoardCollaborationOptions) {
   const clientId = useMemo(createClientId, [])
   const channelRef = useRef<BoardChannel | null>(null)
@@ -91,14 +98,15 @@ export function useBoardCollaboration({
   const [remoteCursors, setRemoteCursors] = useState<BoardCursor[]>([])
   const self = useMemo<BoardMember>(
     () => ({
+      avatarPath: userAvatarPath,
       clientId,
-      color: getColor(userEmail ?? userId ?? clientId),
+      color: userColor ?? getColor(userEmail ?? userId ?? clientId),
       email: userEmail ?? 'unknown@fireboard.local',
-      name: getName(userEmail, fallbackName),
+      name: userName?.trim() || getName(userEmail, fallbackName),
       onlineAt: new Date().toISOString(),
       userId,
     }),
-    [clientId, fallbackName, userEmail, userId],
+    [clientId, fallbackName, userAvatarPath, userColor, userEmail, userId, userName],
   )
 
   useEffect(() => {

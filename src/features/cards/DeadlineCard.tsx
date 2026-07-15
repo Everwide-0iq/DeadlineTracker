@@ -1,14 +1,18 @@
-import { CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink, Zap } from 'lucide-react'
+import { CalendarCheck2, CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink, Zap } from 'lucide-react'
 import {
   memo,
   useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn.ts'
+import { useAuthStore } from '../auth/auth.store.ts'
 import { useDragCard } from '../board/useDragCard.ts'
 import { useResizeCard, type CardResizeDirection } from '../board/useResizeCard.ts'
 import { useBoardTextStore } from '../boardTexts/boardText.store.ts'
@@ -17,10 +21,14 @@ import type { CardLinkSide } from '../cardLinks/cardLink.types.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
+import { ProfileAvatar } from '../profile/ProfileAvatar.tsx'
+import { useProfileStore } from '../profile/profile.store.ts'
+import { defaultActiveColor } from '../profile/profile.types.ts'
 import { useCardStore } from './card.store.ts'
 import { CardImageView } from './CardImageView.tsx'
 import type { Card } from './card.types.ts'
 import { getCardRenderSize } from './card.utils.ts'
+import { formatCompletionDate } from './completion.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
@@ -59,13 +67,16 @@ function DeadlineCardComponent({
 }: DeadlineCardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
   const now = useCardStore((state) => state.now)
   const deleteCards = useCardStore((state) => state.deleteCards)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const selectCard = useCardStore((state) => state.selectCard)
   const selectedCardIds = useCardStore((state) => state.selectedCardIds)
   const toggleCardSelection = useCardStore((state) => state.toggleCardSelection)
+  const toggleCardActive = useCardStore((state) => state.toggleCardActive)
   const updateCard = useCardStore((state) => state.updateCard)
+  const userId = useAuthStore((state) => state.user?.id ?? null)
   const deleteLinksForCard = useCardLinkStore((state) => state.deleteLinksForCard)
   const linkedCount = useCardLinkStore((state) =>
     state.links.reduce(
@@ -79,14 +90,37 @@ function DeadlineCardComponent({
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
+  const activeProfile = useProfileStore((state) =>
+    card.activeBy ? state.profiles[card.activeBy] ?? null : null,
+  )
   const dragPointerDown = useDragCard({ cameraZoom, card, enabled: canDrag })
   const resizePointerDown = useResizeCard({ cameraZoom, card, enabled: canDrag })
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)
   const isCompleting = useCompletionAnimation(card.status === 'done')
+  const activeColor = activeProfile?.activeColor ?? defaultActiveColor
+  const activeOwnerName = activeProfile?.nickname ?? t.card.activeOwnerUnknown
+  const activeActionLabel =
+    card.isActive && card.activeBy === userId
+      ? t.card.deactivate
+      : card.isActive
+        ? t.card.takeActivity
+        : t.card.activate
+  const completionDate = formatCompletionDate(card.completedAt, language)
+  const resizeZoom = Math.max(cameraZoom, 0.1)
+  const resizeEdgeSize = 16 / resizeZoom
+  const resizeCornerSize = 24 / resizeZoom
 
   const cardStyle: CardStyle = {
+    '--active-color': activeColor,
+    '--card-resize-corner': `${resizeCornerSize}px`,
+    '--card-resize-corner-offset': `${resizeCornerSize / -2}px`,
+    '--card-resize-dot': `${8 / resizeZoom}px`,
+    '--card-resize-edge': `${resizeEdgeSize}px`,
+    '--card-resize-edge-offset': `${resizeEdgeSize / -2}px`,
+    '--card-resize-inset': `${resizeCornerSize * 0.56}px`,
+    '--card-resize-line': `${2 / resizeZoom}px`,
     '--deadline-bg': visual.backgroundColor,
     '--deadline-border': visual.borderColor,
     '--deadline-glow': visual.glowColor,
@@ -103,25 +137,54 @@ function DeadlineCardComponent({
       return undefined
     }
 
-    const closeOnOutsideLeftClick = (event: globalThis.PointerEvent) => {
-      if (event.button !== 0) {
-        return
-      }
-
-      const target = event.target
-
-      if (target instanceof Element && target.closest('[data-card-action="true"]')) {
-        return
-      }
-
+    const closeMenu = () => {
       setIsMenuOpen(false)
       setMenuPosition(null)
     }
 
-    window.addEventListener('pointerdown', closeOnOutsideLeftClick)
+    const closeOnOutsideLeftClick = (event: globalThis.PointerEvent) => {
+      const target = event.target
 
-    return () => window.removeEventListener('pointerdown', closeOnOutsideLeftClick)
-  }, [isMenuOpen])
+      if (target instanceof Element && target.closest(`[data-card-menu-owner="${card.id}"]`)) {
+        return
+      }
+
+      closeMenu()
+    }
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeMenu()
+      }
+    }
+
+    window.addEventListener('pointerdown', closeOnOutsideLeftClick)
+    window.addEventListener('keydown', closeOnEscape)
+    window.addEventListener('resize', closeMenu)
+
+    return () => {
+      window.removeEventListener('pointerdown', closeOnOutsideLeftClick)
+      window.removeEventListener('keydown', closeOnEscape)
+      window.removeEventListener('resize', closeMenu)
+    }
+  }, [card.id, isMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!isMenuOpen || !menuPosition || !menuRef.current) {
+      return
+    }
+
+    const padding = 12
+    const rect = menuRef.current.getBoundingClientRect()
+    const next = {
+      x: Math.min(Math.max(menuPosition.x, padding), Math.max(window.innerWidth - rect.width - padding, padding)),
+      y: Math.min(Math.max(menuPosition.y, padding), Math.max(window.innerHeight - rect.height - padding, padding)),
+    }
+
+    if (next.x !== menuPosition.x || next.y !== menuPosition.y) {
+      setMenuPosition(next)
+    }
+  }, [isMenuOpen, linkedCount, menuPosition, selectedCardIds.length])
 
   const handleDelete = async () => {
     setIsMenuOpen(false)
@@ -148,7 +211,7 @@ function DeadlineCardComponent({
   const handleToggleActive = async () => {
     setIsMenuOpen(false)
     setMenuPosition(null)
-    await updateCard(card.id, { isActive: !card.isActive }).catch(() => undefined)
+    await toggleCardActive(card.id, userId).catch(() => undefined)
   }
 
   const handleToggleDone = async () => {
@@ -214,10 +277,9 @@ function DeadlineCardComponent({
       selectCard(card.id)
     }
 
-    const rect = event.currentTarget.getBoundingClientRect()
     setMenuPosition({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
+      x: event.clientX,
+      y: event.clientY,
     })
     setIsMenuOpen(true)
   }
@@ -251,6 +313,21 @@ function DeadlineCardComponent({
     }
 
     const rect = event.currentTarget.getBoundingClientRect()
+    const edgeDistance = Math.min(
+      event.clientX - rect.left,
+      rect.right - event.clientX,
+      event.clientY - rect.top,
+      rect.bottom - event.clientY,
+    )
+
+    if (edgeDistance <= 22) {
+      event.currentTarget.dataset.resizeReady = 'true'
+      event.currentTarget.style.setProperty('--card-tilt-x', '0deg')
+      event.currentTarget.style.setProperty('--card-tilt-y', '0deg')
+      return
+    }
+
+    delete event.currentTarget.dataset.resizeReady
     const x = (event.clientX - rect.left) / rect.width
     const y = (event.clientY - rect.top) / rect.height
     event.currentTarget.style.setProperty('--card-tilt-x', `${(x - 0.5) * 2.6}deg`)
@@ -258,13 +335,14 @@ function DeadlineCardComponent({
   }
 
   const handleCardPointerLeave = (event: PointerEvent<HTMLElement>) => {
+    delete event.currentTarget.dataset.resizeReady
     event.currentTarget.style.setProperty('--card-tilt-x', '0deg')
     event.currentTarget.style.setProperty('--card-tilt-y', '0deg')
   }
 
   return (
     <article
-      aria-label={`${card.title}, ${countdown}${card.isActive ? `, ${t.card.active}` : ''}`}
+      aria-label={`${card.title}, ${countdown}${card.isActive ? `, ${t.card.activeBy(activeOwnerName)}` : ''}`}
       className={cn(
         'deadline-card group absolute z-[12] flex select-none flex-col overflow-visible rounded-[18px] border p-5 text-left transition duration-200',
         card.status === 'done' && 'deadline-card-done',
@@ -328,12 +406,13 @@ function DeadlineCardComponent({
           </div>
           <div className="relative flex items-center gap-2">
             <button
-              aria-label={card.isActive ? t.card.deactivate : t.card.activate}
+              aria-label={activeActionLabel}
               aria-pressed={card.isActive}
               className="icon-button card-active-toggle h-9 w-9"
               data-active={card.isActive ? 'true' : 'false'}
               data-card-action="true"
-              title={card.isActive ? t.card.deactivate : t.card.activate}
+              disabled={card.status === 'done'}
+              title={activeActionLabel}
               type="button"
               onClick={handleToggleActive}
             >
@@ -343,16 +422,37 @@ function DeadlineCardComponent({
               aria-label={t.card.actions}
               className="icon-button h-9 w-9"
               data-card-action="true"
+              data-card-menu-owner={card.id}
               type="button"
-              onClick={() => {
-                setMenuPosition(null)
-                setIsMenuOpen((value) => !value)
+              onClick={(event) => {
+                if (isMenuOpen) {
+                  setIsMenuOpen(false)
+                  setMenuPosition(null)
+                  return
+                }
+
+                const rect = event.currentTarget.getBoundingClientRect()
+                setMenuPosition({ x: rect.right - 240, y: rect.bottom + 8 })
+                setIsMenuOpen(true)
               }}
             >
               <MoreHorizontal size={18} />
             </button>
           </div>
         </div>
+
+        {card.isActive ? (
+          <div className="deadline-card-active-owner" style={{ '--active-color': activeColor } as CardStyle}>
+            <ProfileAvatar
+              avatarPath={activeProfile?.avatarPath}
+              color={activeColor}
+              name={activeOwnerName}
+              size={22}
+            />
+            <Zap fill="currentColor" size={13} />
+            <span>{t.card.activeBy(activeOwnerName)}</span>
+          </div>
+        ) : null}
 
         <h3
           className={cn(
@@ -398,17 +498,24 @@ function DeadlineCardComponent({
             <span className="h-2.5 w-2.5 rounded-full bg-[var(--deadline-border)] shadow-[0_0_12px_var(--deadline-glow)]" />
             {visual.label}
           </div>
+          {card.status === 'done' ? (
+            <div className="deadline-card-completion-date">
+              <CalendarCheck2 size={15} />
+              <span>{completionDate ? t.card.completedAt(completionDate) : t.card.completionUnknown}</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {isMenuOpen ? (
+      {isMenuOpen && menuPosition ? createPortal(
         <div
-          className={cn(
-            'absolute z-30 min-w-56 rounded-2xl border border-white/10 bg-[#080a0f]/95 p-1.5 shadow-2xl backdrop-blur-xl',
-            !menuPosition && 'right-5 top-16',
-          )}
+          aria-label={t.card.actions}
+          className="card-action-menu fixed z-[70] w-60 rounded-2xl border border-white/10 bg-[#080a0f]/96 p-1.5 shadow-2xl backdrop-blur-xl"
           data-card-action="true"
-          style={menuPosition ? { left: menuPosition.x, top: menuPosition.y } : undefined}
+          data-card-menu-owner={card.id}
+          ref={menuRef}
+          role="menu"
+          style={{ left: menuPosition.x, top: menuPosition.y }}
         >
           <button className="menu-item" type="button" onClick={handleEdit}>
             <Pencil size={15} />
@@ -418,10 +525,12 @@ function DeadlineCardComponent({
             <CheckCircle2 size={15} />
             {card.status === 'done' ? t.card.backToWork : t.card.markDone}
           </button>
-          <button className="menu-item" type="button" onClick={handleToggleActive}>
-            <Zap fill={card.isActive ? 'currentColor' : 'none'} size={15} />
-            {card.isActive ? t.card.deactivate : t.card.activate}
-          </button>
+          {card.status !== 'done' ? (
+            <button className="menu-item" type="button" onClick={handleToggleActive}>
+              <Zap fill={card.isActive ? 'currentColor' : 'none'} size={15} />
+              {activeActionLabel}
+            </button>
+          ) : null}
           {linkedCount > 0 ? (
             <button className="menu-item menu-item-danger" type="button" onClick={handleDeleteAllLinks}>
               <Unlink size={15} />
@@ -438,7 +547,8 @@ function DeadlineCardComponent({
               ? t.card.deleteSelected(selectedCardIds.length)
               : t.card.delete}
           </button>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </article>
   )

@@ -21,6 +21,8 @@ export type Database = {
           deadline_at: string
           status: CardStatus
           is_active: boolean
+          active_by: string | null
+          completed_at: string | null
           board_scope: BoardScope
           project_id: string | null
           x: number
@@ -44,6 +46,8 @@ export type Database = {
           project_id?: string | null
           status?: CardStatus
           is_active?: boolean
+          active_by?: string | null
+          completed_at?: string | null
           x?: number
           y?: number
           w?: number
@@ -64,11 +68,38 @@ export type Database = {
           project_id?: string | null
           status?: CardStatus
           is_active?: boolean
+          active_by?: string | null
+          completed_at?: string | null
           x?: number
           y?: number
           w?: number
           h?: number
           created_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          id: string
+          nickname: string
+          avatar_path: string | null
+          active_color: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          nickname: string
+          avatar_path?: string | null
+          active_color?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          nickname?: string
+          avatar_path?: string | null
+          active_color?: string
           updated_at?: string
         }
         Relationships: []

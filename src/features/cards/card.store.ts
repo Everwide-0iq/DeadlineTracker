@@ -67,6 +67,7 @@ type CardState = {
   setNow: (now: number) => void
   subscribeRealtime: () => () => void
   toggleCardSelection: (id: string) => void
+  toggleCardActive: (id: string, userId: string | null) => Promise<void>
   updateCard: (id: string, input: UpdateCardInput) => Promise<void>
 }
 
@@ -98,6 +99,14 @@ const getMessage = (error: unknown) => {
       return t.errors.cardsMissingImage
     }
 
+    if (message?.includes("Could not find the 'active_by' column") || message?.includes('active_by')) {
+      return t.errors.cardsMissingActiveOwner
+    }
+
+    if (message?.includes("Could not find the 'completed_at' column") || message?.includes('completed_at')) {
+      return t.errors.cardsMissingCompletedAt
+    }
+
     if (message?.includes("Could not find the 'is_active' column") || message?.includes('is_active')) {
       return t.errors.cardsMissingActive
     }
@@ -122,11 +131,48 @@ const upsertCard = (cards: Card[], card: Card) => {
   return next
 }
 
-const applyLocalPatch = (card: Card, input: UpdateCardInput): Card => ({
-  ...card,
-  ...input,
-  updatedAt: new Date().toISOString(),
-})
+export const applyOptimisticCardPatch = (card: Card, input: UpdateCardInput): Card => {
+  const updatedAt = new Date().toISOString()
+  const next: Card = { ...card, ...input, updatedAt }
+
+  if (input.status === 'done') {
+    next.status = 'done'
+    next.isActive = false
+    next.activeBy = null
+    next.completedAt = card.status === 'done' ? card.completedAt : updatedAt
+    return next
+  }
+
+  if (input.status === 'todo' && card.status === 'done') {
+    next.completedAt = null
+  }
+
+  if (input.isActive === false) {
+    next.activeBy = null
+  }
+
+  if (next.status === 'done') {
+    next.isActive = false
+    next.activeBy = null
+  }
+
+  return next
+}
+
+export function getActivityTogglePatch(
+  card: Card,
+  userId: string | null,
+): UpdateCardInput | null {
+  if (card.status === 'done' || !userId) {
+    return null
+  }
+
+  const isOwnedByCurrentUser = card.isActive && card.activeBy === userId
+  return {
+    activeBy: isOwnedByCurrentUser ? null : userId,
+    isActive: !isOwnedByCurrentUser,
+  }
+}
 
 const uniqueIds = (ids: string[]) => Array.from(new Set(ids))
 
@@ -331,9 +377,22 @@ export const useCardStore = create<CardState>((set, get) => ({
       },
       (realtimeStatus) => set({ realtimeStatus }),
     ),
+  toggleCardActive: async (id, userId) => {
+    const card = get().cards.find((item) => item.id === id)
+
+    if (!card) {
+      return
+    }
+
+    const patch = getActivityTogglePatch(card, userId)
+
+    if (patch) {
+      await get().updateCard(id, patch)
+    }
+  },
   updateCard: async (id, input) => {
     const previousCard = get().cards.find((card) => card.id === id) ?? null
-    const optimisticCard = previousCard ? applyLocalPatch(previousCard, input) : null
+    const optimisticCard = previousCard ? applyOptimisticCardPatch(previousCard, input) : null
     set((state) => ({
       cards: state.cards.map((card) => (card.id === id && optimisticCard ? optimisticCard : card)),
       saveError: null,
