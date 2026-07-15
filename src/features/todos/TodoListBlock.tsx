@@ -1,10 +1,11 @@
 import { CalendarClock, Check, CheckSquare2, ChevronDown, ChevronUp, GripVertical, MoreHorizontal, Plus, Trash2, Zap } from 'lucide-react'
-import { memo, useMemo, useState, type CSSProperties, type PointerEvent } from 'react'
+import { memo, useCallback, useMemo, type CSSProperties, type PointerEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
 import { formatCompletionDate } from '../cards/completion.ts'
 import { formatCountdown } from '../cards/countdown.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
+import { useCompletionAnimation } from '../cards/useCompletionAnimation.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
@@ -15,6 +16,7 @@ import { TodoImageView } from './TodoImageView.tsx'
 import { useTodoStore } from './todo.store.ts'
 import type { TodoBlock, TodoItem } from './todo.types.ts'
 import { getTodoBlockStatus } from './todo.utils.ts'
+import { useTodoItemReorder } from './useTodoItemReorder.ts'
 
 type TodoListBlockProps = {
   block: TodoBlock
@@ -24,12 +26,13 @@ type TodoListBlockProps = {
 
 type Style = CSSProperties & Record<`--${string}`, string | number>
 
-const TodoListItem = memo(function TodoListItem({ item, index, count, onMove, onStartReorder }: {
+const TodoListItem = memo(function TodoListItem({ item, index, count, onMove, onStartReorder, reorderStyle }: {
   item: TodoItem
   index: number
   count: number
   onMove: (id: string, direction: -1 | 1) => void
-  onStartReorder: (item: TodoItem, event: PointerEvent<HTMLButtonElement>) => void
+  onStartReorder: (id: string, event: PointerEvent<HTMLButtonElement>) => void
+  reorderStyle?: CSSProperties
 }) {
   const updateItem = useTodoStore((state) => state.updateItem)
   const toggleActive = useTodoStore((state) => state.toggleItemActive)
@@ -42,15 +45,16 @@ const TodoListItem = memo(function TodoListItem({ item, index, count, onMove, on
   const name = profile?.nickname ?? t.card.activeOwnerUnknown
   const color = profile?.activeColor ?? defaultActiveColor
   const date = formatCompletionDate(item.completedAt, language)
+  const isCompleting = useCompletionAnimation(item.isDone)
 
   return (
-    <div className={cn('todo-list-item', item.isDone && 'todo-list-item-done', item.isActive && 'todo-list-item-active')} data-todo-list-item-id={item.id} style={{ '--todo-owner-color': color } as Style}>
+    <div className={cn('todo-list-item', item.isDone && 'todo-list-item-done', item.isActive && 'todo-list-item-active', isCompleting && 'todo-item-row-completed')} data-todo-list-item-id={item.id} data-todo-reorder-id={item.id} style={{ '--todo-owner-color': color, ...reorderStyle } as Style}>
       <button className="todo-item-check" type="button" onClick={() => updateItem(item.id, { isDone: !item.isDone }).catch(() => undefined)}>{item.isDone ? <Check size={15} strokeWidth={3} /> : null}</button>
       <button className="todo-list-item-copy" type="button" onClick={() => editItem(item.id)}>
         <strong>{item.title}</strong>
         {item.description ? <span>{item.description}</span> : null}
         {item.isActive || item.isDone ? (
-          <small><ProfileAvatar avatarPath={profile?.avatarPath} color={color} name={name} size={18} />{item.isDone ? (date ? t.todo.completedBy(name, date) : t.card.completionUnknown) : t.todo.activeBy(name)}</small>
+          <small><ProfileAvatar avatarPath={profile?.avatarPath} className={cn(isCompleting && 'completion-avatar-pulse')} color={color} name={name} size={18} />{item.isDone ? (date ? t.todo.completedBy(name, date) : t.card.completionUnknown) : t.todo.activeBy(name)}</small>
         ) : null}
       </button>
       {item.imagePath ? <TodoImageView alt={item.title} path={item.imagePath} /> : null}
@@ -58,7 +62,7 @@ const TodoListItem = memo(function TodoListItem({ item, index, count, onMove, on
         <button aria-label={t.card.activate} className="todo-row-action" disabled={item.isDone} type="button" onClick={() => toggleActive(item.id, userId).catch(() => undefined)}><Zap fill={item.isActive ? 'currentColor' : 'none'} size={15} /></button>
         <button aria-label={t.todo.moveUp} className="todo-row-action" disabled={index === 0} type="button" onClick={() => onMove(item.id, -1)}><ChevronUp size={15} /></button>
         <button aria-label={t.todo.moveDown} className="todo-row-action" disabled={index === count - 1} type="button" onClick={() => onMove(item.id, 1)}><ChevronDown size={15} /></button>
-        <button aria-label={t.todo.reorder} className="todo-item-drag" type="button" onPointerDown={(event) => onStartReorder(item, event)}><GripVertical size={16} /></button>
+        <button aria-label={t.todo.reorder} className="todo-item-drag" type="button" onPointerDown={(event) => onStartReorder(item.id, event)}><GripVertical size={16} /></button>
       </div>
     </div>
   )
@@ -74,9 +78,13 @@ function TodoListBlockComponent({ block, items, now }: TodoListBlockProps) {
   const confirm = useFeedbackStore((state) => state.confirm)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
-  const [draggedId, setDraggedId] = useState<string | null>(null)
   const status = useMemo(() => getTodoBlockStatus(items, block.id), [block.id, items])
   const visible = expanded ? items : items.slice(0, 10)
+  const itemIds = useMemo(() => items.map((item) => item.id), [items])
+  const commitReorder = useCallback((orderedIds: string[]) => {
+    void reorder(block.id, orderedIds).catch(() => undefined)
+  }, [block.id, reorder])
+  const { draggedId, getItemStyle, startReorder } = useTodoItemReorder(itemIds, commitReorder)
   const visual = block.deadlineAt
     ? getDeadlineVisualState(block.deadlineAt, status.isDone ? 'done' : 'todo', now, language)
     : { backgroundColor: 'rgb(15 33 39 / .72)', borderColor: '#55d9e8', glowColor: 'rgb(85 217 232 / .4)', textColor: '#8cecf3' }
@@ -97,40 +105,6 @@ function TodoListBlockComponent({ block, items, now }: TodoListBlockProps) {
     void reorder(block.id, ordered.map((candidate) => candidate.id)).catch(() => undefined)
   }
 
-  const startReorder = (item: TodoItem, event: PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    let targetId = item.id
-    let started = event.pointerType !== 'touch'
-    let timer = started ? null : window.setTimeout(() => { started = true; setDraggedId(item.id) }, 280)
-    if (started) setDraggedId(item.id)
-    const movePointer = (pointer: globalThis.PointerEvent) => {
-      if (!started) {
-        if (Math.hypot(pointer.clientX - event.clientX, pointer.clientY - event.clientY) > 8 && timer !== null) { clearTimeout(timer); timer = null }
-        return
-      }
-      const row = document.elementFromPoint(pointer.clientX, pointer.clientY)?.closest<HTMLElement>('[data-todo-list-item-id]')
-      if (row?.dataset.todoListItemId) targetId = row.dataset.todoListItemId
-    }
-    const up = () => {
-      if (timer !== null) clearTimeout(timer)
-      window.removeEventListener('pointermove', movePointer)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
-      setDraggedId(null)
-      if (!started || targetId === item.id) return
-      const from = items.findIndex((candidate) => candidate.id === item.id)
-      const to = items.findIndex((candidate) => candidate.id === targetId)
-      if (from < 0 || to < 0) return
-      const ordered = [...items]
-      const [moved] = ordered.splice(from, 1)
-      ordered.splice(to, 0, moved)
-      void reorder(block.id, ordered.map((candidate) => candidate.id)).catch(() => undefined)
-    }
-    window.addEventListener('pointermove', movePointer)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
-  }
-
   const handleDelete = async () => {
     const confirmed = await confirm({ confirmLabel: t.todo.deleteBlock, description: t.todo.deleteBlockDescription(block.title), title: t.todo.deleteBlockTitle, tone: 'danger' })
     if (confirmed) void deleteBlocks([block.id]).catch(() => undefined)
@@ -149,7 +123,7 @@ function TodoListBlockComponent({ block, items, now }: TodoListBlockProps) {
       </div>
       <div className="todo-progress"><span style={{ width: `${status.progress * 100}%` }} /></div>
       <div className="todo-list-items" data-dragging-item={draggedId ?? undefined}>
-        {visible.map((item, index) => <TodoListItem count={items.length} index={index} item={item} key={item.id} onMove={move} onStartReorder={startReorder} />)}
+        {visible.map((item, index) => <TodoListItem count={items.length} index={index} item={item} key={item.id} onMove={move} onStartReorder={startReorder} reorderStyle={getItemStyle(item.id)} />)}
         {items.length === 0 ? <div className="todo-empty-state">{t.todo.empty}</div> : null}
       </div>
       <footer className="todo-list-footer">

@@ -1,4 +1,5 @@
 import { requireSupabase } from '../../lib/supabase.ts'
+import { createSignedUrlCache } from '../../lib/signedUrlCache.ts'
 
 export const avatarBucket = 'avatars'
 
@@ -7,19 +8,16 @@ const maxStoredBytes = 480 * 1024
 const signedUrlLifetimeSeconds = 60 * 60
 const signedUrlRefreshPaddingMs = 60 * 1000
 
-type SignedUrlCacheEntry = {
-  expiresAt: number
-  url: string
-}
-
 export type PreparedAvatar = {
   blob: Blob
   objectUrl: string
   size: number
 }
 
-const signedUrlCache = new Map<string, SignedUrlCacheEntry>()
-const pendingSignedUrls = new Map<string, Promise<string>>()
+const signedUrls = createSignedUrlCache({
+  lifetimeSeconds: signedUrlLifetimeSeconds,
+  refreshPaddingMs: signedUrlRefreshPaddingMs,
+})
 
 function loadImage(file: File) {
   return new Promise<{ image: HTMLImageElement; objectUrl: string }>((resolve, reject) => {
@@ -119,8 +117,7 @@ export async function removeAvatar(path: string | null) {
     return
   }
 
-  signedUrlCache.delete(path)
-  pendingSignedUrls.delete(path)
+  signedUrls.invalidate(path)
   const { error } = await requireSupabase().storage.from(avatarBucket).remove([path])
 
   if (error) {
@@ -129,34 +126,17 @@ export async function removeAvatar(path: string | null) {
 }
 
 export function getAvatarSignedUrl(path: string) {
-  const cached = signedUrlCache.get(path)
-
-  if (cached && cached.expiresAt > Date.now() + signedUrlRefreshPaddingMs) {
-    return Promise.resolve(cached.url)
-  }
-
-  const pending = pendingSignedUrls.get(path)
-
-  if (pending) {
-    return pending
-  }
-
-  const request = requireSupabase()
-    .storage.from(avatarBucket)
-    .createSignedUrl(path, signedUrlLifetimeSeconds)
-    .then(({ data, error }) => {
+  return signedUrls.get(path, () =>
+    requireSupabase()
+      .storage.from(avatarBucket)
+      .createSignedUrl(path, signedUrlLifetimeSeconds)
+      .then(({ data, error }) => {
       if (error) {
         throw error
       }
-
-      signedUrlCache.set(path, {
-        expiresAt: Date.now() + signedUrlLifetimeSeconds * 1000,
-        url: data.signedUrl,
-      })
       return data.signedUrl
-    })
-    .finally(() => pendingSignedUrls.delete(path))
-
-  pendingSignedUrls.set(path, request)
-  return request
+      }),
+  )
 }
+
+export const getCachedAvatarSignedUrl = (path: string) => signedUrls.peek(path)

@@ -122,7 +122,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
       style={style}
     >
       {card.isActive ? <span aria-hidden="true" className="deadline-card-active-rim" /> : null}
-      <div className="relative z-10">
+      <div className="deadline-card-content relative z-10">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)]">
             {card.status === 'done' ? <CheckCircle2 size={19} /> : <Flame size={19} />}
@@ -196,7 +196,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
           <div className="mobile-completion-date">
             <ProfileAvatar
               avatarPath={completedProfile?.avatarPath}
-              className="completion-avatar-pulse"
+              className={cn(isCompleting && 'completion-avatar-pulse')}
               color={completedOwnerColor}
               name={completedOwnerName}
               size={21}
@@ -400,7 +400,7 @@ export function MobileCardList({
       {!isLoading && !error && hasEntries ? (
         <AddMenu
           allowText={false}
-          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2"
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30"
           mobile
           onAddCard={onCreate}
           onAddTodo={onCreateTodo}

@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
-import { getAvatarSignedUrl } from './avatar.api.ts'
+import { usePrivateImage } from '../../lib/usePrivateImage.ts'
+import { getAvatarSignedUrl, getCachedAvatarSignedUrl } from './avatar.api.ts'
 
 type ProfileAvatarProps = {
   avatarPath?: string | null
@@ -19,34 +20,10 @@ export function ProfileAvatar({
   name,
   size = 36,
 }: ProfileAvatarProps) {
-  const [url, setUrl] = useState<string | null>(null)
-  const [failedPath, setFailedPath] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    setUrl(null)
-    setFailedPath(null)
-
-    if (!avatarPath) {
-      return undefined
-    }
-
-    getAvatarSignedUrl(avatarPath)
-      .then((signedUrl) => {
-        if (active) {
-          setUrl(signedUrl)
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setFailedPath(avatarPath)
-        }
-      })
-
-    return () => {
-      active = false
-    }
-  }, [avatarPath])
+  const { failed, isLoaded, markFailed, markLoaded, url } = usePrivateImage(avatarPath, {
+    getCachedUrl: getCachedAvatarSignedUrl,
+    getUrl: getAvatarSignedUrl,
+  })
 
   const style: AvatarStyle = {
     '--profile-color': color,
@@ -60,10 +37,20 @@ export function ProfileAvatar({
     <span
       aria-hidden="true"
       className={cn('profile-avatar', className)}
+      data-image-state={failed ? 'failed' : isLoaded ? 'loaded' : avatarPath ? 'loading' : 'initial'}
       style={style}
     >
-      {url && failedPath !== avatarPath ? (
-        <img alt="" draggable={false} src={url} onError={() => setFailedPath(avatarPath)} />
+      {url && !failed ? (
+        <img
+          alt=""
+          decoding="async"
+          draggable={false}
+          src={url}
+          onError={markFailed}
+          onLoad={markLoaded}
+        />
+      ) : avatarPath && !failed ? (
+        <span className="profile-avatar-loading" />
       ) : (
         <span>{initial}</span>
       )}

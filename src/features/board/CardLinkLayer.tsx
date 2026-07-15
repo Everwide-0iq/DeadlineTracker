@@ -9,26 +9,17 @@ import {
 } from '../cardLinks/cardLink.types.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
+import type { ConnectableBoardObjectMetric } from './boardObject.types.ts'
 
 export type DraftCardLink = {
   from: BoardLinkEndpoint
   pointer: Point
 }
 
-export type BoardLinkNodeMetric = {
-  color: string
-  h: number
-  id: string
-  kind: BoardLinkNodeKind
-  w: number
-  x: number
-  y: number
-}
-
 type CardLinkLayerProps = {
   draftLink: DraftCardLink | null
   links: CardLink[]
-  nodes: BoardLinkNodeMetric[]
+  nodes: ConnectableBoardObjectMetric[]
   selectedLinkId: string | null
   onDeleteLink: (id: string) => void
   onSelectLink: (id: string | null) => void
@@ -70,7 +61,7 @@ const isHorizontalSide = (side: CardLinkSide) => side === 'left' || side === 'ri
 
 const getNodeKey = (kind: BoardLinkNodeKind, id: string) => `${kind}:${id}`
 
-function getNodeRect(node: BoardLinkNodeMetric): NodeRect {
+function getNodeRect(node: ConnectableBoardObjectMetric): NodeRect {
   return {
     bottom: node.y + node.h,
     key: getNodeKey(node.kind, node.id),
@@ -366,7 +357,7 @@ function CardLinkLayerComponent({
   const nodeByKey = useMemo(
     () => hasLinkWork
       ? new Map(nodes.map((node) => [getNodeKey(node.kind, node.id), node]))
-      : new Map<string, BoardLinkNodeMetric>(),
+      : new Map<string, ConnectableBoardObjectMetric>(),
     [hasLinkWork, nodes],
   )
   const nodeRectByKey = useMemo(

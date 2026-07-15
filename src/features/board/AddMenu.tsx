@@ -70,16 +70,18 @@ export function AddMenu({ allowText = true, className, mobile = false, onAddCard
   return (
     <div className={cn('add-menu-root', mobile ? 'add-menu-mobile-root' : 'relative', className)} ref={rootRef}>
       <button
+        aria-label={mobile ? t.mobile.add : undefined}
         aria-expanded={open}
         aria-haspopup="menu"
         className={cn(mobile ? 'mobile-create-button' : 'primary-button w-full justify-center py-3 text-base')}
+        title={mobile ? t.mobile.add : undefined}
         type="button"
         onClick={() => setOpen((current) => !current)}
       >
-        <span className={cn(mobile && 'grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--accent)]')}>
+        <span className={cn(mobile && 'grid place-items-center')}>
           <Plus size={mobile ? 21 : 20} strokeWidth={2.7} />
         </span>
-        <span>{mobile ? t.mobile.add : t.sidebar.add}</span>
+        {!mobile ? <span>{t.sidebar.add}</span> : null}
         {!mobile ? <ChevronDown className={cn('add-menu-chevron', open && 'rotate-180')} size={16} /> : null}
       </button>
       {open ? (

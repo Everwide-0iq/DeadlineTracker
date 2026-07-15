@@ -12,7 +12,7 @@ import {
   Unlink,
   Zap,
 } from 'lucide-react'
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
 import type { CardLinkSide } from '../cardLinks/cardLink.types.ts'
@@ -20,6 +20,7 @@ import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
 import { formatCompletionDate } from '../cards/completion.ts'
 import { formatCountdown } from '../cards/countdown.ts'
 import { getDeadlineVisualState } from '../cards/deadlineColor.ts'
+import { useCompletionAnimation } from '../cards/useCompletionAnimation.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
@@ -33,6 +34,7 @@ import { useTodoStore } from './todo.store.ts'
 import type { TodoBlock as TodoBlockModel, TodoItem } from './todo.types.ts'
 import { getTodoBlockStatus } from './todo.utils.ts'
 import { useCardStore } from '../cards/card.store.ts'
+import { useTodoItemReorder } from './useTodoItemReorder.ts'
 
 type TodoBlockProps = {
   block: TodoBlockModel
@@ -61,12 +63,14 @@ const TodoItemRow = memo(function TodoItemRow({
   itemCount,
   onMove,
   onStartReorder,
+  reorderStyle,
 }: {
   index: number
   item: TodoItem
   itemCount: number
   onMove: (id: string, direction: -1 | 1) => void
-  onStartReorder: (item: TodoItem, event: PointerEvent<HTMLButtonElement>) => void
+  onStartReorder: (id: string, event: PointerEvent<HTMLButtonElement>) => void
+  reorderStyle?: CSSProperties
 }) {
   const updateItem = useTodoStore((state) => state.updateItem)
   const toggleItemActive = useTodoStore((state) => state.toggleItemActive)
@@ -82,6 +86,7 @@ const TodoItemRow = memo(function TodoItemRow({
   const profileName = profile?.nickname ?? t.card.activeOwnerUnknown
   const profileColor = profile?.activeColor ?? defaultActiveColor
   const completedAt = formatCompletionDate(item.completedAt, language)
+  const isCompleting = useCompletionAnimation(item.isDone)
 
   const handleDelete = async () => {
     const confirmed = await confirm({
@@ -95,9 +100,15 @@ const TodoItemRow = memo(function TodoItemRow({
 
   return (
     <div
-      className={cn('todo-item-row', item.isDone && 'todo-item-row-done', item.isActive && 'todo-item-row-active')}
+      className={cn(
+        'todo-item-row',
+        item.isDone && 'todo-item-row-done',
+        item.isActive && 'todo-item-row-active',
+        isCompleting && 'todo-item-row-completed',
+      )}
       data-todo-item-id={item.id}
-      style={{ '--todo-owner-color': profileColor } as TodoStyle}
+      data-todo-reorder-id={item.id}
+      style={{ '--todo-owner-color': profileColor, ...reorderStyle } as TodoStyle}
     >
       <button
         aria-label={item.isDone ? t.card.backToWork : t.card.markDone}
@@ -123,7 +134,7 @@ const TodoItemRow = memo(function TodoItemRow({
           <small className="todo-item-owner todo-item-completed-owner">
             <ProfileAvatar
               avatarPath={profile?.avatarPath}
-              className="completion-avatar-pulse"
+              className={cn(isCompleting && 'completion-avatar-pulse')}
               color={profileColor}
               name={profileName}
               size={18}
@@ -148,7 +159,7 @@ const TodoItemRow = memo(function TodoItemRow({
         <button aria-label={t.todo.moveDown} className="todo-row-action" disabled={index === itemCount - 1} type="button" onClick={() => onMove(item.id, 1)}><ChevronDown size={14} /></button>
         <button aria-label={t.card.edit} className="todo-row-action" type="button" onClick={() => openEditItem(item.id)}><Pencil size={13} /></button>
         <button aria-label={t.todo.deleteItem} className="todo-row-action todo-row-action-danger" type="button" onClick={() => void handleDelete()}><Trash2 size={13} /></button>
-        <button aria-label={t.todo.reorder} className="todo-item-drag" type="button" onPointerDown={(event) => onStartReorder(item, event)}><GripVertical size={15} /></button>
+        <button aria-label={t.todo.reorder} className="todo-item-drag" type="button" onPointerDown={(event) => onStartReorder(item.id, event)}><GripVertical size={15} /></button>
       </div>
     </div>
   )
@@ -168,12 +179,10 @@ function TodoBlockComponent({
   onStartConnection,
 }: TodoBlockProps) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
   const rootRef = useRef<HTMLElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const expanded = useTodoStore((state) => state.expandedBlockIds.includes(block.id))
   const toggleExpanded = useTodoStore((state) => state.toggleBlockExpanded)
-  const selectedIds = useTodoStore((state) => state.selectedBlockIds)
   const selectBlocks = useTodoStore((state) => state.selectBlocks)
   const toggleSelection = useTodoStore((state) => state.toggleBlockSelection)
   const selectCard = useCardStore((state) => state.selectCard)
@@ -189,6 +198,11 @@ function TodoBlockComponent({
   const resize = useResizeTodoBlock(block, cameraZoom, canDrag)
   const status = useMemo(() => getTodoBlockStatus(items, block.id), [block.id, items])
   const visibleItems = expanded ? items : items.slice(0, 10)
+  const itemIds = useMemo(() => items.map((item) => item.id), [items])
+  const commitReorder = useCallback((orderedIds: string[]) => {
+    void reorderItems(block.id, orderedIds).catch(() => undefined)
+  }, [block.id, reorderItems])
+  const { draggedId, getItemStyle, startReorder } = useTodoItemReorder(itemIds, commitReorder)
   const visual = block.deadlineAt
     ? getDeadlineVisualState(block.deadlineAt, status.isDone ? 'done' : 'todo', now, language)
     : {
@@ -238,49 +252,6 @@ function TodoBlockComponent({
     void reorderItems(block.id, ordered.map((item) => item.id)).catch(() => undefined)
   }
 
-  const startReorder = (item: TodoItem, event: PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return
-    event.preventDefault()
-    event.stopPropagation()
-    let targetId = item.id
-    let started = event.pointerType !== 'touch'
-    let timer = started ? null : window.setTimeout(() => {
-      started = true
-      setDraggedItemId(item.id)
-    }, 280)
-    if (started) setDraggedItemId(item.id)
-
-    const move = (moveEvent: globalThis.PointerEvent) => {
-      if (!started) {
-        if (Math.hypot(moveEvent.clientX - event.clientX, moveEvent.clientY - event.clientY) > 8 && timer !== null) {
-          clearTimeout(timer)
-          timer = null
-        }
-        return
-      }
-      const row = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)?.closest<HTMLElement>('[data-todo-item-id]')
-      if (row?.dataset.todoItemId) targetId = row.dataset.todoItemId
-    }
-    const up = () => {
-      if (timer !== null) clearTimeout(timer)
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
-      setDraggedItemId(null)
-      if (!started || targetId === item.id) return
-      const from = items.findIndex((candidate) => candidate.id === item.id)
-      const to = items.findIndex((candidate) => candidate.id === targetId)
-      if (from < 0 || to < 0) return
-      const ordered = [...items]
-      const [moved] = ordered.splice(from, 1)
-      ordered.splice(to, 0, moved)
-      void reorderItems(block.id, ordered.map((candidate) => candidate.id)).catch(() => undefined)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
-  }
-
   const handleSelect = (event: MouseEvent<HTMLElement>) => {
     if (rootRef.current?.dataset.todoDragMoved === 'true') return
     if (event.ctrlKey || event.metaKey || event.shiftKey) toggleSelection(block.id)
@@ -291,6 +262,7 @@ function TodoBlockComponent({
   }
 
   const handleDelete = async () => {
+    const selectedIds = useTodoStore.getState().selectedBlockIds
     const ids = isSelected && selectedIds.length > 1 ? selectedIds : [block.id]
     const confirmed = await confirm({
       confirmLabel: t.todo.deleteBlock,
@@ -346,9 +318,17 @@ function TodoBlockComponent({
       </div>
       <div className="todo-progress"><span style={{ width: `${status.progress * 100}%` }} /></div>
 
-      <div className="todo-items" data-dragging-item={draggedItemId ?? undefined}>
+      <div className="todo-items" data-dragging-item={draggedId ?? undefined}>
         {visibleItems.map((item, index) => (
-          <TodoItemRow index={index} item={item} itemCount={items.length} key={item.id} onMove={moveItem} onStartReorder={startReorder} />
+          <TodoItemRow
+            index={index}
+            item={item}
+            itemCount={items.length}
+            key={item.id}
+            onMove={moveItem}
+            onStartReorder={startReorder}
+            reorderStyle={getItemStyle(item.id)}
+          />
         ))}
         {items.length === 0 ? <div className="todo-empty-state">{t.todo.empty}</div> : null}
       </div>

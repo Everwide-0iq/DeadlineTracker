@@ -83,6 +83,9 @@ const upsertText = (texts: BoardText[], text: BoardText) => {
   return next
 }
 
+const restoreTextIfMissing = (texts: BoardText[], text: BoardText) =>
+  texts.some((item) => item.id === text.id) ? texts : upsertText(texts, text)
+
 const applyLocalPatch = (text: BoardText, input: UpdateBoardTextInput): BoardText => ({
   ...text,
   ...input,
@@ -111,7 +114,9 @@ export const useBoardTextStore = create<BoardTextState>((set, get) => ({
     }
   },
   deleteText: async (id) => {
-    const previousTexts = get().texts
+    const previousState = get()
+    const deletedText = previousState.texts.find((text) => text.id === id) ?? null
+    const wasSelected = previousState.selectedTextId === id
     set((state) => ({
       saveError: null,
       selectedTextId: state.selectedTextId === id ? null : state.selectedTextId,
@@ -121,7 +126,11 @@ export const useBoardTextStore = create<BoardTextState>((set, get) => ({
     try {
       await deleteBoardTextApi(id)
     } catch (error) {
-      set({ saveError: getMessage(error), texts: previousTexts })
+      set((state) => ({
+        saveError: getMessage(error),
+        selectedTextId: wasSelected && state.selectedTextId === null ? id : state.selectedTextId,
+        texts: deletedText ? restoreTextIfMissing(state.texts, deletedText) : state.texts,
+      }))
       throw error
     }
   },
@@ -185,20 +194,28 @@ export const useBoardTextStore = create<BoardTextState>((set, get) => ({
     }),
   updateText: async (id, input) => {
     const previousText = get().texts.find((text) => text.id === id) ?? null
+    const optimisticText = previousText ? applyLocalPatch(previousText, input) : null
     set((state) => ({
       saveError: null,
-      texts: state.texts.map((text) => (text.id === id ? applyLocalPatch(text, input) : text)),
+      texts: state.texts.map((text) =>
+        text.id === id && optimisticText ? optimisticText : text,
+      ),
     }))
 
     try {
       const text = await updateBoardTextApi(id, input)
       set((state) => ({ editor: null, texts: upsertText(state.texts, text) }))
     } catch (error) {
-      if (previousText) {
-        set((state) => ({ saveError: getMessage(error), texts: upsertText(state.texts, previousText) }))
-      } else {
-        set({ saveError: getMessage(error) })
-      }
+      set((state) => {
+        const currentText = state.texts.find((text) => text.id === id)
+        const shouldRollback =
+          previousText && optimisticText && currentText?.updatedAt === optimisticText.updatedAt
+
+        return {
+          saveError: getMessage(error),
+          texts: shouldRollback ? upsertText(state.texts, previousText) : state.texts,
+        }
+      })
 
       throw error
     }

@@ -1,7 +1,8 @@
 import { ImageOff } from 'lucide-react'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
-import { getCardImageSignedUrl } from './cardImage.api.ts'
+import { usePrivateImage } from '../../lib/usePrivateImage.ts'
+import { getCachedCardImageSignedUrl, getCardImageSignedUrl } from './cardImage.api.ts'
 
 type CardImageViewProps = {
   alt: string
@@ -22,9 +23,10 @@ export function CardImageView({
   path,
   width,
 }: CardImageViewProps) {
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [isUnavailable, setIsUnavailable] = useState(false)
-  const [url, setUrl] = useState<string | null>(null)
+  const { failed: isUnavailable, isLoaded, markFailed, markLoaded, url } = usePrivateImage(path, {
+    getCachedUrl: getCachedCardImageSignedUrl,
+    getUrl: getCardImageSignedUrl,
+  })
   const imageRatio = useMemo(() => {
     if (!width || !height) {
       return null
@@ -35,34 +37,6 @@ export function CardImageView({
   const frameStyle: ImageFrameStyle | undefined = imageRatio
     ? { '--card-image-ratio': imageRatio.toFixed(4) }
     : undefined
-
-  useEffect(() => {
-    let isActive = true
-
-    setIsLoaded(false)
-    setIsUnavailable(false)
-    setUrl(null)
-
-    if (!path) {
-      return undefined
-    }
-
-    getCardImageSignedUrl(path)
-      .then((signedUrl) => {
-        if (isActive) {
-          setUrl(signedUrl)
-        }
-      })
-      .catch(() => {
-        if (isActive) {
-          setIsUnavailable(true)
-        }
-      })
-
-    return () => {
-      isActive = false
-    }
-  }, [path])
 
   if (!path) {
     return null
@@ -93,8 +67,8 @@ export function CardImageView({
             draggable={false}
             loading="lazy"
             src={url}
-            onError={() => setIsUnavailable(true)}
-            onLoad={() => setIsLoaded(true)}
+            onError={markFailed}
+            onLoad={markLoaded}
           />
         </>
       ) : null}

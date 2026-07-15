@@ -1,7 +1,8 @@
+import type { ConnectableBoardObjectKind } from '../board/boardObject.types.ts'
 import type { BoardScope } from '../cards/card.types.ts'
 
 export type CardLinkSide = 'top' | 'right' | 'bottom' | 'left'
-export type BoardLinkNodeKind = 'card' | 'todo'
+export type BoardLinkNodeKind = ConnectableBoardObjectKind
 
 export type BoardLinkEndpoint = {
   id: string

@@ -63,6 +63,13 @@ const upsertLink = (links: CardLink[], link: CardLink) => {
   return next
 }
 
+const restoreMissingLinks = (links: CardLink[], removedLinks: CardLink[]) =>
+  removedLinks.reduce(
+    (current, link) =>
+      current.some((item) => item.id === link.id) ? current : upsertLink(current, link),
+    links,
+  )
+
 const findMatchingLink = (links: CardLink[], input: CreateCardLinkInput) =>
   links.find(
     (link) =>
@@ -107,7 +114,9 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
     }
   },
   deleteLink: async (id) => {
-    const previousLinks = get().links
+    const previousState = get()
+    const removedLink = previousState.links.find((link) => link.id === id) ?? null
+    const wasSelected = previousState.selectedLinkId === id
     set((state) => ({
       links: state.links.filter((link) => link.id !== id),
       saveError: null,
@@ -117,7 +126,11 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
     try {
       await deleteCardLinkApi(id)
     } catch (error) {
-      set({ links: previousLinks, saveError: getMessage(error) })
+      set((state) => ({
+        links: removedLink ? restoreMissingLinks(state.links, [removedLink]) : state.links,
+        saveError: getMessage(error),
+        selectedLinkId: wasSelected && state.selectedLinkId === null ? id : state.selectedLinkId,
+      }))
       throw error
     }
   },
@@ -144,7 +157,7 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
       await deleteCardLinksForCardApi(cardId)
     } catch (error) {
       set((state) => ({
-        links: removedLinks.reduce(upsertLink, state.links),
+        links: restoreMissingLinks(state.links, removedLinks),
         saveError: getMessage(error),
       }))
       throw error
@@ -164,7 +177,7 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
     try {
       await deleteCardLinksForTodoBlockApi(blockId)
     } catch (error) {
-      set((state) => ({ links: removedLinks.reduce(upsertLink, state.links), saveError: getMessage(error) }))
+      set((state) => ({ links: restoreMissingLinks(state.links, removedLinks), saveError: getMessage(error) }))
       throw error
     }
   },

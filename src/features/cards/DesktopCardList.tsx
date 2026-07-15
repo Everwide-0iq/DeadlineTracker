@@ -148,7 +148,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
           <div className="deadline-list-completion-date">
             <ProfileAvatar
               avatarPath={completedProfile?.avatarPath}
-              className="completion-avatar-pulse"
+              className={cn(isCompleting && 'completion-avatar-pulse')}
               color={completedOwnerColor}
               name={completedOwnerName}
               size={20}

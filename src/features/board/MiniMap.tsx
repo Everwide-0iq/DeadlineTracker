@@ -8,7 +8,7 @@ import {
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import type { BoardCursor } from './useBoardCollaboration.ts'
-import type { BoardLinkNodeMetric } from './CardLinkLayer.tsx'
+import type { ConnectableBoardObjectMetric } from './boardObject.types.ts'
 import { useBoardMotionStore } from './boardMotion.store.ts'
 import type { BoardCamera } from './useBoardCamera.ts'
 
@@ -27,7 +27,7 @@ type WorldBounds = {
 type MiniMapProps = {
   camera: BoardCamera
   cursors: BoardCursor[]
-  nodes: BoardLinkNodeMetric[]
+  nodes: ConnectableBoardObjectMetric[]
   setCamera: (next: BoardCamera | ((current: BoardCamera) => BoardCamera)) => void
   viewportSize: ViewportSize
 }
@@ -54,7 +54,7 @@ function getViewportBounds(camera: BoardCamera, viewportSize: ViewportSize): Wor
 }
 
 function getMiniMapGeometry(
-  nodeMetrics: BoardLinkNodeMetric[],
+  nodeMetrics: ConnectableBoardObjectMetric[],
   camera: BoardCamera,
   viewportSize: ViewportSize,
 ) {

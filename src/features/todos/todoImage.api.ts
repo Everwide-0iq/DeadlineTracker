@@ -1,10 +1,14 @@
 import { requireSupabase } from '../../lib/supabase.ts'
+import { createSignedUrlCache } from '../../lib/signedUrlCache.ts'
 import type { PreparedCardImage } from '../cards/cardImage.api.ts'
 
 const bucket = 'todo-images'
 const lifetimeSeconds = 60 * 60
 const refreshPaddingMs = 60 * 1000
-const signedUrlCache = new Map<string, { expiresAt: number; url: string }>()
+const signedUrls = createSignedUrlCache({
+  lifetimeSeconds: lifetimeSeconds,
+  refreshPaddingMs: refreshPaddingMs,
+})
 
 export async function uploadTodoImage(itemId: string, userId: string, image: PreparedCardImage) {
   const path = `${userId}/${itemId}-${crypto.randomUUID()}.webp`
@@ -25,7 +29,7 @@ export async function uploadTodoImage(itemId: string, userId: string, image: Pre
 
 export async function removeTodoImage(path: string | null) {
   if (!path) return
-  signedUrlCache.delete(path)
+  signedUrls.invalidate(path)
   const supabase = requireSupabase()
   const { error } = await supabase.storage.from(bucket).remove([path])
   if (error) throw error
@@ -42,7 +46,7 @@ export async function cleanupPendingTodoImages() {
     if (paths.length === 0) return
     const { error: removeError } = await supabase.storage.from(bucket).remove(paths)
     if (removeError) throw removeError
-    paths.forEach((path) => signedUrlCache.delete(path))
+    signedUrls.invalidateMany(paths)
     const { error: queueError } = await supabase.from('todo_image_cleanup_queue').delete().in('image_path', paths)
     if (queueError) throw queueError
     if (paths.length < 100) return
@@ -50,11 +54,11 @@ export async function cleanupPendingTodoImages() {
 }
 
 export async function getTodoImageSignedUrl(path: string) {
-  const cached = signedUrlCache.get(path)
-  if (cached && cached.expiresAt > Date.now() + refreshPaddingMs) return cached.url
-  const { data, error } = await requireSupabase().storage.from(bucket).createSignedUrl(path, lifetimeSeconds)
-  if (error) throw error
-  signedUrlCache.set(path, { expiresAt: Date.now() + lifetimeSeconds * 1000, url: data.signedUrl })
-  return data.signedUrl
+  return signedUrls.get(path, async () => {
+    const { data, error } = await requireSupabase().storage.from(bucket).createSignedUrl(path, lifetimeSeconds)
+    if (error) throw error
+    return data.signedUrl
+  })
 }
 
+export const getCachedTodoImageSignedUrl = (path: string) => signedUrls.peek(path)

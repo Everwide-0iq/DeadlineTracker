@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useAuthStore } from '../auth/auth.store.ts'
 import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createTodoBlock as createTodoBlockApi,
@@ -86,6 +87,20 @@ const upsertItem = (items: TodoItem[], item: TodoItem) => {
   return next
 }
 
+const restoreMissingBlocks = (blocks: TodoBlock[], removedBlocks: TodoBlock[]) =>
+  removedBlocks.reduce(
+    (current, block) =>
+      current.some((item) => item.id === block.id) ? current : upsertBlock(current, block),
+    blocks,
+  )
+
+const restoreMissingItems = (items: TodoItem[], removedItems: TodoItem[]) =>
+  removedItems.reduce(
+    (current, item) =>
+      current.some((candidate) => candidate.id === item.id) ? current : upsertItem(current, item),
+    items,
+  )
+
 const getMessage = (error: unknown) => {
   const t = getCurrentTranslation()
 
@@ -101,7 +116,11 @@ const getMessage = (error: unknown) => {
   return t.errors.todosGeneric
 }
 
-function applyOptimisticItemPatch(item: TodoItem, input: UpdateTodoItemInput): TodoItem {
+export function applyOptimisticItemPatch(
+  item: TodoItem,
+  input: UpdateTodoItemInput,
+  actorId: string | null = null,
+): TodoItem {
   const updatedAt = new Date().toISOString()
   const next = { ...item, ...input, updatedAt }
 
@@ -110,6 +129,7 @@ function applyOptimisticItemPatch(item: TodoItem, input: UpdateTodoItemInput): T
     next.isActive = false
     next.activeBy = null
     next.completedAt = item.isDone ? item.completedAt : updatedAt
+    next.completedBy = item.isDone ? item.completedBy : actorId
   } else if (input.isDone === false && item.isDone) {
     next.completedAt = null
     next.completedBy = null
@@ -167,8 +187,10 @@ export const useTodoStore = create<TodoState>((set, get) => ({
     const deleteIds = uniqueIds(ids)
     if (deleteIds.length === 0) return
     const deleteSet = new Set(deleteIds)
-    const previousBlocks = get().blocks
-    const previousItems = get().items
+    const previousState = get()
+    const deletedBlocks = previousState.blocks.filter((block) => deleteSet.has(block.id))
+    const deletedItems = previousState.items.filter((item) => deleteSet.has(item.blockId))
+    const previouslySelectedIds = previousState.selectedBlockIds.filter((id) => deleteSet.has(id))
     set((state) => ({
       blocks: state.blocks.filter((block) => !deleteSet.has(block.id)),
       items: state.items.filter((item) => !deleteSet.has(item.blockId)),
@@ -179,7 +201,12 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       await deleteTodoBlocksApi(deleteIds)
       void cleanupPendingTodoImages().catch(() => undefined)
     } catch (error) {
-      set({ blocks: previousBlocks, items: previousItems, saveError: getMessage(error) })
+      set((state) => ({
+        blocks: restoreMissingBlocks(state.blocks, deletedBlocks),
+        items: restoreMissingItems(state.items, deletedItems),
+        saveError: getMessage(error),
+        selectedBlockIds: uniqueIds([...state.selectedBlockIds, ...previouslySelectedIds]),
+      }))
       throw error
     }
   },
@@ -191,7 +218,10 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       await deleteTodoItemApi(id)
       void cleanupPendingTodoImages().catch(() => undefined)
     } catch (error) {
-      set((state) => ({ items: upsertItem(state.items, previous), saveError: getMessage(error) }))
+      set((state) => ({
+        items: restoreMissingItems(state.items, [previous]),
+        saveError: getMessage(error),
+      }))
       throw error
     }
   },
@@ -239,7 +269,11 @@ export const useTodoStore = create<TodoState>((set, get) => ({
     }
   },
   reorderItems: async (blockId, orderedIds) => {
-    const previous = get().items
+    const previousSortOrder = new Map(
+      get().items
+        .filter((item) => item.blockId === blockId)
+        .map((item) => [item.id, item.sortOrder]),
+    )
     const order = new Map(orderedIds.map((id, index) => [id, (index + 1) * 1000]))
     set((state) => ({
       items: state.items.map((item) => {
@@ -252,7 +286,20 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       const items = await reorderTodoItemsApi(blockId, orderedIds)
       set((state) => ({ items: items.reduce(upsertItem, state.items) }))
     } catch (error) {
-      set({ items: previous, saveError: getMessage(error) })
+      set((state) => ({
+        items: state.items.map((item) => {
+          const attemptedSortOrder = order.get(item.id)
+          const previous = previousSortOrder.get(item.id)
+
+          return item.blockId === blockId &&
+            attemptedSortOrder !== undefined &&
+            previous !== undefined &&
+            item.sortOrder === attemptedSortOrder
+            ? { ...item, sortOrder: previous }
+            : item
+        }),
+        saveError: getMessage(error),
+      }))
       throw error
     }
   },
@@ -308,22 +355,32 @@ export const useTodoStore = create<TodoState>((set, get) => ({
   updateBlock: async (id, input) => {
     const previous = get().blocks.find((block) => block.id === id)
     if (!previous) return
+    const optimistic = { ...previous, ...input, updatedAt: new Date().toISOString() }
     set((state) => ({
-      blocks: state.blocks.map((block) => block.id === id ? { ...block, ...input } : block),
+      blocks: state.blocks.map((block) => block.id === id ? optimistic : block),
       saveError: null,
     }))
     try {
       const block = await updateTodoBlockApi(id, input)
       set((state) => ({ blocks: upsertBlock(state.blocks, block), blockEditor: null }))
     } catch (error) {
-      set((state) => ({ blocks: upsertBlock(state.blocks, previous), saveError: getMessage(error) }))
+      set((state) => {
+        const current = state.blocks.find((block) => block.id === id)
+        return {
+          blocks: current?.updatedAt === optimistic.updatedAt
+            ? upsertBlock(state.blocks, previous)
+            : state.blocks,
+          saveError: getMessage(error),
+        }
+      })
       throw error
     }
   },
   updateItem: async (id, input) => {
     const previous = get().items.find((item) => item.id === id)
     if (!previous) return
-    const optimistic = applyOptimisticItemPatch(previous, input)
+    const actorId = useAuthStore.getState().user?.id ?? null
+    const optimistic = applyOptimisticItemPatch(previous, input, actorId)
     set((state) => ({
       items: state.items.map((item) => item.id === id ? optimistic : item),
       saveError: null,
@@ -332,9 +389,16 @@ export const useTodoStore = create<TodoState>((set, get) => ({
       const item = await updateTodoItemApi(id, input)
       set((state) => ({ items: upsertItem(state.items, item), itemEditor: null }))
     } catch (error) {
-      set((state) => ({ items: upsertItem(state.items, previous), saveError: getMessage(error) }))
+      set((state) => {
+        const current = state.items.find((item) => item.id === id)
+        return {
+          items: current?.updatedAt === optimistic.updatedAt
+            ? upsertItem(state.items, previous)
+            : state.items,
+          saveError: getMessage(error),
+        }
+      })
       throw error
     }
   },
 }))
-

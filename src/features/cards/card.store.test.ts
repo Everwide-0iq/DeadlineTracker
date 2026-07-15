@@ -30,12 +30,13 @@ const createCard = (overrides: Partial<Card> = {}): Card => ({
 
 describe('applyOptimisticCardPatch', () => {
   it('clears activity and records a provisional completion time when completed', () => {
-    const card = applyOptimisticCardPatch(createCard(), { status: 'done' })
+    const card = applyOptimisticCardPatch(createCard(), { status: 'done' }, 'user-2')
 
     expect(card.status).toBe('done')
     expect(card.isActive).toBe(false)
     expect(card.activeBy).toBeNull()
     expect(card.completedAt).toBe(card.updatedAt)
+    expect(card.completedBy).toBe('user-2')
   })
 
   it('keeps a known completion time while an already completed card updates', () => {

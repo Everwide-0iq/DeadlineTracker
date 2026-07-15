@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { preloadPrivateImage } from '../../lib/usePrivateImage.ts'
 import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   ensureProfile,
@@ -7,6 +8,7 @@ import {
   updateProfile as updateProfileApi,
 } from './profile.api.ts'
 import type { UpdateProfileInput, UserProfile } from './profile.types.ts'
+import { getAvatarSignedUrl } from './avatar.api.ts'
 
 type ProfileState = {
   error: string | null
@@ -41,6 +43,12 @@ function getMessage(error: unknown) {
 const toRecord = (profiles: UserProfile[]) =>
   Object.fromEntries(profiles.map((profile) => [profile.id, profile]))
 
+const preloadProfileAvatar = (profile: UserProfile) => {
+  if (profile.avatarPath) {
+    void preloadPrivateImage(profile.avatarPath, getAvatarSignedUrl).catch(() => undefined)
+  }
+}
+
 export const useProfileStore = create<ProfileState>((set) => ({
   error: null,
   isLoading: false,
@@ -59,6 +67,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
       }
 
       set({ error: null, isLoading: false, profiles: toRecord(nextProfiles) })
+      nextProfiles.forEach(preloadProfileAvatar)
     } catch (error) {
       set({ error: getMessage(error), isLoading: false })
     }
@@ -74,6 +83,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
         return
       }
 
+      preloadProfileAvatar(event.profile)
       set((state) => ({
         profiles: { ...state.profiles, [event.profile.id]: event.profile },
       }))
@@ -81,6 +91,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
   updateProfile: async (userId, input) => {
     try {
       const profile = await updateProfileApi(userId, input)
+      preloadProfileAvatar(profile)
       set((state) => ({
         error: null,
         profiles: { ...state.profiles, [profile.id]: profile },

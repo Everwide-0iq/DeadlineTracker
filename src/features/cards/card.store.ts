@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { DragGuide } from '../board/dragGuide.types.ts'
+import { useAuthStore } from '../auth/auth.store.ts'
 import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import {
   createCard as createCardApi,
@@ -131,7 +132,11 @@ const upsertCard = (cards: Card[], card: Card) => {
   return next
 }
 
-export const applyOptimisticCardPatch = (card: Card, input: UpdateCardInput): Card => {
+export const applyOptimisticCardPatch = (
+  card: Card,
+  input: UpdateCardInput,
+  actorId: string | null = null,
+): Card => {
   const updatedAt = new Date().toISOString()
   const next: Card = { ...card, ...input, updatedAt }
 
@@ -140,7 +145,7 @@ export const applyOptimisticCardPatch = (card: Card, input: UpdateCardInput): Ca
     next.isActive = false
     next.activeBy = null
     next.completedAt = card.status === 'done' ? card.completedAt : updatedAt
-    next.completedBy = card.status === 'done' ? card.completedBy : next.completedBy
+    next.completedBy = card.status === 'done' ? card.completedBy : actorId
     return next
   }
 
@@ -394,7 +399,8 @@ export const useCardStore = create<CardState>((set, get) => ({
   },
   updateCard: async (id, input) => {
     const previousCard = get().cards.find((card) => card.id === id) ?? null
-    const optimisticCard = previousCard ? applyOptimisticCardPatch(previousCard, input) : null
+    const actorId = useAuthStore.getState().user?.id ?? null
+    const optimisticCard = previousCard ? applyOptimisticCardPatch(previousCard, input, actorId) : null
     set((state) => ({
       cards: state.cards.map((card) => (card.id === id && optimisticCard ? optimisticCard : card)),
       saveError: null,

@@ -73,7 +73,7 @@ function DeadlineCardComponent({
   const deleteCards = useCardStore((state) => state.deleteCards)
   const openEditEditor = useCardStore((state) => state.openEditEditor)
   const selectCard = useCardStore((state) => state.selectCard)
-  const selectedCardIds = useCardStore((state) => state.selectedCardIds)
+  const selectedCardCount = useCardStore((state) => isMenuOpen ? state.selectedCardIds.length : 0)
   const toggleCardSelection = useCardStore((state) => state.toggleCardSelection)
   const toggleCardActive = useCardStore((state) => state.toggleCardActive)
   const updateCard = useCardStore((state) => state.updateCard)
@@ -191,11 +191,12 @@ function DeadlineCardComponent({
     if (next.x !== menuPosition.x || next.y !== menuPosition.y) {
       setMenuPosition(next)
     }
-  }, [isMenuOpen, linkedCount, menuPosition, selectedCardIds.length])
+  }, [isMenuOpen, linkedCount, menuPosition, selectedCardCount])
 
   const handleDelete = async () => {
     setIsMenuOpen(false)
     setMenuPosition(null)
+    const selectedCardIds = useCardStore.getState().selectedCardIds
     const ids = isSelected && selectedCardIds.length > 1 ? selectedCardIds : [card.id]
     const isBulkDelete = ids.length > 1
 
@@ -410,7 +411,7 @@ function DeadlineCardComponent({
             </button>
           ))
         : null}
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+      <div className="deadline-card-content relative z-10 flex min-h-0 flex-1 flex-col">
         <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
           <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_22px_var(--deadline-glow)]">
             {card.status === 'done' ? <CheckCircle2 size={21} /> : <Flame size={21} />}
@@ -513,7 +514,7 @@ function DeadlineCardComponent({
             <div className="deadline-card-completion-date">
               <ProfileAvatar
                 avatarPath={completedProfile?.avatarPath}
-                className="completion-avatar-pulse"
+                className={cn(isCompleting && 'completion-avatar-pulse')}
                 color={completedOwnerColor}
                 name={completedOwnerName}
                 size={22}
@@ -565,8 +566,8 @@ function DeadlineCardComponent({
           <div className="mx-2 my-1 h-px bg-white/[0.07]" />
           <button className="menu-item menu-item-danger" type="button" onClick={handleDelete}>
             <Trash2 size={15} />
-            {isSelected && selectedCardIds.length > 1
-              ? t.card.deleteSelected(selectedCardIds.length)
+            {isSelected && selectedCardCount > 1
+              ? t.card.deleteSelected(selectedCardCount)
               : t.card.delete}
           </button>
         </div>,

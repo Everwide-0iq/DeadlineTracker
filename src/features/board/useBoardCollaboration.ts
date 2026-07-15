@@ -93,6 +93,7 @@ export function useBoardCollaboration({
 }: UseBoardCollaborationOptions) {
   const clientId = useMemo(createClientId, [])
   const channelRef = useRef<BoardChannel | null>(null)
+  const channelReadyRef = useRef(false)
   const lastCursorAtRef = useRef(0)
   const [members, setMembers] = useState<BoardMember[]>([])
   const [remoteCursors, setRemoteCursors] = useState<BoardCursor[]>([])
@@ -112,6 +113,7 @@ export function useBoardCollaboration({
   useEffect(() => {
     if (!enabled) {
       channelRef.current = null
+      channelReadyRef.current = false
       setMembers([])
       setRemoteCursors([])
       return undefined
@@ -125,6 +127,7 @@ export function useBoardCollaboration({
       },
     })
     channelRef.current = channel
+    channelReadyRef.current = false
 
     const syncMembers = () => {
       const state = channel.presenceState<BoardMember>()
@@ -149,12 +152,17 @@ export function useBoardCollaboration({
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          channelReadyRef.current = true
           void channel.track(self).catch(() => undefined)
+          return
         }
+
+        channelReadyRef.current = false
       })
 
     return () => {
       channelRef.current = null
+      channelReadyRef.current = false
       setMembers([])
       setRemoteCursors([])
       void channel.untrack().catch(() => undefined)
@@ -181,7 +189,7 @@ export function useBoardCollaboration({
     (x: number, y: number) => {
       const now = Date.now()
 
-      if (!enabled) {
+      if (!enabled || !channelReadyRef.current) {
         return
       }
 

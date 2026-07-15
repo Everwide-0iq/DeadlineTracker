@@ -1,4 +1,5 @@
 import { requireSupabase } from '../../lib/supabase.ts'
+import { createSignedUrlCache } from '../../lib/signedUrlCache.ts'
 
 export const cardImageBucket = 'card-images'
 
@@ -9,11 +10,6 @@ const signedUrlLifetimeSeconds = 60 * 60
 const signedUrlRefreshPaddingMs = 60 * 1000
 const cleanupBatchSize = 100
 const maxCleanupBatchesPerRun = 20
-
-type SignedUrlCacheEntry = {
-  expiresAt: number
-  url: string
-}
 
 export type PreparedCardImage = {
   blob: Blob
@@ -30,7 +26,10 @@ export type CardImageMetadata = {
   imageWidth: number
 }
 
-const signedUrlCache = new Map<string, SignedUrlCacheEntry>()
+const signedUrls = createSignedUrlCache({
+  lifetimeSeconds: signedUrlLifetimeSeconds,
+  refreshPaddingMs: signedUrlRefreshPaddingMs,
+})
 
 function ensureImageFile(file: File) {
   if (!file.type.startsWith('image/')) {
@@ -187,7 +186,7 @@ export async function removeCardImage(path: string | null) {
     return
   }
 
-  signedUrlCache.delete(path)
+  signedUrls.invalidate(path)
 
   const { error } = await requireSupabase().storage.from(cardImageBucket).remove([path])
 
@@ -231,7 +230,7 @@ export async function cleanupPendingCardImages() {
       throw removeError
     }
 
-    paths.forEach((path) => signedUrlCache.delete(path))
+    signedUrls.invalidateMany(paths)
 
     const { error: queueError } = await supabase
       .from('card_image_cleanup_queue')
@@ -249,24 +248,14 @@ export async function cleanupPendingCardImages() {
 }
 
 export async function getCardImageSignedUrl(path: string) {
-  const cached = signedUrlCache.get(path)
+  return signedUrls.get(path, async () => {
+    const { data, error } = await requireSupabase()
+      .storage.from(cardImageBucket)
+      .createSignedUrl(path, signedUrlLifetimeSeconds)
 
-  if (cached && cached.expiresAt > Date.now() + signedUrlRefreshPaddingMs) {
-    return cached.url
-  }
-
-  const { data, error } = await requireSupabase()
-    .storage.from(cardImageBucket)
-    .createSignedUrl(path, signedUrlLifetimeSeconds)
-
-  if (error) {
-    throw error
-  }
-
-  signedUrlCache.set(path, {
-    expiresAt: Date.now() + signedUrlLifetimeSeconds * 1000,
-    url: data.signedUrl,
+    if (error) throw error
+    return data.signedUrl
   })
-
-  return data.signedUrl
 }
+
+export const getCachedCardImageSignedUrl = (path: string) => signedUrls.peek(path)

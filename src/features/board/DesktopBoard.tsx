@@ -38,7 +38,8 @@ import type { TodoBlock as TodoBlockModel, TodoItem } from '../todos/todo.types.
 import { getTodoBlockStatus, getTodoBlockRenderHeight } from '../todos/todo.utils.ts'
 import { AddMenuItems } from './AddMenu.tsx'
 import { BoardControls } from './BoardControls.tsx'
-import { CardLinkLayer, type BoardLinkNodeMetric, type DraftCardLink } from './CardLinkLayer.tsx'
+import type { ConnectableBoardObjectMetric } from './boardObject.types.ts'
+import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
 import { useBoardMotionStore } from './boardMotion.store.ts'
 import type { DragGuide } from './dragGuide.types.ts'
 import { HeatHorizon } from './HeatHorizon.tsx'
@@ -425,7 +426,7 @@ export function DesktopBoard({
     }),
     [expandedTodoIdSet, todoBlocks, todoHeightById, todoItemsByBlock, visibleWorldBounds],
   )
-  const linkNodes = useMemo<BoardLinkNodeMetric[]>(() => {
+  const linkNodes = useMemo<ConnectableBoardObjectMetric[]>(() => {
     const cardNodes = cards.map((card) => {
       const size = cardRenderSizeById.get(card.id) ?? getCardRenderSize(card)
       const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
