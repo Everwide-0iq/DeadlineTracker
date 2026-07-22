@@ -12,7 +12,7 @@ export type Card = {
   imagePath: string | null
   imageSize: number | null
   imageWidth: number | null
-  deadlineAt: string
+  deadlineAt: string | null
   status: CardStatus
   isActive: boolean
   activeBy: string | null
@@ -37,7 +37,7 @@ export type CardRow = {
   image_path?: string | null
   image_size?: number | null
   image_width?: number | null
-  deadline_at: string
+  deadline_at: string | null
   status: CardStatus
   is_active?: boolean
   active_by?: string | null
@@ -62,7 +62,7 @@ export type CreateCardInput = {
   imagePath?: string | null
   imageSize?: number | null
   imageWidth?: number | null
-  deadlineAt: string
+  deadlineAt: string | null
   boardScope: BoardScope
   projectId: string | null
   status?: CardStatus

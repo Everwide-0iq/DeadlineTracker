@@ -385,8 +385,10 @@ export function DeadlinePicker({
         : t.deadlinePicker.addTimePreset
   const scopedCards = useMemo(
     () =>
-      cards.filter((card) =>
-        isRelevantCard(card, boardScope, projectId, userId, currentCardId),
+      cards.filter(
+        (card): card is Card & { deadlineAt: string } =>
+          card.deadlineAt !== null &&
+          isRelevantCard(card, boardScope, projectId, userId, currentCardId),
       ),
     [boardScope, cards, currentCardId, projectId, userId],
   )

@@ -1,4 +1,4 @@
-import { CalendarCheck2, CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink, Zap } from 'lucide-react'
+import { CalendarCheck2, CalendarOff, CheckCircle2, Clock3, Flame, MoreHorizontal, Pencil, Trash2, Unlink, Zap } from 'lucide-react'
 import {
   memo,
   useEffect,
@@ -414,7 +414,13 @@ function DeadlineCardComponent({
       <div className="deadline-card-content relative z-10 flex min-h-0 flex-1 flex-col">
         <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
           <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_22px_var(--deadline-glow)]">
-            {card.status === 'done' ? <CheckCircle2 size={21} /> : <Flame size={21} />}
+            {card.status === 'done' ? (
+              <CheckCircle2 size={21} />
+            ) : card.deadlineAt ? (
+              <Flame size={21} />
+            ) : (
+              <CalendarOff size={21} />
+            )}
           </div>
           <div className="relative flex items-center gap-2">
             <button
@@ -495,7 +501,7 @@ function DeadlineCardComponent({
 
         <div className="mt-auto shrink-0">
           <div className="mb-4 flex items-center gap-3 text-[var(--deadline-text)]">
-            <Clock3 size={23} />
+            {card.deadlineAt ? <Clock3 size={23} /> : <CalendarOff size={23} />}
             <span className="countdown-text text-[34px] font-black tracking-normal">{countdown}</span>
           </div>
 

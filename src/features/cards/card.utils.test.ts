@@ -7,6 +7,7 @@ import {
   sortCardsForMobile,
 } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
+import { getDeadlineVisualState } from './deadlineColor.ts'
 
 const now = new Date(2026, 6, 11, 12, 0, 0)
 
@@ -110,6 +111,30 @@ describe('filters and ordering', () => {
       doneCard,
     ])
   })
+
+  it('keeps undated work out of deadline filters and after active dated cards', () => {
+    const undatedCard = createCard({
+      createdAt: '2026-07-02T00:00:00.000Z',
+      deadlineAt: null,
+    })
+    const doneUndatedCard = createCard({
+      createdAt: '2026-07-03T00:00:00.000Z',
+      deadlineAt: null,
+      status: 'done',
+    })
+    const mixedCards = [undatedCard, doneUndatedCard, upcomingCard, overdueCard]
+
+    expect(filterCards(mixedCards, 'all', now.getTime())).toEqual(mixedCards)
+    expect(filterCards(mixedCards, 'today', now.getTime())).toEqual([])
+    expect(filterCards(mixedCards, 'overdue', now.getTime())).toEqual([overdueCard])
+    expect(filterCards(mixedCards, 'done', now.getTime())).toEqual([doneUndatedCard])
+    expect(sortCardsForMobile(mixedCards, now.getTime())).toEqual([
+      overdueCard,
+      upcomingCard,
+      undatedCard,
+      doneUndatedCard,
+    ])
+  })
 })
 
 describe('countdown formatting', () => {
@@ -122,5 +147,15 @@ describe('countdown formatting', () => {
     )
     expect(formatCountdown(now, 'done', now.getTime(), 'en')).toBe('Done')
     expect(formatCountdown('invalid', 'todo', now.getTime(), 'en')).toBe('Invalid date')
+  })
+
+  it('uses a calm label for undated work while preserving the completed state', () => {
+    expect(formatCountdown(null, 'todo', now.getTime(), 'en')).toBe('No deadline')
+    expect(formatCountdown(null, 'done', now.getTime(), 'en')).toBe('Done')
+
+    const visual = getDeadlineVisualState(null, 'todo', now.getTime(), 'en')
+    expect(visual.zone).toBe('undated')
+    expect(visual.label).toBe('No deadline')
+    expect(visual.shouldPulse).toBe(false)
   })
 })

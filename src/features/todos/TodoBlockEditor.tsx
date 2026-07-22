@@ -115,14 +115,14 @@ export function TodoBlockEditor() {
           <section className="todo-deadline-control">
             <button
               aria-pressed={hasDeadline}
-              className="todo-deadline-toggle"
+              className="deadline-mode-toggle"
               data-active={hasDeadline ? 'true' : 'false'}
               type="button"
               onClick={() => setHasDeadline((current) => !current)}
             >
               <CalendarClock size={18} />
               <span>{hasDeadline ? t.todo.deadline : t.todo.noDeadline}</span>
-              <span aria-hidden="true" className="todo-toggle-track"><span /></span>
+              <span aria-hidden="true" className="deadline-toggle-track"><span /></span>
             </button>
             {hasDeadline ? (
               <input
@@ -150,4 +150,3 @@ export function TodoBlockEditor() {
     document.body,
   )
 }
-

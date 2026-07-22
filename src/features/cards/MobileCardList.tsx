@@ -1,4 +1,4 @@
-import { CalendarCheck2, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound, Zap } from 'lucide-react'
+import { CalendarCheck2, CalendarOff, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound, Zap } from 'lucide-react'
 import { memo, useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
@@ -125,7 +125,13 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
       <div className="deadline-card-content relative z-10">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)]">
-            {card.status === 'done' ? <CheckCircle2 size={19} /> : <Flame size={19} />}
+            {card.status === 'done' ? (
+              <CheckCircle2 size={19} />
+            ) : card.deadlineAt ? (
+              <Flame size={19} />
+            ) : (
+              <CalendarOff size={19} />
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button

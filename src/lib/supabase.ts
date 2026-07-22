@@ -18,7 +18,7 @@ export type Database = {
           image_path: string | null
           image_size: number | null
           image_width: number | null
-          deadline_at: string
+          deadline_at: string | null
           status: CardStatus
           is_active: boolean
           active_by: string | null
@@ -42,7 +42,7 @@ export type Database = {
           image_path?: string | null
           image_size?: number | null
           image_width?: number | null
-          deadline_at: string
+          deadline_at?: string | null
           board_scope?: BoardScope
           project_id?: string | null
           status?: CardStatus
@@ -65,7 +65,7 @@ export type Database = {
           image_path?: string | null
           image_size?: number | null
           image_width?: number | null
-          deadline_at?: string
+          deadline_at?: string | null
           board_scope?: BoardScope
           project_id?: string | null
           status?: CardStatus

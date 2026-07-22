@@ -45,4 +45,8 @@ describe('mapCardFromRow', () => {
     expect(card.activeBy).toBe('user-2')
     expect(card.completedAt).toBe(completedAt)
   })
+
+  it('keeps a missing deadline as an undated card', () => {
+    expect(mapCardFromRow(createRow({ deadline_at: null })).deadlineAt).toBeNull()
+  })
 })

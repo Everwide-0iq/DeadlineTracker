@@ -152,11 +152,11 @@ export function fromDateTimeLocalValue(value: string) {
 }
 
 export function isCardOverdue(card: Card, now = Date.now()) {
-  return card.status !== 'done' && new Date(card.deadlineAt).getTime() < now
+  return card.status !== 'done' && card.deadlineAt !== null && new Date(card.deadlineAt).getTime() < now
 }
 
 function isCardThisWeek(card: Card) {
-  return card.status !== 'done' && isThisWeek(new Date(card.deadlineAt), { weekStartsOn: 1 })
+  return card.status !== 'done' && card.deadlineAt !== null && isThisWeek(new Date(card.deadlineAt), { weekStartsOn: 1 })
 }
 
 function matchesFilter(card: Card, filter: BoardFilter, now: number) {
@@ -169,6 +169,10 @@ function matchesFilter(card: Card, filter: BoardFilter, now: number) {
   }
 
   if (card.status === 'done') {
+    return false
+  }
+
+  if (!card.deadlineAt) {
     return false
   }
 
@@ -208,6 +212,18 @@ export function sortCardsForMobile(cards: Card[], now: number) {
 
     if (leftOverdue !== rightOverdue) {
       return leftOverdue ? -1 : 1
+    }
+
+    if (!left.deadlineAt && !right.deadlineAt) {
+      return left.createdAt.localeCompare(right.createdAt)
+    }
+
+    if (!left.deadlineAt) {
+      return 1
+    }
+
+    if (!right.deadlineAt) {
+      return -1
     }
 
     return new Date(left.deadlineAt).getTime() - new Date(right.deadlineAt).getTime()

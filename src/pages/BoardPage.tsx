@@ -84,9 +84,13 @@ function getProjectDeadlineSummaries(
   now: number,
   language: Language,
 ) {
-  type DeadlineCandidate = Pick<Card, 'deadlineAt' | 'status' | 'title'>
+  type DeadlineCandidate = {
+    deadlineAt: string
+    status: Card['status']
+    title: string
+  }
   const nearestByProject = cards.reduce<Record<string, DeadlineCandidate>>((acc, card) => {
-    if (card.status === 'done') {
+    if (card.status === 'done' || !card.deadlineAt) {
       return acc
     }
 
@@ -100,7 +104,11 @@ function getProjectDeadlineSummaries(
     const current = acc[projectId]
 
     if (!current || deadlineTime < new Date(current.deadlineAt).getTime()) {
-      acc[projectId] = card
+      acc[projectId] = {
+        deadlineAt: card.deadlineAt,
+        status: card.status,
+        title: card.title,
+      }
     }
 
     return acc

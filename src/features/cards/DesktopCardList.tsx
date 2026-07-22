@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarCheck2, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2, Zap } from 'lucide-react'
+import { AlertTriangle, CalendarCheck2, CalendarOff, CheckCircle2, Clock3, Flame, MoreHorizontal, Plus, Trash2, Zap } from 'lucide-react'
 import { memo, useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
@@ -106,7 +106,13 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
     >
       <div className="flex min-w-0 items-center gap-4">
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_18px_var(--deadline-glow)]">
-          {card.status === 'done' ? <CheckCircle2 size={21} /> : <Flame size={21} />}
+          {card.status === 'done' ? (
+            <CheckCircle2 size={21} />
+          ) : card.deadlineAt ? (
+            <Flame size={21} />
+          ) : (
+            <CalendarOff size={21} />
+          )}
         </div>
         {card.imagePath ? (
           <CardImageView
@@ -141,7 +147,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
 
       <div className="flex min-w-0 flex-col gap-1.5 text-[var(--deadline-text)]">
         <div className="flex items-center gap-3">
-          <Clock3 size={20} />
+          {card.deadlineAt ? <Clock3 size={20} /> : <CalendarOff size={20} />}
           <span className="text-2xl font-black">{countdown}</span>
         </div>
         {card.status === 'done' ? (

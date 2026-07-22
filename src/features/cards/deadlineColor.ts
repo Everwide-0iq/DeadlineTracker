@@ -2,12 +2,12 @@ import type { CardStatus } from './card.types.ts'
 import type { Language } from '../i18n/i18n.types.ts'
 import { translations } from '../i18n/translations.ts'
 
-export type DeadlineZone = 'done' | 'overdue' | 'critical' | 'soon' | 'important' | 'calm'
+export type DeadlineZone = 'done' | 'undated' | 'overdue' | 'critical' | 'soon' | 'important' | 'calm'
 
 export type DeadlineVisualState = {
   zone: DeadlineZone
   daysLeft: number
-  urgency: 'done' | 'overdue' | 'urgent' | 'soon' | 'important' | 'calm'
+  urgency: 'done' | 'undated' | 'overdue' | 'urgent' | 'soon' | 'important' | 'calm'
   backgroundColor: string
   borderColor: string
   textColor: string
@@ -51,7 +51,7 @@ function colorSet(hue: number, heat: number, zone: DeadlineZone, label: string):
 }
 
 export function getDeadlineVisualState(
-  deadlineAt: string | Date,
+  deadlineAt: string | Date | null,
   status: CardStatus,
   now = Date.now(),
   language: Language = 'ru',
@@ -69,6 +69,21 @@ export function getDeadlineVisualState(
       glowColor: 'hsl(220 10% 45% / 0.16)',
       progress: 0,
       label: labels.done,
+      shouldPulse: false,
+    }
+  }
+
+  if (deadlineAt === null) {
+    return {
+      zone: 'undated',
+      daysLeft: 0,
+      urgency: 'undated',
+      backgroundColor: 'hsl(190 28% 10% / 0.48)',
+      borderColor: 'hsl(186 56% 46%)',
+      textColor: 'hsl(184 66% 70%)',
+      glowColor: 'hsl(187 58% 44% / 0.22)',
+      progress: 0.14,
+      label: labels.undated,
       shouldPulse: false,
     }
   }

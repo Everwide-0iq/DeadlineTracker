@@ -21,11 +21,15 @@ function formatPositiveDuration(durationMs: number, language: Language) {
   return `${hours}${t.hour} ${pad(minutes)}${t.minute}`
 }
 
-export function formatCountdown(deadlineAt: string | Date, status: CardStatus, now = Date.now(), language: Language = 'ru') {
+export function formatCountdown(deadlineAt: string | Date | null, status: CardStatus, now = Date.now(), language: Language = 'ru') {
   const t = translations[language].countdown
 
   if (status === 'done') {
     return t.done
+  }
+
+  if (deadlineAt === null) {
+    return t.noDeadline
   }
 
   const deadlineTime = new Date(deadlineAt).getTime()

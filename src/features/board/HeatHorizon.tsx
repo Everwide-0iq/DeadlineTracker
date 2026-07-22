@@ -26,7 +26,7 @@ const segments: Array<Omit<Segment, 'count'>> = [
   { maxDays: 30, minDays: 7, tone: 'calm' },
 ]
 
-const getDaysLeft = (card: Card, now: number) => (new Date(card.deadlineAt).getTime() - now) / dayMs
+const getDaysLeft = (deadlineAt: string, now: number) => (new Date(deadlineAt).getTime() - now) / dayMs
 
 function HeatHorizonComponent({ cards, now }: HeatHorizonProps) {
   const language = useI18nStore((state) => state.language)
@@ -34,8 +34,8 @@ function HeatHorizonComponent({ cards, now }: HeatHorizonProps) {
   const activeCards = useMemo(
     () =>
       cards
-        .filter((card) => card.status !== 'done')
-        .map((card) => ({ card, daysLeft: getDaysLeft(card, now) }))
+        .filter((card): card is Card & { deadlineAt: string } => card.status !== 'done' && card.deadlineAt !== null)
+        .map((card) => ({ card, daysLeft: getDaysLeft(card.deadlineAt, now) }))
         .filter((item) => !Number.isNaN(item.daysLeft))
         .sort((left, right) => left.daysLeft - right.daysLeft),
     [cards, now],

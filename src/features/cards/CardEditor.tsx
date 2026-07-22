@@ -1,4 +1,4 @@
-import { CalendarClock, CheckCircle2, ImagePlus, Loader2, Save, Trash2, UploadCloud, X } from 'lucide-react'
+import { CalendarClock, CalendarOff, CheckCircle2, ImagePlus, Loader2, Save, Trash2, UploadCloud, X } from 'lucide-react'
 import {
   useEffect,
   useMemo,
@@ -62,6 +62,7 @@ export function CardEditor() {
     [editorProjectId, projects, t],
   )
   const [deadlineLocal, setDeadlineLocal] = useState('')
+  const [hasDeadline, setHasDeadline] = useState(true)
   const [description, setDescription] = useState('')
   const [dirty, setDirty] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -89,13 +90,15 @@ export function CardEditor() {
     if (editor.mode === 'edit' && card) {
       setTitle(card.title)
       setDescription(card.description ?? '')
-      setDeadlineLocal(toDateTimeLocalValue(card.deadlineAt))
+      setHasDeadline(card.deadlineAt !== null)
+      setDeadlineLocal(toDateTimeLocalValue(card.deadlineAt ?? getDefaultDeadline()))
       setStatus(card.status)
       return
     }
 
     setTitle('')
     setDescription('')
+    setHasDeadline(true)
     setDeadlineLocal(toDateTimeLocalValue(getDefaultDeadline()))
     setStatus('todo')
   }, [card, clearSaveError, editor])
@@ -249,13 +252,15 @@ export function CardEditor() {
       return
     }
 
-    let deadlineAt: string
+    let deadlineAt: string | null = null
 
-    try {
-      deadlineAt = fromDateTimeLocalValue(deadlineLocal)
-    } catch {
-      setFormError(t.cardEditor.deadlineInvalid)
-      return
+    if (hasDeadline) {
+      try {
+        deadlineAt = fromDateTimeLocalValue(deadlineLocal)
+      } catch {
+        setFormError(t.cardEditor.deadlineInvalid)
+        return
+      }
     }
 
     let uploadedImage: CardImageMetadata | null = null
@@ -549,17 +554,54 @@ export function CardEditor() {
             </div>
           </div>
 
-          <DeadlinePicker
-            boardScope={editorScope}
-            cards={cards}
-            currentCardId={card?.id ?? null}
-            projectId={editorProjectId}
-            status={status}
-            userId={userId}
-            value={deadlineLocal}
-            onChange={setDeadlineLocal}
-            onTouched={markDirty}
-          />
+          <div className="card-deadline-column">
+            <section className="card-deadline-control" data-active={hasDeadline ? 'true' : 'false'}>
+              <button
+                aria-pressed={hasDeadline}
+                className="deadline-mode-toggle"
+                data-active={hasDeadline ? 'true' : 'false'}
+                type="button"
+                onClick={() => {
+                  setHasDeadline((current) => !current)
+                  markDirty()
+                }}
+              >
+                {hasDeadline ? <CalendarClock size={19} /> : <CalendarOff size={19} />}
+                <span className="deadline-mode-copy">
+                  <strong>{hasDeadline ? t.cardEditor.withDeadline : t.cardEditor.noDeadline}</strong>
+                  <small>{t.cardEditor.deadlineMode}</small>
+                </span>
+                <span aria-hidden="true" className="deadline-toggle-track"><span /></span>
+              </button>
+            </section>
+
+            {hasDeadline ? (
+              <DeadlinePicker
+                boardScope={editorScope}
+                cards={cards}
+                currentCardId={card?.id ?? null}
+                projectId={editorProjectId}
+                status={status}
+                userId={userId}
+                value={deadlineLocal}
+                onChange={setDeadlineLocal}
+                onTouched={markDirty}
+              />
+            ) : (
+              <section className="card-no-deadline-state">
+                <div className="card-no-deadline-icon"><CalendarOff size={28} /></div>
+                <div className="min-w-0">
+                  <span>{t.cardEditor.deadlineMode}</span>
+                  <h3>{t.cardEditor.noDeadline}</h3>
+                  <p>{title.trim() || t.cardEditor.titlePlaceholder}</p>
+                </div>
+                <div className="card-no-deadline-status">
+                  <i />
+                  {t.deadline.label.undated}
+                </div>
+              </section>
+            )}
+          </div>
         </form>
       </section>
     </div>,

@@ -641,7 +641,7 @@ export function DesktopBoard({
         active: card.isActive,
         completed: card.status === 'done',
         status: card.status,
-        deadline: formatDate(card.deadlineAt),
+        deadline: card.deadlineAt ? formatDate(card.deadlineAt) : null,
       })),
       todoBlocks: todoBlocks.map((block) => {
         const items = todoItemsByBlock.get(block.id) ?? []

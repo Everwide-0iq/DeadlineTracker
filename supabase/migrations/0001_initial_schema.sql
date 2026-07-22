@@ -169,7 +169,7 @@ create table if not exists public.cards (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   description text,
-  deadline_at timestamptz not null,
+  deadline_at timestamptz,
   status text not null default 'todo' check (status in ('todo', 'done')),
   is_active boolean not null default false,
   active_by uuid references public.profiles(id) on delete set null,
@@ -219,6 +219,9 @@ add column if not exists image_height integer;
 
 alter table public.cards
 add column if not exists image_size integer;
+
+alter table public.cards
+alter column deadline_at drop not null;
 
 do $$
 begin
@@ -601,7 +604,7 @@ alter table public.cards
 add constraint cards_content_geometry_check check (
   char_length(btrim(title)) between 1 and 120
   and (description is null or char_length(description) <= 1800)
-  and isfinite(deadline_at)
+  and (deadline_at is null or isfinite(deadline_at))
   and x between -10000000 and 10000000
   and y between -10000000 and 10000000
   and w between 280 and 3200
