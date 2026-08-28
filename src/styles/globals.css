@@ -1063,6 +1063,16 @@ button {
   text-shadow: 0 0 22px var(--deadline-glow);
 }
 
+.deadline-card-title {
+  font-size: var(--card-title-font-size, 22px);
+  line-height: var(--card-title-line-height, 28px);
+}
+
+.deadline-card-description {
+  font-size: var(--card-description-font-size, 14px);
+  line-height: var(--card-description-line-height, 24px);
+}
+
 .desktop-board-scene[data-camera-moving="true"] .countdown-text {
   text-shadow: 0 0 10px var(--deadline-glow);
 }

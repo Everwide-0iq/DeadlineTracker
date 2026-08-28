@@ -1,3 +1,5 @@
+begin;
+
 create extension if not exists pgcrypto;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -42,13 +44,18 @@ add column if not exists sort_order integer not null default 0;
 alter table public.projects
 alter column sort_order set default 0;
 
-insert into public.projects (id, name, color, sort_order, created_by)
-values ('00000000-0000-0000-0000-000000000001', 'Общее', '#ff463d', 0, null)
-on conflict (id) do update
-set
-  name = excluded.name,
-  color = excluded.color,
-  sort_order = 0;
+do $$
+begin
+  if not exists (
+    select 1
+    from public.projects
+    where id = '00000000-0000-0000-0000-000000000001'
+  ) then
+    insert into public.projects (id, name, color, sort_order, created_by)
+    values ('00000000-0000-0000-0000-000000000001', 'Общее', '#ff463d', 0, null);
+  end if;
+end;
+$$;
 
 update public.projects
 set sort_order = 0
@@ -2182,3 +2189,1637 @@ exception
   when undefined_object then null;
 end;
 $$;
+
+-- Team access control. The helpers live in a private schema so they are not
+-- exposed through the Data API; public RPCs below are the only mutation entry points.
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+
+create table if not exists public.teams (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint teams_name_check check (char_length(btrim(name)) between 1 and 64)
+);
+
+create table if not exists public.team_members (
+  team_id uuid not null references public.teams(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  role text not null check (role in ('owner', 'admin', 'editor', 'member', 'viewer')),
+  joined_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (team_id, user_id)
+);
+
+alter table public.projects
+add column if not exists team_id uuid references public.teams(id) on delete cascade;
+
+with initial_owner as (
+  select coalesce(
+    (
+      select project.created_by
+      from public.projects as project
+      where project.created_by is not null
+      order by project.created_at, project.id
+      limit 1
+    ),
+    (
+      select card.created_by
+      from public.cards as card
+      where card.created_by is not null
+      order by card.created_at, card.id
+      limit 1
+    ),
+    (
+      select profile.id
+      from public.profiles as profile
+      order by profile.created_at, profile.id
+      limit 1
+    )
+  ) as user_id
+)
+insert into public.teams (id, name, created_by)
+select '00000000-0000-0000-0000-000000000010', 'Fireboard', initial_owner.user_id
+from initial_owner
+on conflict (id) do update
+set
+  created_by = coalesce(public.teams.created_by, excluded.created_by);
+
+update public.projects
+set team_id = '00000000-0000-0000-0000-000000000010'
+where team_id is null;
+
+alter table public.projects
+alter column team_id set not null;
+
+update public.projects
+set name = 'Центр'
+where id = '00000000-0000-0000-0000-000000000001';
+
+insert into public.team_members (team_id, user_id, role)
+select team.id, team.created_by, 'owner'
+from public.teams as team
+where team.id = '00000000-0000-0000-0000-000000000010'
+  and team.created_by is not null
+on conflict (team_id, user_id) do update
+set role = 'owner';
+
+create table if not exists public.project_members (
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  access_level text not null check (access_level in ('editor', 'contributor', 'viewer')),
+  granted_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (project_id, user_id)
+);
+
+create table if not exists public.team_invites (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references public.teams(id) on delete cascade,
+  invitee_email text not null,
+  role text not null check (role in ('admin', 'editor', 'member', 'viewer')),
+  token_hash text not null unique,
+  created_by uuid not null references public.profiles(id) on delete cascade,
+  expires_at timestamptz not null,
+  accepted_at timestamptz,
+  accepted_by uuid references public.profiles(id) on delete set null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint team_invites_email_check check (
+    invitee_email = lower(btrim(invitee_email))
+    and invitee_email ~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'
+  ),
+  constraint team_invites_expiry_check check (expires_at > created_at)
+);
+
+create table if not exists public.team_invite_projects (
+  invite_id uuid not null references public.team_invites(id) on delete cascade,
+  project_id uuid not null references public.projects(id) on delete cascade,
+  primary key (invite_id, project_id)
+);
+
+create index if not exists projects_team_id_idx on public.projects (team_id);
+create index if not exists team_members_user_id_idx on public.team_members (user_id, team_id);
+create index if not exists project_members_user_id_idx on public.project_members (user_id, project_id);
+create index if not exists team_invites_team_email_idx on public.team_invites (team_id, invitee_email)
+where accepted_at is null and revoked_at is null;
+create index if not exists team_invites_expires_at_idx on public.team_invites (expires_at)
+where accepted_at is null and revoked_at is null;
+
+create or replace function private.team_role(target_team_id uuid)
+returns text
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select member.role
+  from public.team_members as member
+  where member.team_id = target_team_id
+    and member.user_id = (select auth.uid())
+  limit 1;
+$$;
+
+create or replace function private.is_team_member(target_team_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.team_members as member
+    where member.team_id = target_team_id
+      and member.user_id = (select auth.uid())
+  );
+$$;
+
+create or replace function private.is_team_admin(target_team_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select coalesce(private.team_role(target_team_id) in ('owner', 'admin'), false);
+$$;
+
+create or replace function private.is_team_owner(target_team_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select private.team_role(target_team_id) = 'owner';
+$$;
+
+create or replace function private.default_project_access(member_role text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case member_role
+    when 'viewer' then 'viewer'
+    when 'member' then 'contributor'
+    else 'editor'
+  end;
+$$;
+
+create or replace function private.can_view_project(target_project_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.projects as project
+    join public.team_members as member
+      on member.team_id = project.team_id
+     and member.user_id = (select auth.uid())
+    where project.id = target_project_id
+      and (
+        member.role in ('owner', 'admin')
+        or exists (
+          select 1
+          from public.project_members as project_member
+          where project_member.project_id = project.id
+            and project_member.user_id = member.user_id
+        )
+      )
+  );
+$$;
+
+create or replace function private.can_contribute_project(target_project_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.projects as project
+    join public.team_members as member
+      on member.team_id = project.team_id
+     and member.user_id = (select auth.uid())
+    where project.id = target_project_id
+      and (
+        member.role in ('owner', 'admin')
+        or exists (
+          select 1
+          from public.project_members as project_member
+          where project_member.project_id = project.id
+            and project_member.user_id = member.user_id
+            and project_member.access_level in ('editor', 'contributor')
+        )
+      )
+  );
+$$;
+
+create or replace function private.can_edit_project(target_project_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.projects as project
+    join public.team_members as member
+      on member.team_id = project.team_id
+     and member.user_id = (select auth.uid())
+    where project.id = target_project_id
+      and (
+        member.role in ('owner', 'admin')
+        or exists (
+          select 1
+          from public.project_members as project_member
+          where project_member.project_id = project.id
+            and project_member.user_id = member.user_id
+            and project_member.access_level = 'editor'
+        )
+      )
+  );
+$$;
+
+create or replace function private.can_update_shared_object(target_project_id uuid, object_owner_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select private.can_edit_project(target_project_id)
+    or (
+      object_owner_id = (select auth.uid())
+      and private.can_contribute_project(target_project_id)
+    );
+$$;
+
+create or replace function private.can_delete_shared_object(target_project_id uuid, object_owner_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.projects as project
+    join public.team_members as member
+      on member.team_id = project.team_id
+     and member.user_id = (select auth.uid())
+    where project.id = target_project_id
+      and (
+        member.role in ('owner', 'admin')
+        or (
+          object_owner_id = member.user_id
+          and exists (
+            select 1
+            from public.project_members as project_member
+            where project_member.project_id = project.id
+              and project_member.user_id = member.user_id
+              and project_member.access_level in ('editor', 'contributor')
+          )
+        )
+      )
+  );
+$$;
+
+create or replace function private.can_manage_project(target_project_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.projects as project
+    where project.id = target_project_id
+      and private.is_team_admin(project.team_id)
+  );
+$$;
+
+create or replace function private.can_create_project(target_team_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select coalesce(private.team_role(target_team_id) in ('owner', 'admin', 'editor'), false);
+$$;
+
+create or replace function private.shares_team_with(target_user_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select target_user_id = (select auth.uid())
+    or exists (
+      select 1
+      from public.team_members as own_membership
+      join public.team_members as target_membership
+        on target_membership.team_id = own_membership.team_id
+      where own_membership.user_id = (select auth.uid())
+        and target_membership.user_id = target_user_id
+    );
+$$;
+
+create or replace function private.can_view_todo_item(target_item_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.todo_items as item
+    join public.todo_blocks as block on block.id = item.block_id
+    where item.id = target_item_id
+      and (
+        (block.board_scope = 'personal' and block.created_by = (select auth.uid()))
+        or (block.board_scope = 'shared' and private.can_view_project(block.project_id))
+      )
+  );
+$$;
+
+create or replace function private.can_contribute_todo_block(target_block_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.todo_blocks as block
+    where block.id = target_block_id
+      and (
+        (block.board_scope = 'personal' and block.created_by = (select auth.uid()))
+        or (block.board_scope = 'shared' and private.can_contribute_project(block.project_id))
+      )
+  );
+$$;
+
+create or replace function private.can_update_todo_item(target_item_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.todo_items as item
+    join public.todo_blocks as block on block.id = item.block_id
+    where item.id = target_item_id
+      and (
+        (block.board_scope = 'personal' and block.created_by = (select auth.uid()))
+        or (
+          block.board_scope = 'shared'
+          and private.can_update_shared_object(block.project_id, item.created_by)
+        )
+      )
+  );
+$$;
+
+create or replace function private.can_delete_todo_item(target_item_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.todo_items as item
+    join public.todo_blocks as block on block.id = item.block_id
+    where item.id = target_item_id
+      and (
+        (block.board_scope = 'personal' and block.created_by = (select auth.uid()))
+        or (
+          block.board_scope = 'shared'
+          and private.can_delete_shared_object(block.project_id, item.created_by)
+        )
+      )
+  );
+$$;
+
+create or replace function private.replace_project_access(
+  target_team_id uuid,
+  target_user_id uuid,
+  target_role text,
+  requested_project_ids uuid[],
+  granted_by_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  center_project_id constant uuid := '00000000-0000-0000-0000-000000000001';
+  normalized_project_ids uuid[];
+begin
+  normalized_project_ids := array(
+    select distinct requested.project_id
+    from unnest(
+      coalesce(requested_project_ids, '{}'::uuid[]) || array[center_project_id]
+    ) as requested(project_id)
+  );
+
+  if exists (
+    select 1
+    from unnest(normalized_project_ids) as requested(project_id)
+    left join public.projects as project
+      on project.id = requested.project_id
+     and project.team_id = target_team_id
+    where project.id is null
+  ) then
+    raise exception 'One or more selected projects do not belong to this team';
+  end if;
+
+  delete from public.project_members as project_member
+  using public.projects as project
+  where project_member.project_id = project.id
+    and project.team_id = target_team_id
+    and project_member.user_id = target_user_id;
+
+  if target_role = 'admin' then
+    return;
+  end if;
+
+  insert into public.project_members (project_id, user_id, access_level, granted_by)
+  select
+    requested.project_id,
+    target_user_id,
+    private.default_project_access(target_role),
+    granted_by_user_id
+  from unnest(normalized_project_ids) as requested(project_id)
+  on conflict (project_id, user_id) do update
+  set
+    access_level = excluded.access_level,
+    granted_by = excluded.granted_by,
+    updated_at = now();
+end;
+$$;
+
+create or replace function public.sync_center_project_access()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  center_project_id constant uuid := '00000000-0000-0000-0000-000000000001';
+begin
+  if not exists (
+    select 1
+    from public.projects as project
+    where project.id = center_project_id
+      and project.team_id = new.team_id
+  ) then
+    return new;
+  end if;
+
+  insert into public.project_members (project_id, user_id, access_level, granted_by)
+  values (
+    center_project_id,
+    new.user_id,
+    private.default_project_access(new.role),
+    new.user_id
+  )
+  on conflict (project_id, user_id) do update
+  set
+    access_level = excluded.access_level,
+    updated_at = now();
+
+  return new;
+end;
+$$;
+
+create or replace function public.grant_project_creator_access()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.created_by is not null then
+    insert into public.project_members (project_id, user_id, access_level, granted_by)
+    values (new.id, new.created_by, 'editor', new.created_by)
+    on conflict (project_id, user_id) do update
+    set access_level = 'editor', updated_at = now();
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.enforce_member_card_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  active_card_count integer;
+begin
+  if new.board_scope <> 'shared'
+    or not exists (
+      select 1
+      from public.projects as project
+      join public.team_members as member
+        on member.team_id = project.team_id
+       and member.user_id = (select auth.uid())
+      join public.project_members as project_member
+        on project_member.project_id = project.id
+       and project_member.user_id = member.user_id
+      where project.id = new.project_id
+        and member.role = 'member'
+        and project_member.access_level = 'contributor'
+    ) then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended(new.project_id::text || ':' || (select auth.uid())::text, 0)
+  );
+
+  select count(*)
+  into active_card_count
+  from public.cards as card
+  where card.board_scope = 'shared'
+    and card.project_id = new.project_id
+    and card.created_by = (select auth.uid())
+    and card.status <> 'done';
+
+  if active_card_count >= 10 then
+    raise exception 'The active card limit for this project has been reached';
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.protect_card_ownership()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.created_by = old.created_by;
+  new.created_at = old.created_at;
+  new.board_scope = old.board_scope;
+  new.project_id = old.project_id;
+  return new;
+end;
+$$;
+
+create or replace function public.protect_project_ownership()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.created_by = old.created_by;
+  new.created_at = old.created_at;
+  new.team_id = old.team_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_center_project_access_after_membership on public.team_members;
+create trigger sync_center_project_access_after_membership
+after insert or update of role on public.team_members
+for each row
+execute function public.sync_center_project_access();
+
+drop trigger if exists grant_project_creator_access_after_insert on public.projects;
+create trigger grant_project_creator_access_after_insert
+after insert on public.projects
+for each row
+execute function public.grant_project_creator_access();
+
+drop trigger if exists enforce_member_card_limit_before_insert on public.cards;
+create trigger enforce_member_card_limit_before_insert
+before insert on public.cards
+for each row
+execute function public.enforce_member_card_limit();
+
+insert into public.project_members (project_id, user_id, access_level, granted_by)
+select
+  '00000000-0000-0000-0000-000000000001',
+  member.user_id,
+  private.default_project_access(member.role),
+  member.user_id
+from public.team_members as member
+where member.team_id = '00000000-0000-0000-0000-000000000010'
+on conflict (project_id, user_id) do nothing;
+
+create or replace function public.create_team_invite(
+  target_team_id uuid,
+  target_email text,
+  target_role text,
+  selected_project_ids uuid[] default '{}'::uuid[]
+)
+returns table(invite_id uuid, invite_token text, expires_at timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  normalized_email text := lower(btrim(coalesce(target_email, '')));
+  normalized_role text := lower(btrim(coalesce(target_role, '')));
+  raw_token text;
+  result_invite_id uuid;
+  result_expires_at timestamptz := now() + interval '72 hours';
+begin
+  if not private.is_team_admin(target_team_id) then
+    raise exception 'Only the owner or an administrator can create invitations';
+  end if;
+
+  if normalized_role not in ('admin', 'editor', 'member', 'viewer') then
+    raise exception 'The invitation role is invalid';
+  end if;
+
+  if normalized_role = 'admin' and not private.is_team_owner(target_team_id) then
+    raise exception 'Only the owner can invite an administrator';
+  end if;
+
+  if normalized_email !~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$' then
+    raise exception 'The invitation email is invalid';
+  end if;
+
+  if exists (
+    select 1
+    from unnest(coalesce(selected_project_ids, '{}'::uuid[])) as requested(project_id)
+    left join public.projects as project
+      on project.id = requested.project_id
+     and project.team_id = target_team_id
+    where project.id is null
+  ) then
+    raise exception 'One or more selected projects do not belong to this team';
+  end if;
+
+  -- Serialize replacement invitations for the same person so two concurrent
+  -- administrators cannot leave multiple valid one-time links behind.
+  perform pg_advisory_xact_lock(hashtextextended(target_team_id::text || ':' || normalized_email, 0));
+
+  update public.team_invites as invite
+  set revoked_at = now()
+  where invite.team_id = target_team_id
+    and invite.invitee_email = normalized_email
+    and invite.accepted_at is null
+    and invite.revoked_at is null;
+
+  raw_token := encode(extensions.gen_random_bytes(32), 'hex');
+
+  insert into public.team_invites (
+    team_id,
+    invitee_email,
+    role,
+    token_hash,
+    created_by,
+    expires_at
+  )
+  values (
+    target_team_id,
+    normalized_email,
+    normalized_role,
+    encode(extensions.digest(raw_token, 'sha256'), 'hex'),
+    (select auth.uid()),
+    result_expires_at
+  )
+  returning id into result_invite_id;
+
+  insert into public.team_invite_projects (invite_id, project_id)
+  select result_invite_id, requested.project_id
+  from unnest(coalesce(selected_project_ids, '{}'::uuid[])) as requested(project_id)
+  on conflict do nothing;
+
+  return query select result_invite_id, raw_token, result_expires_at;
+end;
+$$;
+
+create or replace function public.accept_team_invite(raw_token text)
+returns table(team_id uuid, member_role text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  invite public.team_invites%rowtype;
+  accepted_email text := lower(coalesce((select auth.jwt() ->> 'email'), ''));
+  existing_role text;
+  selected_project_ids uuid[];
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Authentication is required to accept an invitation';
+  end if;
+
+  if raw_token is null or char_length(raw_token) <> 64 or raw_token !~ '^[0-9a-f]+$' then
+    raise exception 'The invitation link is invalid';
+  end if;
+
+  select * into invite
+  from public.team_invites as candidate
+  where candidate.token_hash = encode(extensions.digest(raw_token, 'sha256'), 'hex')
+  for update;
+
+  if invite.id is null
+    or invite.revoked_at is not null
+    or invite.accepted_at is not null
+    or invite.expires_at <= now() then
+    raise exception 'The invitation link is expired, revoked, or already used';
+  end if;
+
+  if accepted_email = '' or invite.invitee_email <> accepted_email then
+    raise exception 'This invitation belongs to a different email address';
+  end if;
+
+  select member.role into existing_role
+  from public.team_members as member
+  where member.team_id = invite.team_id
+    and member.user_id = (select auth.uid());
+
+  if existing_role = 'owner' then
+    raise exception 'The team owner cannot accept another invitation';
+  end if;
+
+  if existing_role is not null then
+    raise exception 'This account is already a team member. Update its access from team settings.';
+  end if;
+
+  select coalesce(array_agg(invite_project.project_id), '{}'::uuid[])
+  into selected_project_ids
+  from public.team_invite_projects as invite_project
+  where invite_project.invite_id = invite.id;
+
+  insert into public.team_members (team_id, user_id, role)
+  values (invite.team_id, (select auth.uid()), invite.role);
+
+  perform private.replace_project_access(
+    invite.team_id,
+    (select auth.uid()),
+    invite.role,
+    selected_project_ids,
+    invite.created_by
+  );
+
+  update public.team_invites
+  set
+    accepted_at = now(),
+    accepted_by = (select auth.uid())
+  where id = invite.id;
+
+  return query select invite.team_id, invite.role;
+end;
+$$;
+
+create or replace function public.update_team_member_access(
+  target_team_id uuid,
+  target_user_id uuid,
+  target_role text,
+  selected_project_ids uuid[] default '{}'::uuid[]
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_role text := private.team_role(target_team_id);
+  existing_role text;
+  normalized_role text := lower(btrim(coalesce(target_role, '')));
+begin
+  if current_role not in ('owner', 'admin') then
+    raise exception 'Only the owner or an administrator can update team access';
+  end if;
+
+  if normalized_role not in ('admin', 'editor', 'member', 'viewer') then
+    raise exception 'The team role is invalid';
+  end if;
+
+  select member.role into existing_role
+  from public.team_members as member
+  where member.team_id = target_team_id
+    and member.user_id = target_user_id
+  for update;
+
+  if existing_role is null then
+    raise exception 'The team member was not found';
+  end if;
+
+  if existing_role = 'owner' then
+    raise exception 'Transfer ownership before changing the owner access';
+  end if;
+
+  if current_role <> 'owner' and (existing_role = 'admin' or normalized_role = 'admin') then
+    raise exception 'Only the owner can manage administrator access';
+  end if;
+
+  update public.team_members
+  set role = normalized_role
+  where team_id = target_team_id
+    and user_id = target_user_id;
+
+  perform private.replace_project_access(
+    target_team_id,
+    target_user_id,
+    normalized_role,
+    selected_project_ids,
+    (select auth.uid())
+  );
+end;
+$$;
+
+create or replace function public.remove_team_member(target_team_id uuid, target_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_role text := private.team_role(target_team_id);
+  existing_role text;
+begin
+  if current_role not in ('owner', 'admin') then
+    raise exception 'Only the owner or an administrator can remove a member';
+  end if;
+
+  if target_user_id = (select auth.uid()) then
+    raise exception 'Use ownership transfer or leave-team flow instead of removing yourself';
+  end if;
+
+  select member.role into existing_role
+  from public.team_members as member
+  where member.team_id = target_team_id
+    and member.user_id = target_user_id
+  for update;
+
+  if existing_role is null then
+    raise exception 'The team member was not found';
+  end if;
+
+  if existing_role = 'owner' then
+    raise exception 'The owner cannot be removed';
+  end if;
+
+  if current_role <> 'owner' and existing_role = 'admin' then
+    raise exception 'Only the owner can remove an administrator';
+  end if;
+
+  delete from public.team_members
+  where team_id = target_team_id
+    and user_id = target_user_id;
+end;
+$$;
+
+create or replace function public.revoke_team_invite(target_invite_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  invite_team_id uuid;
+begin
+  select invite.team_id into invite_team_id
+  from public.team_invites as invite
+  where invite.id = target_invite_id
+  for update;
+
+  if invite_team_id is null or not private.is_team_admin(invite_team_id) then
+    raise exception 'Only the owner or an administrator can revoke this invitation';
+  end if;
+
+  update public.team_invites
+  set revoked_at = now()
+  where id = target_invite_id
+    and accepted_at is null
+    and revoked_at is null;
+end;
+$$;
+
+create or replace function public.create_team_project(
+  target_team_id uuid,
+  project_name text,
+  project_color text
+)
+returns public.projects
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  normalized_name text := btrim(coalesce(project_name, ''));
+  normalized_color text := lower(btrim(coalesce(project_color, '')));
+  next_sort_order integer;
+  created_project public.projects%rowtype;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Authentication is required to create a project';
+  end if;
+
+  if not private.can_create_project(target_team_id) then
+    raise exception 'You do not have permission to create projects in this team';
+  end if;
+
+  if char_length(normalized_name) not between 1 and 64 then
+    raise exception 'The project name must contain between 1 and 64 characters';
+  end if;
+
+  if normalized_color !~ '^#[0-9a-f]{6}$' then
+    raise exception 'The project color is invalid';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(target_team_id::text, 0));
+
+  select coalesce(max(project.sort_order), 0) + 1000
+  into next_sort_order
+  from public.projects as project
+  where project.team_id = target_team_id;
+
+  insert into public.projects (name, color, sort_order, team_id, created_by)
+  values (normalized_name, normalized_color, next_sort_order, target_team_id, (select auth.uid()))
+  returning * into created_project;
+
+  return created_project;
+end;
+$$;
+
+revoke all on function public.create_team_invite(uuid, text, text, uuid[]) from public;
+revoke all on function public.accept_team_invite(text) from public;
+revoke all on function public.update_team_member_access(uuid, uuid, text, uuid[]) from public;
+revoke all on function public.remove_team_member(uuid, uuid) from public;
+revoke all on function public.revoke_team_invite(uuid) from public;
+revoke all on function public.create_team_project(uuid, text, text) from public;
+grant execute on function public.create_team_invite(uuid, text, text, uuid[]) to authenticated;
+grant execute on function public.accept_team_invite(text) to authenticated;
+grant execute on function public.update_team_member_access(uuid, uuid, text, uuid[]) to authenticated;
+grant execute on function public.remove_team_member(uuid, uuid) to authenticated;
+grant execute on function public.revoke_team_invite(uuid) to authenticated;
+grant execute on function public.create_team_project(uuid, text, text) to authenticated;
+
+revoke all on function private.team_role(uuid) from public;
+revoke all on function private.is_team_member(uuid) from public;
+revoke all on function private.is_team_admin(uuid) from public;
+revoke all on function private.is_team_owner(uuid) from public;
+revoke all on function private.default_project_access(text) from public;
+revoke all on function private.can_view_project(uuid) from public;
+revoke all on function private.can_contribute_project(uuid) from public;
+revoke all on function private.can_edit_project(uuid) from public;
+revoke all on function private.can_update_shared_object(uuid, uuid) from public;
+revoke all on function private.can_delete_shared_object(uuid, uuid) from public;
+revoke all on function private.can_manage_project(uuid) from public;
+revoke all on function private.can_create_project(uuid) from public;
+revoke all on function private.shares_team_with(uuid) from public;
+revoke all on function private.can_view_todo_item(uuid) from public;
+revoke all on function private.can_contribute_todo_block(uuid) from public;
+revoke all on function private.can_update_todo_item(uuid) from public;
+revoke all on function private.can_delete_todo_item(uuid) from public;
+revoke all on function private.replace_project_access(uuid, uuid, text, uuid[], uuid) from public;
+revoke all on function private.team_role(uuid) from authenticated;
+revoke all on function private.is_team_member(uuid) from authenticated;
+revoke all on function private.is_team_admin(uuid) from authenticated;
+revoke all on function private.is_team_owner(uuid) from authenticated;
+revoke all on function private.default_project_access(text) from authenticated;
+revoke all on function private.can_view_project(uuid) from authenticated;
+revoke all on function private.can_contribute_project(uuid) from authenticated;
+revoke all on function private.can_edit_project(uuid) from authenticated;
+revoke all on function private.can_update_shared_object(uuid, uuid) from authenticated;
+revoke all on function private.can_delete_shared_object(uuid, uuid) from authenticated;
+revoke all on function private.can_manage_project(uuid) from authenticated;
+revoke all on function private.can_create_project(uuid) from authenticated;
+revoke all on function private.shares_team_with(uuid) from authenticated;
+revoke all on function private.can_view_todo_item(uuid) from authenticated;
+revoke all on function private.can_contribute_todo_block(uuid) from authenticated;
+revoke all on function private.can_update_todo_item(uuid) from authenticated;
+revoke all on function private.can_delete_todo_item(uuid) from authenticated;
+revoke all on function private.replace_project_access(uuid, uuid, text, uuid[], uuid) from authenticated;
+
+-- RLS expressions must be able to call these read-only predicates. The only
+-- state-changing helper, replace_project_access, deliberately stays private.
+grant execute on function private.is_team_member(uuid) to authenticated;
+grant execute on function private.is_team_admin(uuid) to authenticated;
+grant execute on function private.can_view_project(uuid) to authenticated;
+grant execute on function private.can_contribute_project(uuid) to authenticated;
+grant execute on function private.can_update_shared_object(uuid, uuid) to authenticated;
+grant execute on function private.can_delete_shared_object(uuid, uuid) to authenticated;
+grant execute on function private.can_manage_project(uuid) to authenticated;
+grant execute on function private.can_create_project(uuid) to authenticated;
+grant execute on function private.shares_team_with(uuid) to authenticated;
+grant execute on function private.can_view_todo_item(uuid) to authenticated;
+grant execute on function private.can_contribute_todo_block(uuid) to authenticated;
+grant execute on function private.can_update_todo_item(uuid) to authenticated;
+grant execute on function private.can_delete_todo_item(uuid) to authenticated;
+
+alter table public.teams enable row level security;
+alter table public.team_members enable row level security;
+alter table public.project_members enable row level security;
+alter table public.team_invites enable row level security;
+alter table public.team_invite_projects enable row level security;
+
+-- A previous interrupted run may have created only part of this access layer.
+-- Remove every policy owned by this section before recreating it below.
+do $$
+declare
+  policy_record record;
+begin
+  for policy_record in
+    select *
+    from (
+      values
+        ('public', 'teams', 'teams_select_members'),
+        ('public', 'team_members', 'team_members_select_members'),
+        ('public', 'project_members', 'project_members_select_self_or_admin'),
+        ('public', 'team_invites', 'team_invites_manage_admins'),
+        ('public', 'team_invite_projects', 'team_invite_projects_manage_admins'),
+        ('public', 'projects', 'projects_select_team_access'),
+        ('public', 'projects', 'projects_insert_team_editor'),
+        ('public', 'projects', 'projects_update_team_admin'),
+        ('public', 'projects', 'projects_delete_team_admin'),
+        ('public', 'profiles', 'profiles_select_shared_team'),
+        ('public', 'cards', 'cards_select_team_access'),
+        ('public', 'cards', 'cards_insert_team_contributors'),
+        ('public', 'cards', 'cards_update_team_access'),
+        ('public', 'cards', 'cards_delete_team_access'),
+        ('public', 'todo_blocks', 'todo_blocks_select_team_access'),
+        ('public', 'todo_blocks', 'todo_blocks_insert_team_contributors'),
+        ('public', 'todo_blocks', 'todo_blocks_update_team_access'),
+        ('public', 'todo_blocks', 'todo_blocks_delete_team_access'),
+        ('public', 'todo_items', 'todo_items_select_team_access'),
+        ('public', 'todo_items', 'todo_items_insert_team_contributors'),
+        ('public', 'todo_items', 'todo_items_update_team_access'),
+        ('public', 'todo_items', 'todo_items_delete_team_access'),
+        ('public', 'card_links', 'card_links_select_team_access'),
+        ('public', 'card_links', 'card_links_insert_team_contributors'),
+        ('public', 'card_links', 'card_links_update_team_access'),
+        ('public', 'card_links', 'card_links_delete_team_access'),
+        ('public', 'board_texts', 'board_texts_select_team_access'),
+        ('public', 'board_texts', 'board_texts_insert_team_contributors'),
+        ('public', 'board_texts', 'board_texts_update_team_access'),
+        ('public', 'board_texts', 'board_texts_delete_team_access'),
+        ('storage', 'objects', 'card_images_select_team_access'),
+        ('storage', 'objects', 'card_images_delete_team_access'),
+        ('storage', 'objects', 'todo_images_select_team_access'),
+        ('storage', 'objects', 'todo_images_delete_team_access'),
+        ('storage', 'objects', 'avatars_select_shared_team'),
+        ('realtime', 'messages', 'fireboard_presence_read'),
+        ('realtime', 'messages', 'fireboard_presence_write')
+    ) as policies(schema_name, table_name, policy_name)
+  loop
+    execute format(
+      'drop policy if exists %I on %I.%I',
+      policy_record.policy_name,
+      policy_record.schema_name,
+      policy_record.table_name
+    );
+  end loop;
+end;
+$$;
+
+drop policy if exists "teams_select_members" on public.teams;
+create policy "teams_select_members"
+on public.teams
+for select
+to authenticated
+using (private.is_team_member(id));
+
+drop policy if exists "team_members_select_members" on public.team_members;
+create policy "team_members_select_members"
+on public.team_members
+for select
+to authenticated
+using (private.is_team_member(team_id));
+
+drop policy if exists "project_members_select_self_or_admin" on public.project_members;
+create policy "project_members_select_self_or_admin"
+on public.project_members
+for select
+to authenticated
+using (
+  user_id = (select auth.uid())
+  or private.can_manage_project(project_id)
+);
+
+drop policy if exists "team_invites_manage_admins" on public.team_invites;
+create policy "team_invites_manage_admins"
+on public.team_invites
+for select
+to authenticated
+using (private.is_team_admin(team_id));
+
+drop policy if exists "team_invite_projects_manage_admins" on public.team_invite_projects;
+create policy "team_invite_projects_manage_admins"
+on public.team_invite_projects
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.team_invites as invite
+    where invite.id = invite_id
+      and private.is_team_admin(invite.team_id)
+  )
+);
+
+drop policy if exists "projects_select_authenticated" on public.projects;
+create policy "projects_select_team_access"
+on public.projects
+for select
+to authenticated
+using (private.can_view_project(id));
+
+drop policy if exists "projects_insert_authenticated" on public.projects;
+create policy "projects_insert_team_editor"
+on public.projects
+for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and private.can_create_project(team_id)
+);
+
+drop policy if exists "projects_update_authenticated" on public.projects;
+create policy "projects_update_team_admin"
+on public.projects
+for update
+to authenticated
+using (private.can_manage_project(id))
+with check (private.can_manage_project(id));
+
+drop policy if exists "projects_delete_authenticated" on public.projects;
+create policy "projects_delete_team_admin"
+on public.projects
+for delete
+to authenticated
+using (
+  id <> '00000000-0000-0000-0000-000000000001'
+  and private.can_manage_project(id)
+);
+
+drop policy if exists "profiles_select_authenticated" on public.profiles;
+create policy "profiles_select_shared_team"
+on public.profiles
+for select
+to authenticated
+using (
+  id = (select auth.uid())
+  or private.shares_team_with(id)
+);
+
+drop policy if exists "cards_select_authenticated" on public.cards;
+create policy "cards_select_team_access"
+on public.cards
+for select
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_view_project(project_id))
+);
+
+drop policy if exists "cards_insert_authenticated" on public.cards;
+create policy "cards_insert_team_contributors"
+on public.cards
+for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and private.can_contribute_project(project_id))
+  )
+);
+
+drop policy if exists "cards_update_authenticated" on public.cards;
+create policy "cards_update_team_access"
+on public.cards
+for update
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+)
+with check (
+  (board_scope = 'personal' and created_by = (select auth.uid()) and project_id is null)
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+);
+
+drop policy if exists "cards_delete_authenticated" on public.cards;
+create policy "cards_delete_team_access"
+on public.cards
+for delete
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_delete_shared_object(project_id, created_by))
+);
+
+drop policy if exists "todo_blocks_select_authenticated" on public.todo_blocks;
+create policy "todo_blocks_select_team_access"
+on public.todo_blocks
+for select
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_view_project(project_id))
+);
+
+drop policy if exists "todo_blocks_insert_authenticated" on public.todo_blocks;
+create policy "todo_blocks_insert_team_contributors"
+on public.todo_blocks
+for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and private.can_contribute_project(project_id))
+  )
+);
+
+drop policy if exists "todo_blocks_update_authenticated" on public.todo_blocks;
+create policy "todo_blocks_update_team_access"
+on public.todo_blocks
+for update
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+)
+with check (
+  (board_scope = 'personal' and created_by = (select auth.uid()) and project_id is null)
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+);
+
+drop policy if exists "todo_blocks_delete_authenticated" on public.todo_blocks;
+create policy "todo_blocks_delete_team_access"
+on public.todo_blocks
+for delete
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_delete_shared_object(project_id, created_by))
+);
+
+drop policy if exists "todo_items_select_authenticated" on public.todo_items;
+create policy "todo_items_select_team_access"
+on public.todo_items
+for select
+to authenticated
+using (private.can_view_todo_item(id));
+
+drop policy if exists "todo_items_insert_authenticated" on public.todo_items;
+create policy "todo_items_insert_team_contributors"
+on public.todo_items
+for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and private.can_contribute_todo_block(block_id)
+);
+
+drop policy if exists "todo_items_update_authenticated" on public.todo_items;
+create policy "todo_items_update_team_access"
+on public.todo_items
+for update
+to authenticated
+using (private.can_update_todo_item(id))
+with check (private.can_update_todo_item(id));
+
+drop policy if exists "todo_items_delete_authenticated" on public.todo_items;
+create policy "todo_items_delete_team_access"
+on public.todo_items
+for delete
+to authenticated
+using (private.can_delete_todo_item(id));
+
+drop policy if exists "card_links_select_authenticated" on public.card_links;
+create policy "card_links_select_team_access"
+on public.card_links
+for select
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_view_project(project_id))
+);
+
+drop policy if exists "card_links_insert_authenticated" on public.card_links;
+create policy "card_links_insert_team_contributors"
+on public.card_links
+for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and private.can_contribute_project(project_id))
+  )
+);
+
+drop policy if exists "card_links_update_authenticated" on public.card_links;
+create policy "card_links_update_team_access"
+on public.card_links
+for update
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+)
+with check (
+  (board_scope = 'personal' and created_by = (select auth.uid()) and project_id is null)
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+);
+
+drop policy if exists "card_links_delete_authenticated" on public.card_links;
+create policy "card_links_delete_team_access"
+on public.card_links
+for delete
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_delete_shared_object(project_id, created_by))
+);
+
+drop policy if exists "board_texts_select_authenticated" on public.board_texts;
+create policy "board_texts_select_team_access"
+on public.board_texts
+for select
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_view_project(project_id))
+);
+
+drop policy if exists "board_texts_insert_authenticated" on public.board_texts;
+create policy "board_texts_insert_team_contributors"
+on public.board_texts
+for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and (
+    (board_scope = 'personal' and project_id is null)
+    or (board_scope = 'shared' and private.can_contribute_project(project_id))
+  )
+);
+
+drop policy if exists "board_texts_update_authenticated" on public.board_texts;
+create policy "board_texts_update_team_access"
+on public.board_texts
+for update
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+)
+with check (
+  (board_scope = 'personal' and created_by = (select auth.uid()) and project_id is null)
+  or (board_scope = 'shared' and private.can_update_shared_object(project_id, created_by))
+);
+
+drop policy if exists "board_texts_delete_authenticated" on public.board_texts;
+create policy "board_texts_delete_team_access"
+on public.board_texts
+for delete
+to authenticated
+using (
+  (board_scope = 'personal' and created_by = (select auth.uid()))
+  or (board_scope = 'shared' and private.can_delete_shared_object(project_id, created_by))
+);
+
+drop policy if exists "card_images_select_authenticated" on storage.objects;
+create policy "card_images_select_team_access"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'card-images'
+  and (
+    exists (
+      select 1
+      from public.cards as card
+      where card.image_path = name
+        and (
+          (card.board_scope = 'personal' and card.created_by = (select auth.uid()))
+          or (card.board_scope = 'shared' and private.can_view_project(card.project_id))
+        )
+    )
+    or (
+      (storage.foldername(name))[1] = (select auth.uid()::text)
+      and not exists (select 1 from public.cards as card where card.image_path = name)
+    )
+  )
+);
+
+drop policy if exists "card_images_delete_visible_or_own" on storage.objects;
+create policy "card_images_delete_team_access"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'card-images'
+  and (
+    exists (
+      select 1
+      from public.cards as card
+      where card.image_path = name
+        and (
+          (card.board_scope = 'personal' and card.created_by = (select auth.uid()))
+          or (
+            card.board_scope = 'shared'
+            and private.can_delete_shared_object(card.project_id, card.created_by)
+          )
+        )
+    )
+    or (
+      (storage.foldername(name))[1] = (select auth.uid()::text)
+      and not exists (select 1 from public.cards as card where card.image_path = name)
+    )
+    or exists (
+      select 1
+      from public.card_image_cleanup_queue as cleanup
+      where cleanup.image_path = name
+        and cleanup.requested_by = (select auth.uid())
+    )
+  )
+);
+
+drop policy if exists "todo_images_select_authenticated" on storage.objects;
+create policy "todo_images_select_team_access"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'todo-images'
+  and (
+    exists (
+      select 1
+      from public.todo_items as item
+      join public.todo_blocks as block on block.id = item.block_id
+      where item.image_path = name
+        and (
+          (block.board_scope = 'personal' and block.created_by = (select auth.uid()))
+          or (block.board_scope = 'shared' and private.can_view_project(block.project_id))
+        )
+    )
+    or (
+      (storage.foldername(name))[1] = (select auth.uid()::text)
+      and not exists (select 1 from public.todo_items as item where item.image_path = name)
+    )
+  )
+);
+
+drop policy if exists "todo_images_delete_visible_or_own" on storage.objects;
+create policy "todo_images_delete_team_access"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'todo-images'
+  and (
+    exists (
+      select 1
+      from public.todo_items as item
+      join public.todo_blocks as block on block.id = item.block_id
+      where item.image_path = name
+        and (
+          (block.board_scope = 'personal' and block.created_by = (select auth.uid()))
+          or (
+            block.board_scope = 'shared'
+            and private.can_delete_shared_object(block.project_id, item.created_by)
+          )
+        )
+    )
+    or (
+      (storage.foldername(name))[1] = (select auth.uid()::text)
+      and not exists (select 1 from public.todo_items as item where item.image_path = name)
+    )
+    or exists (
+      select 1
+      from public.todo_image_cleanup_queue as cleanup
+      where cleanup.image_path = name
+        and cleanup.requested_by = (select auth.uid())
+    )
+  )
+);
+
+drop policy if exists "avatars_select_authenticated" on storage.objects;
+create policy "avatars_select_shared_team"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'avatars'
+  and (
+    (storage.foldername(name))[1] = (select auth.uid()::text)
+    or exists (
+      select 1
+      from public.profiles as profile
+      where profile.avatar_path = name
+        and private.shares_team_with(profile.id)
+    )
+  )
+);
+
+create or replace function private.can_access_presence_topic(topic text)
+returns boolean
+language plpgsql
+security definer
+stable
+set search_path = ''
+as $$
+declare
+  project_id uuid;
+begin
+  if topic !~ '^fireboard:presence:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return false;
+  end if;
+
+  project_id := split_part(topic, ':', 3)::uuid;
+  return private.can_view_project(project_id);
+end;
+$$;
+
+revoke all on function private.can_access_presence_topic(text) from public;
+grant execute on function private.can_access_presence_topic(text) to authenticated;
+
+drop policy if exists "fireboard_presence_read" on realtime.messages;
+create policy "fireboard_presence_read"
+on realtime.messages
+for select
+to authenticated
+using (
+  private.can_access_presence_topic(realtime.topic())
+);
+
+drop policy if exists "fireboard_presence_write" on realtime.messages;
+create policy "fireboard_presence_write"
+on realtime.messages
+for insert
+to authenticated
+with check (
+  private.can_access_presence_topic(realtime.topic())
+);
+
+drop trigger if exists set_teams_updated_at on public.teams;
+create trigger set_teams_updated_at
+before update on public.teams
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_team_members_updated_at on public.team_members;
+create trigger set_team_members_updated_at
+before update on public.team_members
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_project_members_updated_at on public.project_members;
+create trigger set_project_members_updated_at
+before update on public.project_members
+for each row
+execute function public.set_updated_at();
+
+do $$
+begin
+  alter publication supabase_realtime add table public.teams;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.team_members;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.project_members;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end;
+$$;
+
+commit;

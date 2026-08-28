@@ -336,6 +336,7 @@ export type Database = {
           name: string
           color: string
           sort_order: number
+          team_id: string
           created_by: string | null
           created_at: string
           updated_at: string
@@ -345,6 +346,7 @@ export type Database = {
           name: string
           color?: string
           sort_order?: number
+          team_id: string
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -353,9 +355,104 @@ export type Database = {
           name?: string
           color?: string
           sort_order?: number
+          team_id?: string
           created_by?: string | null
           updated_at?: string
         }
+        Relationships: []
+      }
+      teams: {
+        Row: {
+          id: string
+          name: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          created_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          team_id: string
+          user_id: string
+          role: 'owner' | 'admin' | 'editor' | 'member' | 'viewer'
+          joined_at: string
+          updated_at: string
+        }
+        Insert: {
+          team_id: string
+          user_id: string
+          role?: 'owner' | 'admin' | 'editor' | 'member' | 'viewer'
+          joined_at?: string
+          updated_at?: string
+        }
+        Update: {
+          role?: 'owner' | 'admin' | 'editor' | 'member' | 'viewer'
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      project_members: {
+        Row: {
+          project_id: string
+          user_id: string
+          access_level: 'viewer' | 'contributor' | 'editor'
+          granted_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          project_id: string
+          user_id: string
+          access_level?: 'viewer' | 'contributor' | 'editor'
+          granted_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          access_level?: 'viewer' | 'contributor' | 'editor'
+          granted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      team_invites: {
+        Row: {
+          id: string
+          team_id: string
+          invitee_email: string
+          role: 'admin' | 'editor' | 'member' | 'viewer'
+          token_hash: string
+          expires_at: string
+          accepted_at: string | null
+          accepted_by: string | null
+          revoked_at: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      team_invite_projects: {
+        Row: {
+          invite_id: string
+          project_id: string
+        }
+        Insert: never
+        Update: never
         Relationships: []
       }
     }
@@ -384,6 +481,40 @@ export type Database = {
       reorder_todo_items: {
         Args: { target_block_id: string; payload: Json }
         Returns: Database['public']['Tables']['todo_items']['Row'][]
+      }
+      create_team_invite: {
+        Args: {
+          target_team_id: string
+          target_email: string
+          target_role: 'admin' | 'editor' | 'member' | 'viewer'
+          selected_project_ids?: string[]
+        }
+        Returns: { invite_id: string; invite_token: string; expires_at: string }[]
+      }
+      create_team_project: {
+        Args: { target_team_id: string; project_name: string; project_color: string }
+        Returns: Database['public']['Tables']['projects']['Row']
+      }
+      accept_team_invite: {
+        Args: { raw_token: string }
+        Returns: { team_id: string; member_role: 'admin' | 'editor' | 'member' | 'viewer' }[]
+      }
+      update_team_member_access: {
+        Args: {
+          target_team_id: string
+          target_user_id: string
+          target_role: 'admin' | 'editor' | 'member' | 'viewer'
+          selected_project_ids?: string[]
+        }
+        Returns: undefined
+      }
+      remove_team_member: {
+        Args: { target_team_id: string; target_user_id: string }
+        Returns: undefined
+      }
+      revoke_team_invite: {
+        Args: { target_invite_id: string }
+        Returns: undefined
       }
     }
     Enums: Record<string, never>

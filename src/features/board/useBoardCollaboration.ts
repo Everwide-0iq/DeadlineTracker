@@ -124,6 +124,7 @@ export function useBoardCollaboration({
       config: {
         broadcast: { self: false },
         presence: { key: clientId },
+        private: true,
       },
     })
     channelRef.current = channel

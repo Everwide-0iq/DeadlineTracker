@@ -25,6 +25,16 @@ const descriptionBlockMargin = 16
 const imagePreviewMargin = 16
 const maxImagePreviewHeight = 360
 const minImagePreviewHeight = 128
+const typographyReferenceWidth = 400
+const typographyReferenceHeight = 320
+const maxTypographyScale = 2.5
+
+export type CardTypographyMetrics = {
+  descriptionFontSize: number
+  descriptionLineHeight: number
+  titleFontSize: number
+  titleLineHeight: number
+}
 
 type CardContentSizeInput = {
   description: string | null
@@ -52,6 +62,23 @@ const getTextLineCount = (value: string | null, charactersPerLine: number) => {
       const length = Math.max(Array.from(paragraph.trim()).length, 1)
       return lineCount + Math.max(Math.ceil(length / charactersPerLine), 1)
     }, 0)
+}
+
+export function getCardTypographyMetrics(
+  width = defaultCardSize.w,
+  height = defaultCardSize.h,
+): CardTypographyMetrics {
+  const widthScale = width / typographyReferenceWidth
+  const heightScale = height / typographyReferenceHeight
+  const titleScale = Math.min(Math.max(Math.min(widthScale, heightScale), 1), maxTypographyScale)
+  const descriptionScale = 1 + (titleScale - 1) * 0.55
+
+  return {
+    descriptionFontSize: 14 * descriptionScale,
+    descriptionLineHeight: descriptionLineHeight * descriptionScale,
+    titleFontSize: 22 * titleScale,
+    titleLineHeight: titleLineHeight * titleScale,
+  }
 }
 
 const getImagePreviewHeight = (
@@ -89,17 +116,26 @@ export function getCardContentHeight({
   w,
 }: CardContentSizeInput) {
   const cardWidth = w ?? defaultCardSize.w
+  const cardHeight = h ?? defaultCardSize.h
+  const typography = getCardTypographyMetrics(cardWidth, cardHeight)
   const contentWidth = Math.max(cardWidth - cardHorizontalPadding, 220)
-  const titleCharactersPerLine = Math.max(Math.floor(contentWidth / titleAverageCharWidth), 12)
+  const titleCharactersPerLine = Math.max(
+    Math.floor(contentWidth / (titleAverageCharWidth * (typography.titleFontSize / 22))),
+    12,
+  )
   const descriptionCharactersPerLine = Math.max(
-    Math.floor(contentWidth / descriptionAverageCharWidth),
+    Math.floor(
+      contentWidth / (descriptionAverageCharWidth * (typography.descriptionFontSize / 14)),
+    ),
     18,
   )
   const titleLines = Math.max(getTextLineCount(title, titleCharactersPerLine), 1)
   const descriptionLines = getTextLineCount(description, descriptionCharactersPerLine)
-  const titleHeight = titleLines * titleLineHeight + titleBlockMargin
+  const titleHeight = titleLines * typography.titleLineHeight + titleBlockMargin
   const descriptionHeight =
-    descriptionLines > 0 ? descriptionLines * descriptionLineHeight + descriptionBlockMargin : 0
+    descriptionLines > 0
+      ? descriptionLines * typography.descriptionLineHeight + descriptionBlockMargin
+      : 0
   const imageExtraHeight = getImagePreviewHeight(contentWidth, imagePath, imageWidth, imageHeight)
   const stateMetadataHeight = (isActive ? 34 : 0) + (status === 'done' ? 28 : 0)
   const minimumContentHeight =

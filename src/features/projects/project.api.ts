@@ -16,18 +16,10 @@ export function mapProjectFromRow(row: ProjectRow): Project {
     name: row.name,
     color: normalizeColor(row.color),
     sortOrder: row.sort_order ?? 0,
+    teamId: row.team_id,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  }
-}
-
-function toInsertRow(input: CreateProjectInput, userId: string | null) {
-  return {
-    name: input.name,
-    color: normalizeColor(input.color),
-    sort_order: input.sortOrder ?? 0,
-    created_by: userId,
   }
 }
 
@@ -45,12 +37,12 @@ export async function fetchProjects() {
   return sortProjects((data ?? []).map(mapProjectFromRow))
 }
 
-export async function createProject(input: CreateProjectInput, userId: string | null) {
-  const { data, error } = await requireSupabase()
-    .from('projects')
-    .insert(toInsertRow(input, userId))
-    .select('*')
-    .single()
+export async function createProject(input: CreateProjectInput) {
+  const { data, error } = await requireSupabase().rpc('create_team_project', {
+    project_color: normalizeColor(input.color),
+    project_name: input.name,
+    target_team_id: input.teamId,
+  })
 
   if (error) {
     throw error

@@ -51,9 +51,17 @@ If the variables are missing, the app shows a setup screen instead of a blank er
 3. Create users manually in Authentication, or invite them.
 4. Open SQL Editor.
 5. Run `supabase/migrations/0001_initial_schema.sql`.
-6. Make sure Realtime is enabled for `public.cards`, `public.todo_blocks`, `public.todo_items`, `public.projects`, `public.card_links`, `public.board_texts`, and `public.profiles`. The migration also creates private `card-images`, `todo-images`, and `avatars` Storage buckets and attempts to add the relevant tables to `supabase_realtime`.
+6. Make sure Realtime is enabled for `public.cards`, `public.todo_blocks`, `public.todo_items`, `public.projects`, `public.card_links`, `public.board_texts`, `public.profiles`, `public.teams`, `public.team_members`, and `public.project_members`. The migration also creates private `card-images`, `todo-images`, and `avatars` Storage buckets and attempts to add the relevant tables to `supabase_realtime`.
 
 If the project already exists, run `0001_initial_schema.sql` again after pulling updates. The migration is idempotent and adds missing columns, indexes, constraints, atomic bulk-update functions, image-cleanup support, triggers, RLS policies, and realtime publications.
+
+## Team Access
+
+- The first existing account becomes the owner of the initial Fireboard team. Open **Team center** from the shared-board sidebar to invite people and manage their access.
+- `Owner` and `Administrator` manage members and all projects. `Editor` can create projects. `Member` and `Viewer` only access Center plus projects explicitly assigned to them; viewers are read-only.
+- Invitations are tied to one email, expire after 72 hours, and are invalidated on first use. The invited person must already have a Fireboard/Supabase account with that same email.
+- Removing a member revokes access immediately but preserves their existing shared content.
+- For private presence channels, keep Realtime Authorization enabled in Supabase and disable public Realtime access. The app already joins those channels with `private: true`.
 
 ## Vercel Deployment
 
@@ -130,9 +138,17 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 3. Создай пользователей вручную в Authentication или пригласи их.
 4. Открой SQL Editor.
 5. Выполни `supabase/migrations/0001_initial_schema.sql`.
-6. Проверь, что Realtime включён для `public.cards`, `public.todo_blocks`, `public.todo_items`, `public.projects`, `public.card_links`, `public.board_texts` и `public.profiles`. Миграция также создаёт приватные Storage buckets `card-images`, `todo-images` и `avatars` и сама пытается добавить нужные таблицы в `supabase_realtime`.
+6. Проверь, что Realtime включён для `public.cards`, `public.todo_blocks`, `public.todo_items`, `public.projects`, `public.card_links`, `public.board_texts`, `public.profiles`, `public.teams`, `public.team_members` и `public.project_members`. Миграция также создаёт приватные Storage buckets `card-images`, `todo-images` и `avatars` и сама пытается добавить нужные таблицы в `supabase_realtime`.
 
 Если проект уже был создан, после получения обновлений снова выполни `0001_initial_schema.sql`. Миграция идемпотентна и добавит недостающие колонки, индексы, ограничения, атомарные функции массового обновления, очистку изображений, triggers, RLS policies и realtime publications.
+
+## Доступ к команде
+
+- Первый существующий аккаунт становится владельцем начальной команды Fireboard. Открой «Центр команды» в sidebar общей доски, чтобы приглашать людей и настраивать их доступ.
+- `Владелец` и `Администратор` управляют участниками и всеми проектами. `Редактор` может создавать проекты. `Участник` и `Наблюдатель` видят только Центр и явно выданные проекты; наблюдатель ничего не меняет.
+- Ссылка приглашения привязана к одному email, действует 72 часа и перестаёт работать после первого использования. У приглашённого уже должен быть аккаунт Fireboard/Supabase с тем же email.
+- Удаление участника сразу отзывает доступ, но его уже созданный общий контент остаётся на досках.
+- Для приватных presence-каналов оставь Realtime Authorization включённой в Supabase и отключи public Realtime access. Приложение уже подключается к ним с `private: true`.
 
 ## Деплой на Vercel
 

@@ -16,7 +16,7 @@ type ProjectState = {
   hasLoaded: boolean
   isLoading: boolean
   projects: Project[]
-  createProject: (input: CreateProjectInput, userId: string | null) => Promise<Project>
+  createProject: (input: CreateProjectInput) => Promise<Project>
   deleteProject: (id: string) => Promise<void>
   loadProjects: () => Promise<void>
   moveProject: (id: string, direction: ProjectMoveDirection) => Promise<void>
@@ -61,12 +61,6 @@ const upsertProject = (projects: Project[], project: Project) => {
   const next = [...projects]
   next[index] = project
   return sortProjects(next)
-}
-
-const getNextSortOrder = (projects: Project[]) => {
-  const movableProjects = projects.filter((project) => project.id !== defaultProjectId)
-  const maxSortOrder = movableProjects.reduce((max, project) => Math.max(max, project.sortOrder), 0)
-  return maxSortOrder + 1000
 }
 
 const restoreProjectOrder = (current: Project[], attempted: Project[], previous: Project[]) => {
@@ -135,11 +129,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   hasLoaded: false,
   isLoading: false,
   projects: [],
-  createProject: async (input, userId) => {
+  createProject: async (input) => {
     set({ error: null })
 
     try {
-      const project = await createProjectApi({ ...input, sortOrder: getNextSortOrder(get().projects) }, userId)
+      const project = await createProjectApi(input)
       set((state) => ({ projects: upsertProject(state.projects, project) }))
       return project
     } catch (error) {

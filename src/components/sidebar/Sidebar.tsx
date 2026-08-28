@@ -9,6 +9,7 @@ import {
   LockKeyhole,
   LogOut,
   Settings2,
+  ShieldCheck,
   UsersRound,
 } from 'lucide-react'
 import type { ComponentType } from 'react'
@@ -27,6 +28,10 @@ import { AddMenu } from '../../features/board/AddMenu.tsx'
 
 type SidebarProps = {
   activeFilter: BoardFilter
+  canCreateProject: boolean
+  canContribute: boolean
+  canManageProjects: boolean
+  canManageTeam: boolean
   activeBoardScope: BoardScope
   activeProjectId: string
   counts: FilterCounts
@@ -42,6 +47,7 @@ type SidebarProps = {
   onFilterChange: (filter: BoardFilter) => void
   onLogout: () => void
   onOpenProfile: () => void
+  onOpenTeam: () => void
   onMoveProject: (project: Project, direction: ProjectMoveDirection) => void
   onProjectChange: (projectId: string) => void
   onViewModeChange: (mode: DesktopViewMode) => void
@@ -60,6 +66,10 @@ const filterIcons: Record<BoardFilter, ComponentType<{ size?: number }>> = {
 
 export function Sidebar({
   activeFilter,
+  canCreateProject,
+  canContribute,
+  canManageProjects,
+  canManageTeam,
   activeBoardScope,
   activeProjectId,
   counts,
@@ -75,6 +85,7 @@ export function Sidebar({
   onFilterChange,
   onLogout,
   onOpenProfile,
+  onOpenTeam,
   onMoveProject,
   onProjectChange,
   onViewModeChange,
@@ -130,8 +141,16 @@ export function Sidebar({
         </div>
       </div>
 
+      {canManageTeam && activeBoardScope === 'shared' ? (
+        <button className="secondary-button mb-3 w-full justify-center py-2.5 text-sm" type="button" onClick={onOpenTeam}>
+          <ShieldCheck size={16} />
+          {t.team.manage}
+        </button>
+      ) : null}
+
       <AddMenu
         className="mb-3 shrink-0"
+        disabled={activeBoardScope === 'shared' && !canContribute}
         onAddCard={onCreate}
         onAddText={onCreateText}
         onAddTodo={onCreateTodo}
@@ -140,6 +159,8 @@ export function Sidebar({
       {activeBoardScope === 'shared' ? (
         <ProjectList
           activeProjectId={activeProjectId}
+          canCreate={canCreateProject}
+          canManage={canManageProjects}
           counts={projectCardCounts}
           deadlines={projectDeadlines}
           projects={projects}

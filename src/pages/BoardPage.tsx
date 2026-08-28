@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Sidebar } from '../components/sidebar/Sidebar.tsx'
 import { DesktopBoard } from '../features/board/DesktopBoard.tsx'
 import { getBoardCenterPosition } from '../features/board/board.utils.ts'
@@ -36,6 +37,10 @@ import { getProjectDisplayName } from '../features/projects/project.utils.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { readStorageValue, writeStorageValue } from '../lib/storage.ts'
 import { useProfileStore } from '../features/profile/profile.store.ts'
+import { ensureProfile } from '../features/profile/profile.api.ts'
+import { acceptTeamInvite } from '../features/team/team.api.ts'
+import { useTeamStore } from '../features/team/team.store.ts'
+import { canContributeToProject, canCreateTeamProject, isTeamAdmin } from '../features/team/team.types.ts'
 import { useTodoStore } from '../features/todos/todo.store.ts'
 import type { TodoBlock, TodoItem } from '../features/todos/todo.types.ts'
 import {
@@ -56,6 +61,9 @@ const BoardTextEditor = lazy(() =>
 )
 const ProfileSettings = lazy(() =>
   import('../features/profile/ProfileSettings.tsx').then((module) => ({ default: module.ProfileSettings })),
+)
+const TeamSettings = lazy(() =>
+  import('../features/team/TeamSettings.tsx').then((module) => ({ default: module.TeamSettings })),
 )
 const TodoBlockEditor = lazy(() =>
   import('../features/todos/TodoBlockEditor.tsx').then((module) => ({ default: module.TodoBlockEditor })),
@@ -156,6 +164,7 @@ function getProjectDeadlineSummaries(
 }
 
 export function BoardPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const { camera, setCamera, zoomBy } = useBoardCamera()
   const [desktopViewMode, setDesktopViewMode] = useState<DesktopViewMode>(() => {
     const stored = readStorageValue('fireboard.desktopViewMode')
@@ -170,6 +179,7 @@ export function BoardPage() {
   })
   const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false)
   const [isProfileSettingsOpen, setIsProfileSettingsOpen] = useState(false)
+  const [isTeamSettingsOpen, setIsTeamSettingsOpen] = useState(false)
   const cards = useCardStore((state) => state.cards)
   const error = useCardStore((state) => state.error)
   const filter = useCardStore((state) => state.filter)
@@ -213,10 +223,35 @@ export function BoardPage() {
   const loadProfiles = useProfileStore((state) => state.loadProfiles)
   const profiles = useProfileStore((state) => state.profiles)
   const subscribeProfileRealtime = useProfileStore((state) => state.subscribeRealtime)
+  const clearTeam = useTeamStore((state) => state.clear)
+  const hasLoadedTeamAccess = useTeamStore((state) => state.hasLoaded)
+  const loadTeamAccess = useTeamStore((state) => state.loadAccess)
+  const subscribeTeamRealtime = useTeamStore((state) => state.subscribeRealtime)
+  const team = useTeamStore((state) => state.team)
+  const teamMember = useTeamStore((state) => state.member)
+  const projectAccess = useTeamStore((state) => state.projectAccess)
   const confirm = useFeedbackStore((state) => state.confirm)
+  const pushToast = useFeedbackStore((state) => state.pushToast)
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
   const isDesktop = useMediaQuery('(min-width: 1024px)')
+
+  useEffect(() => {
+    if (!userId) {
+      clearTeam()
+      return undefined
+    }
+
+    void loadTeamAccess(userId)
+    return subscribeTeamRealtime(userId)
+  }, [clearTeam, loadTeamAccess, subscribeTeamRealtime, userId])
+
+  useEffect(() => {
+    if (!hasLoadedTeamAccess || teamMember) return
+
+    setActiveBoardScope('personal')
+    void Promise.all([loadCards(), loadProjects(), loadTodos()])
+  }, [hasLoadedTeamAccess, loadCards, loadProjects, loadTodos, teamMember])
 
   useEffect(() => {
     void loadCards()
@@ -260,6 +295,33 @@ export function BoardPage() {
     const unsubscribe = subscribeProfileRealtime()
     return unsubscribe
   }, [clearProfiles, loadProfiles, subscribeProfileRealtime, userEmail, userId])
+
+  useEffect(() => {
+    const inviteToken = searchParams.get('invite')
+    if (!inviteToken || !userId) return
+
+    let active = true
+    void (async () => {
+      try {
+        await ensureProfile(userId, userEmail)
+        await acceptTeamInvite(inviteToken)
+        if (!active) return
+
+        setSearchParams({}, { replace: true })
+        await Promise.all([loadTeamAccess(userId), loadProjects(), loadCards(), loadTodos(), loadProfiles(userId, userEmail)])
+        pushToast({ title: t.team.saved, tone: 'success' })
+      } catch (caughtError) {
+        if (!active) return
+        const description = caughtError instanceof Error ? caughtError.message : t.team.inviteFailed
+        pushToast({ description, title: t.team.inviteFailed, tone: 'danger' })
+        setSearchParams({}, { replace: true })
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [loadCards, loadProfiles, loadProjects, loadTeamAccess, loadTodos, pushToast, searchParams, setSearchParams, t.team, userEmail, userId])
 
   useEffect(() => {
     if (!userId) {
@@ -437,6 +499,11 @@ export function BoardPage() {
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [activeProjectId, projects],
   )
+  const currentTeamRole = teamMember?.role ?? null
+  const canManageTeam = isTeamAdmin(currentTeamRole)
+  const canCreateProject = canCreateTeamProject(currentTeamRole)
+  const canContributeToActiveProject =
+    activeBoardScope === 'personal' || canContributeToProject(currentTeamRole, projectAccess[activeProjectId])
   const currentProfile = userId ? profiles[userId] ?? null : null
   const exportContext = useMemo(
     () => ({
@@ -464,6 +531,11 @@ export function BoardPage() {
   const viewKey = `${activeBoardScope}:${activeBoardScope === 'shared' ? activeProjectId : 'personal'}:${filter}`
 
   const openCreateAtCenter = useCallback(() => {
+    if (activeBoardScope === 'shared' && !canContributeToActiveProject) {
+      pushToast({ description: t.team.accessHint, title: t.team.viewer, tone: 'info' })
+      return
+    }
+
     if (isDesktop) {
       const position = getBoardCenterPosition(camera)
       openCreateEditor(
@@ -476,9 +548,14 @@ export function BoardPage() {
     }
 
     openCreateEditor(0, 0, activeBoardScope, activeBoardScope === 'shared' ? activeProjectId : null)
-  }, [activeBoardScope, activeProjectId, camera, isDesktop, openCreateEditor])
+  }, [activeBoardScope, activeProjectId, camera, canContributeToActiveProject, isDesktop, openCreateEditor, pushToast, t.team])
 
   const openCreateTextAtCenter = useCallback(() => {
+    if (activeBoardScope === 'shared' && !canContributeToActiveProject) {
+      pushToast({ description: t.team.accessHint, title: t.team.viewer, tone: 'info' })
+      return
+    }
+
     setDesktopViewMode('board')
     const position = getBoardCenterPosition(camera)
     openCreateTextEditor(
@@ -487,9 +564,14 @@ export function BoardPage() {
       activeBoardScope,
       activeBoardScope === 'shared' ? activeProjectId : null,
     )
-  }, [activeBoardScope, activeProjectId, camera, openCreateTextEditor])
+  }, [activeBoardScope, activeProjectId, camera, canContributeToActiveProject, openCreateTextEditor, pushToast, t.team])
 
   const openCreateTodoAtCenter = useCallback(() => {
+    if (activeBoardScope === 'shared' && !canContributeToActiveProject) {
+      pushToast({ description: t.team.accessHint, title: t.team.viewer, tone: 'info' })
+      return
+    }
+
     if (isDesktop) setDesktopViewMode('board')
     const position = isDesktop ? getBoardCenterPosition(camera) : { x: 0, y: 0 }
     openCreateTodoEditor(
@@ -498,10 +580,15 @@ export function BoardPage() {
       activeBoardScope,
       activeBoardScope === 'shared' ? activeProjectId : null,
     )
-  }, [activeBoardScope, activeProjectId, camera, isDesktop, openCreateTodoEditor])
+  }, [activeBoardScope, activeProjectId, camera, canContributeToActiveProject, isDesktop, openCreateTodoEditor, pushToast, t.team])
 
   const openCreateAtPosition = useCallback(
     (x: number, y: number) => {
+      if (activeBoardScope === 'shared' && !canContributeToActiveProject) {
+        pushToast({ description: t.team.accessHint, title: t.team.viewer, tone: 'info' })
+        return
+      }
+
       openCreateEditor(
         Math.round(x - defaultCardSize.w / 2),
         Math.round(y - defaultCardSize.h / 2),
@@ -509,11 +596,16 @@ export function BoardPage() {
         activeBoardScope === 'shared' ? activeProjectId : null,
       )
     },
-    [activeBoardScope, activeProjectId, openCreateEditor],
+    [activeBoardScope, activeProjectId, canContributeToActiveProject, openCreateEditor, pushToast, t.team],
   )
 
   const openCreateTextAtPosition = useCallback(
     (x: number, y: number) => {
+      if (activeBoardScope === 'shared' && !canContributeToActiveProject) {
+        pushToast({ description: t.team.accessHint, title: t.team.viewer, tone: 'info' })
+        return
+      }
+
       openCreateTextEditor(
         Math.round(x - 180),
         y,
@@ -521,11 +613,16 @@ export function BoardPage() {
         activeBoardScope === 'shared' ? activeProjectId : null,
       )
     },
-    [activeBoardScope, activeProjectId, openCreateTextEditor],
+    [activeBoardScope, activeProjectId, canContributeToActiveProject, openCreateTextEditor, pushToast, t.team],
   )
 
   const openCreateTodoAtPosition = useCallback(
     (x: number, y: number) => {
+      if (activeBoardScope === 'shared' && !canContributeToActiveProject) {
+        pushToast({ description: t.team.accessHint, title: t.team.viewer, tone: 'info' })
+        return
+      }
+
       openCreateTodoEditor(
         Math.round(x - defaultTodoBlockWidth / 2),
         Math.round(y - 160),
@@ -533,17 +630,21 @@ export function BoardPage() {
         activeBoardScope === 'shared' ? activeProjectId : null,
       )
     },
-    [activeBoardScope, activeProjectId, openCreateTodoEditor],
+    [activeBoardScope, activeProjectId, canContributeToActiveProject, openCreateTodoEditor, pushToast, t.team],
   )
 
   const handleCreateProject = useCallback(
     async (input: { color: string; name: string }) => {
-      const project = await createProject(input, userId)
+      if (!team || !canCreateProject) {
+        throw new Error(t.team.accessHint)
+      }
+
+      const project = await createProject({ ...input, teamId: team.id })
       setActiveBoardScope('shared')
       setActiveProjectId(project.id)
       return project
     },
-    [createProject, userId],
+    [canCreateProject, createProject, t.team.accessHint, team],
   )
 
   const handleDeleteProject = useCallback(
@@ -598,6 +699,10 @@ export function BoardPage() {
       <>
         <MobileCardList
           activeProjectId={activeProjectId}
+          canCreateProject={canCreateProject}
+          canContribute={canContributeToActiveProject}
+          canManageProjects={canManageTeam}
+          canManageTeam={canManageTeam}
           cards={mobileCards}
           todoBlocks={mobileTodoBlocks}
           todoItems={visibleTodoItems}
@@ -620,6 +725,7 @@ export function BoardPage() {
           onProjectChange={setActiveProjectId}
           onLogout={handleLogout}
           onOpenProfile={() => setIsProfileSettingsOpen(true)}
+          onOpenTeam={() => setIsTeamSettingsOpen(true)}
           onRetry={handleRetry}
           profile={currentProfile}
           userEmail={userEmail}
@@ -643,6 +749,18 @@ export function BoardPage() {
               onClose={() => setIsProfileSettingsOpen(false)}
             />
           ) : null}
+          {isTeamSettingsOpen && userId && team ? (
+            <TeamSettings
+              currentRole={currentTeamRole}
+              isOpen={isTeamSettingsOpen}
+              profiles={profiles}
+              projects={projects}
+              team={team}
+              userId={userId}
+              onClose={() => setIsTeamSettingsOpen(false)}
+              onMembershipChanged={() => void loadTeamAccess(userId)}
+            />
+          ) : null}
         </Suspense>
       </>
     )
@@ -653,6 +771,10 @@ export function BoardPage() {
       <div className="app-shell flex h-[100dvh] gap-3 overflow-hidden bg-[var(--background)] p-3 text-white">
         <Sidebar
           activeFilter={filter}
+          canCreateProject={canCreateProject}
+          canContribute={canContributeToActiveProject}
+          canManageProjects={canManageTeam}
+          canManageTeam={canManageTeam}
           activeBoardScope={activeBoardScope}
           activeProjectId={activeProjectId}
           counts={counts}
@@ -668,6 +790,7 @@ export function BoardPage() {
           onFilterChange={setFilter}
           onLogout={handleLogout}
           onOpenProfile={() => setIsProfileSettingsOpen(true)}
+          onOpenTeam={() => setIsTeamSettingsOpen(true)}
           onMoveProject={handleMoveProject}
           onProjectChange={setActiveProjectId}
           onViewModeChange={setDesktopViewMode}
@@ -735,6 +858,18 @@ export function BoardPage() {
               userEmail={userEmail}
               userId={userId}
               onClose={() => setIsProfileSettingsOpen(false)}
+            />
+          ) : null}
+          {isTeamSettingsOpen && userId && team ? (
+            <TeamSettings
+              currentRole={currentTeamRole}
+              isOpen={isTeamSettingsOpen}
+              profiles={profiles}
+              projects={projects}
+              team={team}
+              userId={userId}
+              onClose={() => setIsTeamSettingsOpen(false)}
+              onMembershipChanged={() => void loadTeamAccess(userId)}
             />
           ) : null}
         </Suspense>

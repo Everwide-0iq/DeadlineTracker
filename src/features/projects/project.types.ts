@@ -5,6 +5,7 @@ export type Project = {
   name: string
   color: string
   sortOrder: number
+  teamId: string
   createdBy: string | null
   createdAt: string
   updatedAt: string
@@ -15,6 +16,7 @@ export type ProjectRow = {
   name: string
   color: string
   sort_order: number
+  team_id: string
   created_by: string | null
   created_at: string
   updated_at: string
@@ -23,7 +25,7 @@ export type ProjectRow = {
 export type CreateProjectInput = {
   name: string
   color: string
-  sortOrder?: number
+  teamId: string
 }
 
 export type ProjectMoveDirection = 'up' | 'down'

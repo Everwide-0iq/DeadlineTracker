@@ -9,6 +9,7 @@ const createProject = (id: string, sortOrder: number, createdAt: string): Projec
   id,
   name: id,
   sortOrder,
+  teamId: 'team-id',
   updatedAt: createdAt,
 })
 

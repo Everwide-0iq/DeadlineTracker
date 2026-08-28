@@ -97,7 +97,7 @@ export function ProjectEditor({ isOpen, onClose, onCreate }: ProjectEditorProps)
             <h2 className="text-2xl font-black text-white" id="project-editor-title">
               {t.project.projectSpace}
             </h2>
-            <p className="mt-1 text-sm text-white/40">{t.project.teamVisible}</p>
+            <p className="mt-1 text-sm text-white/40">{t.project.teamAccessControlled}</p>
           </div>
           <button aria-label={t.project.closeEditor} className="icon-button" type="button" onClick={resetAndClose}>
             <X size={19} />

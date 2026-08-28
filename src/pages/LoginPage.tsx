@@ -11,13 +11,14 @@ import { env } from '../lib/env.ts'
 type LocationState = {
   from?: {
     pathname?: string
+    search?: string
   }
 }
 
 export function LoginPage() {
   const location = useLocation()
   const state = location.state as LocationState | null
-  const from = state?.from?.pathname ?? '/'
+  const from = `${state?.from?.pathname ?? '/'}${state?.from?.search ?? ''}`
   const authError = useAuthStore((authState) => authState.error)
   const clearError = useAuthStore((authState) => authState.clearError)
   const isLoading = useAuthStore((authState) => authState.isLoading)

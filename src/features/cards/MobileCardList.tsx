@@ -1,4 +1,4 @@
-import { CalendarCheck2, CalendarOff, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Trash2, UsersRound, Zap } from 'lucide-react'
+import { CalendarCheck2, CalendarOff, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, ShieldCheck, Trash2, UsersRound, Zap } from 'lucide-react'
 import { memo, useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
@@ -25,6 +25,10 @@ import type { TodoBlock, TodoItem } from '../todos/todo.types.ts'
 
 type MobileCardListProps = {
   activeProjectId: string
+  canCreateProject: boolean
+  canContribute: boolean
+  canManageProjects: boolean
+  canManageTeam: boolean
   boardScope: BoardScope
   cards: Card[]
   todoBlocks: TodoBlock[]
@@ -47,6 +51,7 @@ type MobileCardListProps = {
   onMoveProject: (project: Project, direction: ProjectMoveDirection) => void
   onLogout: () => void
   onOpenProfile: () => void
+  onOpenTeam: () => void
   onRetry: () => void
   profile: UserProfile | null
   userEmail: string | null
@@ -237,6 +242,10 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
 
 export function MobileCardList({
   activeProjectId,
+  canCreateProject,
+  canContribute,
+  canManageProjects,
+  canManageTeam,
   boardScope,
   cards,
   todoBlocks,
@@ -259,6 +268,7 @@ export function MobileCardList({
   onMoveProject,
   onLogout,
   onOpenProfile,
+  onOpenTeam,
   onRetry,
   profile,
   userEmail,
@@ -301,6 +311,7 @@ export function MobileCardList({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {canManageTeam && boardScope === 'shared' ? <button aria-label={t.team.manage} className="icon-button h-11 w-11" type="button" onClick={onOpenTeam}><ShieldCheck size={18} /></button> : null}
             <LanguageToggle className="h-11 px-2" />
             <button aria-label={t.sidebar.logout} className="icon-button h-11 w-11" type="button" onClick={onLogout}>
               <LogOut size={19} />
@@ -330,6 +341,8 @@ export function MobileCardList({
         {boardScope === 'shared' ? (
           <ProjectList
             activeProjectId={activeProjectId}
+            canCreate={canCreateProject}
+            canManage={canManageProjects}
             counts={projectCardCounts}
             deadlines={projectDeadlines}
             projects={projects}
@@ -407,6 +420,7 @@ export function MobileCardList({
         <AddMenu
           allowText={false}
           className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30"
+          disabled={boardScope === 'shared' && !canContribute}
           mobile
           onAddCard={onCreate}
           onAddTodo={onCreateTodo}

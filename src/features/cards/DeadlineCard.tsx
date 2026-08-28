@@ -27,7 +27,7 @@ import { defaultActiveColor } from '../profile/profile.types.ts'
 import { useCardStore } from './card.store.ts'
 import { CardImageView } from './CardImageView.tsx'
 import type { Card } from './card.types.ts'
-import { getCardRenderSize } from './card.utils.ts'
+import { getCardRenderSize, getCardTypographyMetrics } from './card.utils.ts'
 import { formatCompletionDate } from './completion.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
@@ -103,6 +103,7 @@ function DeadlineCardComponent({
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)
+  const typography = getCardTypographyMetrics(card.w, card.h)
   const isCompleting = useCompletionAnimation(card.status === 'done')
   const activeColor = activeProfile?.activeColor ?? defaultActiveColor
   const activeOwnerName = activeProfile?.nickname ?? t.card.activeOwnerUnknown
@@ -132,6 +133,10 @@ function DeadlineCardComponent({
     '--deadline-border': visual.borderColor,
     '--deadline-glow': visual.glowColor,
     '--deadline-text': visual.textColor,
+    '--card-description-font-size': `${typography.descriptionFontSize}px`,
+    '--card-description-line-height': `${typography.descriptionLineHeight}px`,
+    '--card-title-font-size': `${typography.titleFontSize}px`,
+    '--card-title-line-height': `${typography.titleLineHeight}px`,
     height: renderSize.h,
     left: card.x,
     minHeight: renderSize.h,
@@ -474,7 +479,7 @@ function DeadlineCardComponent({
 
         <h3
           className={cn(
-            'mb-3 shrink-0 whitespace-pre-wrap break-words text-[22px] font-bold leading-tight text-white drop-shadow',
+            'deadline-card-title mb-3 shrink-0 whitespace-pre-wrap break-words font-bold text-white drop-shadow',
             card.status === 'done' && 'text-white/55 line-through',
           )}
         >
@@ -482,7 +487,7 @@ function DeadlineCardComponent({
         </h3>
 
         {card.description ? (
-          <p className="mb-4 shrink-0 whitespace-pre-wrap break-words text-sm leading-6 text-white/55">
+          <p className="deadline-card-description mb-4 shrink-0 whitespace-pre-wrap break-words text-white/55">
             {card.description}
           </p>
         ) : null}

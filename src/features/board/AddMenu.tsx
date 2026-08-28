@@ -42,10 +42,11 @@ export function AddMenuItems({ allowText = true, onAddCard, onAddText, onAddTodo
 
 type AddMenuProps = AddMenuItemsProps & {
   className?: string
+  disabled?: boolean
   mobile?: boolean
 }
 
-export function AddMenu({ allowText = true, className, mobile = false, onAddCard, onAddText, onAddTodo }: AddMenuProps) {
+export function AddMenu({ allowText = true, className, disabled = false, mobile = false, onAddCard, onAddText, onAddTodo }: AddMenuProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const language = useI18nStore((state) => state.language)
@@ -74,9 +75,10 @@ export function AddMenu({ allowText = true, className, mobile = false, onAddCard
         aria-expanded={open}
         aria-haspopup="menu"
         className={cn(mobile ? 'mobile-create-button' : 'primary-button w-full justify-center py-3 text-base')}
+        disabled={disabled}
         title={mobile ? t.mobile.add : undefined}
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => !disabled && setOpen((current) => !current)}
       >
         <span className={cn(mobile && 'grid place-items-center')}>
           <Plus size={mobile ? 21 : 20} strokeWidth={2.7} />

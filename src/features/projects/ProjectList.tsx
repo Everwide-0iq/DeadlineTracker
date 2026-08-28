@@ -8,6 +8,8 @@ import { getProjectDisplayName } from './project.utils.ts'
 
 type ProjectListProps = {
   activeProjectId: string
+  canCreate: boolean
+  canManage: boolean
   counts: Record<string, number>
   deadlines: Record<string, ProjectDeadlineSummary | undefined>
   onCreate: () => void
@@ -28,6 +30,8 @@ function getProjectStyle(project: Project): ProjectStyle {
 
 export function ProjectList({
   activeProjectId,
+  canCreate,
+  canManage,
   counts,
   deadlines,
   onCreate,
@@ -46,14 +50,12 @@ export function ProjectList({
       <section className="mb-3">
         <div className="mb-2 flex items-center justify-between px-1">
           <span className="text-xs font-black uppercase tracking-[0.18em] text-white/35">{t.project.projects}</span>
-          <button aria-label={t.project.create} className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}>
-            <Plus size={17} />
-          </button>
+          {canCreate ? <button aria-label={t.project.create} className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}><Plus size={17} /></button> : null}
         </div>
         <div className="scrollbar-hidden -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {projects.map((project) => {
             const isActive = activeProjectId === project.id
-            const canDelete = project.id !== defaultProjectId
+            const canDelete = canManage && project.id !== defaultProjectId
             const deadline = deadlines[project.id]
             const movableIndex = movableProjects.findIndex((item) => item.id === project.id)
             const canMoveUp = movableIndex > 0
@@ -121,15 +123,13 @@ export function ProjectList({
           <FolderKanban size={15} />
           {t.project.projects}
         </div>
-        <button aria-label={t.project.create} className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}>
-          <Plus size={17} />
-        </button>
+        {canCreate ? <button aria-label={t.project.create} className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}><Plus size={17} /></button> : null}
       </div>
 
       <div className="sidebar-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-1.5">
         {projects.map((project) => {
           const isActive = activeProjectId === project.id
-          const canDelete = project.id !== defaultProjectId
+          const canDelete = canManage && project.id !== defaultProjectId
           const deadline = deadlines[project.id]
           const movableIndex = movableProjects.findIndex((item) => item.id === project.id)
           const canMoveUp = movableIndex > 0
