@@ -65,6 +65,21 @@ async function copyText(value: string) {
   if (!copied) throw new Error('Could not copy the invitation link.')
 }
 
+function getTeamErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string' && message) {
+      return message
+    }
+  }
+
+  return fallback
+}
+
 export function TeamSettings({
   currentRole,
   isOpen,
@@ -113,7 +128,7 @@ export function TeamSettings({
       setProjectMembers(nextProjectMembers)
       setInvites(nextInvites)
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t.team.inviteFailed)
+      setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     } finally {
       setIsLoading(false)
     }
@@ -162,7 +177,7 @@ export function TeamSettings({
       await reload()
       pushToast({ description: t.team.inviteDescription, title: t.team.inviteCreated, tone: 'success' })
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t.team.inviteFailed)
+      setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     } finally {
       setIsSaving(false)
     }
@@ -182,7 +197,7 @@ export function TeamSettings({
       onMembershipChanged()
       pushToast({ title: t.team.saved, tone: 'success' })
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t.team.inviteFailed)
+      setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     } finally {
       setIsSaving(false)
     }
@@ -216,7 +231,7 @@ export function TeamSettings({
       onMembershipChanged()
       pushToast({ title: t.team.saved, tone: 'success' })
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t.team.inviteFailed)
+      setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     } finally {
       setIsSaving(false)
     }
@@ -240,7 +255,7 @@ export function TeamSettings({
       await reload()
       onMembershipChanged()
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t.team.inviteFailed)
+      setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     } finally {
       setIsSaving(false)
     }
@@ -253,7 +268,7 @@ export function TeamSettings({
       await revokeTeamInvite(inviteId)
       await reload()
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t.team.inviteFailed)
+      setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     } finally {
       setIsSaving(false)
     }
@@ -265,7 +280,7 @@ export function TeamSettings({
       await copyText(inviteLink)
       pushToast({ description: t.team.inviteLinkCopied, title: t.team.inviteCreated, tone: 'success' })
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t.team.inviteFailed)
+      setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     }
   }
 
