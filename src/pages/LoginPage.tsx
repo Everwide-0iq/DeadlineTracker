@@ -1,4 +1,4 @@
-import { Flame, KeyRound, LogIn } from 'lucide-react'
+import { Flame, KeyRound, LogIn, UserRoundPlus } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { EnvSetupPanel } from '../features/auth/EnvSetupPanel.tsx'
@@ -18,18 +18,22 @@ type LocationState = {
 export function LoginPage() {
   const location = useLocation()
   const state = location.state as LocationState | null
-  const from = `${state?.from?.pathname ?? '/'}${state?.from?.search ?? ''}`
+  const invitationSearch = state?.from?.search ?? location.search
+  const from = `${state?.from?.pathname ?? '/'}${invitationSearch}`
   const authError = useAuthStore((authState) => authState.error)
   const clearError = useAuthStore((authState) => authState.clearError)
   const isLoading = useAuthStore((authState) => authState.isLoading)
   const isSubmitting = useAuthStore((authState) => authState.isSubmitting)
   const login = useAuthStore((authState) => authState.login)
+  const register = useAuthStore((authState) => authState.register)
   const session = useAuthStore((authState) => authState.session)
   const language = useI18nStore((i18nState) => i18nState.language)
   const t = translations[language]
   const [email, setEmail] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [mode, setMode] = useState<'login' | 'register'>(() => (new URLSearchParams(invitationSearch).has('invite') ? 'register' : 'login'))
   const [password, setPassword] = useState('')
+  const [registrationNotice, setRegistrationNotice] = useState<string | null>(null)
 
   if (!env.isSupabaseConfigured) {
     return <EnvSetupPanel />
@@ -43,13 +47,29 @@ export function LoginPage() {
     event.preventDefault()
     clearError()
     setFormError(null)
+    setRegistrationNotice(null)
 
     if (!email.trim() || !password) {
       setFormError(t.login.emptyCredentials)
       return
     }
 
-    await login(email.trim(), password).catch(() => undefined)
+    if (mode === 'login') {
+      await login(email.trim(), password).catch(() => undefined)
+      return
+    }
+
+    const authenticated = await register(email.trim(), password, `${window.location.origin}${from}`).catch(() => false)
+    if (!authenticated && !useAuthStore.getState().error) {
+      setRegistrationNotice(t.login.registrationNotice)
+    }
+  }
+
+  const switchMode = (nextMode: 'login' | 'register') => {
+    setMode(nextMode)
+    setFormError(null)
+    setRegistrationNotice(null)
+    clearError()
   }
 
   return (
@@ -108,11 +128,31 @@ export function LoginPage() {
             </div>
 
             <div className="mb-8">
-              <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
-                <KeyRound size={17} />
-                {t.login.login}
+              <div aria-label={t.login.accessMode} className="mb-5 grid grid-cols-2 rounded-xl border border-white/10 bg-white/[0.025] p-1" role="tablist">
+                <button
+                  aria-selected={mode === 'login'}
+                  className={mode === 'login' ? 'rounded-lg bg-[var(--accent)]/15 px-3 py-2 text-sm font-bold text-white shadow-[inset_0_0_0_1px_rgb(255_110_105_/_0.35)]' : 'rounded-lg px-3 py-2 text-sm font-bold text-white/45 transition hover:text-white/75'}
+                  role="tab"
+                  type="button"
+                  onClick={() => switchMode('login')}
+                >
+                  {t.login.login}
+                </button>
+                <button
+                  aria-selected={mode === 'register'}
+                  className={mode === 'register' ? 'rounded-lg bg-[var(--accent)]/15 px-3 py-2 text-sm font-bold text-white shadow-[inset_0_0_0_1px_rgb(255_110_105_/_0.35)]' : 'rounded-lg px-3 py-2 text-sm font-bold text-white/45 transition hover:text-white/75'}
+                  role="tab"
+                  type="button"
+                  onClick={() => switchMode('register')}
+                >
+                  {t.login.register}
+                </button>
               </div>
-              <h2 className="text-2xl font-black sm:text-3xl">{t.login.headline}</h2>
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">
+                {mode === 'login' ? <KeyRound size={17} /> : <UserRoundPlus size={17} />}
+                {mode === 'login' ? t.login.login : t.login.register}
+              </div>
+              <h2 className="text-2xl font-black sm:text-3xl">{mode === 'login' ? t.login.headline : t.login.registerHeadline}</h2>
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
@@ -131,7 +171,7 @@ export function LoginPage() {
               <label className="form-field">
                 <span>{t.login.password}</span>
                 <input
-                  autoComplete="current-password"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   placeholder={t.login.passwordPlaceholder}
                   type="password"
                   value={password}
@@ -145,9 +185,15 @@ export function LoginPage() {
                 </div>
               ) : null}
 
+              {registrationNotice ? (
+                <div className="rounded-2xl border border-emerald-300/25 bg-emerald-400/[0.08] px-4 py-3 text-sm leading-6 text-emerald-50/90">
+                  {registrationNotice}
+                </div>
+              ) : null}
+
               <button className="primary-button w-full justify-center py-4 text-base" disabled={isSubmitting} type="submit">
-                <LogIn size={18} />
-                {isSubmitting ? t.login.submitting : t.login.submit}
+                {mode === 'login' ? <LogIn size={18} /> : <UserRoundPlus size={18} />}
+                {isSubmitting ? t.login.submitting : mode === 'login' ? t.login.submit : t.login.registerSubmit}
               </button>
             </form>
           </div>

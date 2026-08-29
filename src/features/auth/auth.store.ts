@@ -2,7 +2,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { create } from 'zustand'
 import { supabase } from '../../lib/supabase.ts'
 import { getCurrentTranslation } from '../i18n/i18n.store.ts'
-import { signInWithPassword, signOut } from './auth.api.ts'
+import { signInWithPassword, signOut, signUpWithPassword } from './auth.api.ts'
 
 type AuthCleanup = () => void
 
@@ -15,6 +15,7 @@ type AuthState = {
   clearError: () => void
   initialize: () => AuthCleanup
   login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, emailRedirectTo: string) => Promise<boolean>
   logout: () => Promise<void>
 }
 
@@ -102,6 +103,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const session = await signInWithPassword(email, password)
       set({ error: null, isSubmitting: false, session, user: session?.user ?? null })
+    } catch (error) {
+      set({ error: getMessage(error), isSubmitting: false, session: null, user: null })
+      throw error
+    }
+  },
+  register: async (email, password, emailRedirectTo) => {
+    set({ error: null, isSubmitting: true })
+
+    try {
+      const session = await signUpWithPassword(email, password, emailRedirectTo)
+      set({ error: null, isSubmitting: false, session, user: session?.user ?? null })
+      return Boolean(session)
     } catch (error) {
       set({ error: getMessage(error), isSubmitting: false, session: null, user: null })
       throw error

@@ -11,6 +11,7 @@ export function useAuth() {
       user: state.user,
       clearError: state.clearError,
       login: state.login,
+      register: state.register,
       logout: state.logout,
     })),
   )

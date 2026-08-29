@@ -10,6 +10,20 @@ export async function signInWithPassword(email: string, password: string) {
   return data.session
 }
 
+export async function signUpWithPassword(email: string, password: string, emailRedirectTo: string) {
+  const { data, error } = await requireSupabase().auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo },
+  })
+
+  if (error) {
+    throw error
+  }
+
+  return data.session
+}
+
 export async function signOut() {
   const { error } = await requireSupabase().auth.signOut()
 
