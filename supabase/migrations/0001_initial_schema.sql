@@ -2291,7 +2291,7 @@ create table if not exists public.team_invites (
   created_at timestamptz not null default now(),
   constraint team_invites_email_check check (
     invitee_email = lower(btrim(invitee_email))
-    and invitee_email ~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'
+    and invitee_email ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'
   ),
   constraint team_invites_expiry_check check (expires_at > created_at)
 );
@@ -2300,6 +2300,17 @@ create table if not exists public.team_invite_projects (
   invite_id uuid not null references public.team_invites(id) on delete cascade,
   project_id uuid not null references public.projects(id) on delete cascade,
   primary key (invite_id, project_id)
+);
+
+-- Keep the email validation correct for databases where an earlier version
+-- of this migration created the constraint with an over-escaped dot.
+alter table public.team_invites
+drop constraint if exists team_invites_email_check;
+
+alter table public.team_invites
+add constraint team_invites_email_check check (
+  invitee_email = lower(btrim(invitee_email))
+  and invitee_email ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'
 );
 
 create index if not exists projects_team_id_idx on public.projects (team_id);
@@ -2860,7 +2871,7 @@ begin
     raise exception 'Only the owner can invite an administrator';
   end if;
 
-  if normalized_email !~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$' then
+  if normalized_email !~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$' then
     raise exception 'The invitation email is invalid';
   end if;
 
