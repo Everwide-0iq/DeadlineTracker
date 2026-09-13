@@ -27,6 +27,16 @@ Fireboard is a private realtime deadline board for small teams, projects, and pe
 - RU/ENG interface switcher on the login page, environment setup page, desktop app, and mobile app. User-created card/project text is not translated.
 - Friendly loading, empty, error, missing-env, confirmation, sync, and offline states.
 
+## Arcade
+
+The desktop **Arcade** button opens Neon Snake and Deadline Blaster in the board area. Games use a read-only visual snapshot, never change tasks, and lazy-load Phaser only when opened. WASD/arrows move; in the shooter, aim with the mouse and hold click/Space to fire. P pauses, Esc returns to the unchanged board. Sound can be muted; Performance mode and reduced-motion preferences reduce effects.
+
+Team leaderboards show nicknames, avatars, personal placement, and the next score to beat. Apply the `Fireboard Arcade` section at the end of `supabase/migrations/0001_initial_schema.sql` (or rerun the complete migration). Rankings refresh on opening, changing games, submitting a completed run, or manual refresh, without polling during gameplay. Only finished runs are submitted. Personal bests remain local to this browser/account, including when the leaderboard is unavailable; local scores are not retroactively uploaded.
+
+The database checks membership, run ownership/expiry, plausible score bounds, and duplicate submissions. It stores only one best score and one current run per member/game/team, not board content. Ties favor the earlier record. This is a **casual team leaderboard, not cheat-proof competition**: gameplay is client-side and is not replay-validated on the server. Do not attach prizes, payments, or permissions to scores.
+
+Run `npm run test:arcade-sql` for isolated PostgreSQL security/idempotence checks via PGlite. This command never connects to Supabase.
+
 ## Local Development
 
 ```bash
@@ -113,6 +123,16 @@ Fireboard - приватная realtime-доска дедлайнов для м�
 - Контекстное меню desktop-доски для создания карточки, To-do блока или текста точно в месте клика по пустому canvas.
 - Переключатель RU/ENG на странице входа, экране настройки env, desktop-приложении и mobile-приложении. Пользовательский текст карточек и проектов не переводится.
 - Красивые состояния загрузки, пустой доски, ошибок, отсутствующего env, подтверждений, синхронизации и offline.
+
+## Arcade
+
+Кнопка **Arcade** на desktop запускает Neon Snake и Deadline Blaster прямо в области доски. Игры получают отдельный визуальный снимок, не меняют задачи и загружают Phaser только при открытии. WASD/стрелки управляют движением; в шутере мышь задаёт прицел, зажатая ЛКМ/пробел стреляет. P ставит паузу, Esc возвращает к неизменённой доске. Звук отключается; Performance mode и настройка уменьшения движения снижают эффекты.
+
+Командный лидерборд показывает никнеймы, аватарки, место и ближайший рекорд для обгона. Примените блок `Fireboard Arcade` в конце `supabase/migrations/0001_initial_schema.sql` или повторите всю миграцию. Рейтинг обновляется при открытии, переключении игр, отправке завершённой партии и вручную, без опроса сервера во время игры. Отправляются только завершённые партии. Личные рекорды сохраняются отдельно для аккаунта в текущем браузере, в том числе без доступного лидерборда; задним числом они не загружаются.
+
+База проверяет членство, владельца/срок игровой сессии, допустимые пределы результата и повторные отправки. Хранятся один лучший результат и одна текущая сессия на участника/игру/команду, без содержимого досок. При равных очках выше более ранний рекорд. Это **дружеский рейтинг, не полноценный античит**: игра работает на клиенте, сервер не перепроверяет запись партии. Не привязывайте к очкам призы, деньги или права доступа.
+
+Команда `npm run test:arcade-sql` проверяет права доступа и повторное применение SQL в изолированном PostgreSQL через PGlite, без подключения к Supabase.
 
 ## Локальный запуск
 

@@ -3833,4 +3833,139 @@ exception
 end;
 $$;
 
+-- Fireboard Arcade: team leaderboard. Gameplay never writes to board tables.
+create table if not exists public.arcade_scores (
+  team_id uuid not null references public.teams(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  mode text not null check (mode in ('snake', 'shooter')),
+  score integer not null check (score between 1 and 500000),
+  achieved_at timestamptz not null default now(),
+  primary key (team_id, user_id, mode)
+);
+create index if not exists arcade_scores_ranking_idx
+on public.arcade_scores (team_id, mode, score desc, achieved_at, user_id);
+alter table public.arcade_scores enable row level security;
+revoke all on public.arcade_scores from public, anon, authenticated;
+
+create table if not exists private.arcade_runs (
+  team_id uuid not null references public.teams(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  mode text not null check (mode in ('snake', 'shooter')),
+  token uuid not null default gen_random_uuid(),
+  started_at timestamptz not null default clock_timestamp(),
+  submitted_score integer,
+  primary key (team_id, user_id, mode)
+);
+alter table private.arcade_runs enable row level security;
+revoke all on private.arcade_runs from public, anon, authenticated;
+
+create or replace function public.begin_arcade_run(target_team_id uuid, game_mode text)
+returns uuid
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  result uuid;
+begin
+  if auth.uid() is null or not private.is_team_member(target_team_id) then
+    raise exception 'Team membership required' using errcode = '42501';
+  end if;
+  if game_mode is null or game_mode not in ('snake', 'shooter') then
+    raise exception 'Invalid arcade mode' using errcode = '22023';
+  end if;
+  insert into private.arcade_runs as run (team_id, user_id, mode)
+  values (target_team_id, auth.uid(), game_mode)
+  on conflict (team_id, user_id, mode) do update
+    set token = gen_random_uuid(), started_at = clock_timestamp(), submitted_score = null
+    where run.started_at < clock_timestamp() - interval '1 second'
+  returning token into result;
+  if result is null then
+    raise exception 'Please wait a moment before starting another run' using errcode = 'P0001';
+  end if;
+  return result;
+end;
+$$;
+
+create or replace function public.submit_arcade_score(
+  target_team_id uuid, game_mode text, run_token uuid, final_score integer, duration_ms integer
+)
+returns integer
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  current_run private.arcade_runs%rowtype;
+  best integer;
+begin
+  if auth.uid() is null or not private.is_team_member(target_team_id) then
+    raise exception 'Team membership required' using errcode = '42501';
+  end if;
+  select * into current_run from private.arcade_runs
+  where team_id = target_team_id and user_id = auth.uid() and mode = game_mode
+  for update;
+  if current_run.token is null or run_token is distinct from current_run.token then
+    raise exception 'Arcade run is no longer valid' using errcode = '22023';
+  end if;
+  if final_score is null or final_score not between 0 and 500000
+    or duration_ms is null or duration_ms not between 0 and 3600000
+    or clock_timestamp() > current_run.started_at + interval '2 hours'
+    or duration_ms > extract(epoch from (clock_timestamp() - current_run.started_at)) * 1000 + 1500 then
+    raise exception 'Invalid arcade result' using errcode = '22023';
+  end if;
+  -- Plausibility checks for a casual leaderboard, not a substitute for server-replayed gameplay.
+  if (game_mode = 'snake' and (final_score % 25 <> 0 or final_score > 8325 or final_score > (duration_ms / 90 + 1) * 25))
+    or (game_mode = 'shooter' and (final_score % 10 <> 0 or final_score > (duration_ms / 145 + 1) * 50)) then
+    raise exception 'Impossible arcade score' using errcode = '22023';
+  end if;
+  if current_run.submitted_score is not null and current_run.submitted_score <> final_score then
+    raise exception 'This arcade run was already submitted' using errcode = '22023';
+  end if;
+  if current_run.submitted_score is null then
+    update private.arcade_runs set submitted_score = final_score
+    where team_id = target_team_id and user_id = auth.uid() and mode = game_mode;
+    if final_score > 0 then
+      insert into public.arcade_scores as scores (team_id, user_id, mode, score)
+      values (target_team_id, auth.uid(), game_mode, final_score)
+      on conflict (team_id, user_id, mode) do update
+        set score = excluded.score, achieved_at = clock_timestamp()
+        where scores.score < excluded.score;
+    end if;
+  end if;
+  select score into best from public.arcade_scores
+  where team_id = target_team_id and user_id = auth.uid() and mode = game_mode;
+  return coalesce(best, 0);
+end;
+$$;
+
+create or replace function public.get_arcade_leaderboard(target_team_id uuid, game_mode text)
+returns table (user_id uuid, nickname text, avatar_path text, active_color text, score integer, achieved_at timestamptz, rank bigint)
+language plpgsql security definer stable set search_path = ''
+as $$
+begin
+  if auth.uid() is null or not private.is_team_member(target_team_id) then
+    raise exception 'Team membership required' using errcode = '42501';
+  end if;
+  if game_mode is null or game_mode not in ('snake', 'shooter') then
+    raise exception 'Invalid arcade mode' using errcode = '22023';
+  end if;
+  return query
+  with ranked as (
+    select scores.user_id, coalesce(nullif(profiles.nickname, ''), 'Player') as nickname,
+      profiles.avatar_path, coalesce(profiles.active_color, '#55e5ed') as active_color,
+      scores.score, scores.achieved_at,
+      row_number() over (order by scores.score desc, scores.achieved_at, scores.user_id) as rank
+    from public.arcade_scores as scores
+    join public.team_members as members on members.team_id = scores.team_id and members.user_id = scores.user_id
+    left join public.profiles as profiles on profiles.id = scores.user_id
+    where scores.team_id = target_team_id and scores.mode = game_mode
+  )
+  select * from ranked where ranked.rank <= 20 or ranked.user_id = auth.uid() order by ranked.rank;
+end;
+$$;
+
+revoke all on function public.begin_arcade_run(uuid, text) from public, anon;
+revoke all on function public.submit_arcade_score(uuid, text, uuid, integer, integer) from public, anon;
+revoke all on function public.get_arcade_leaderboard(uuid, text) from public, anon;
+grant execute on function public.begin_arcade_run(uuid, text) to authenticated;
+grant execute on function public.submit_arcade_score(uuid, text, uuid, integer, integer) to authenticated;
+grant execute on function public.get_arcade_leaderboard(uuid, text) to authenticated;
+
 commit;

@@ -11,6 +11,7 @@ import {
   type PointerEvent,
 } from 'react'
 import { useCardLinkStore } from '../cardLinks/cardLink.store.ts'
+import { ArcadeLauncher } from '../arcade/ArcadeLauncher.tsx'
 import type {
   BoardLinkEndpoint,
   CardLink,
@@ -1430,6 +1431,18 @@ export function DesktopBoard({
       </div>
 
       <div className="pointer-events-auto absolute right-6 top-6 z-20 hidden items-center gap-2 lg:flex xl:right-[274px]">
+        <ArcadeLauncher
+          key={viewKey}
+          anchorRef={viewportRef}
+          userId={userId ?? 'guest'}
+          reduced={isPerformanceMode}
+          getSnapshot={() => ({
+            name: exportContext.boardName,
+            nodes: linkNodes.map(node => ({ ...node, title: cardById.get(node.id)?.title ?? todoBlockById.get(node.id)?.title ?? '' })),
+            links: links.map(link => ({ from: link.fromCardId ?? link.fromTodoBlockId ?? '', to: link.toCardId ?? link.toTodoBlockId ?? '' })),
+            texts,
+          })}
+        />
         <button
           aria-label={t.board.exportJson}
           className="board-top-action"

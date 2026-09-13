@@ -458,6 +458,18 @@ export type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      begin_arcade_run: {
+        Args: { target_team_id: string; game_mode: 'snake' | 'shooter' }
+        Returns: string
+      }
+      submit_arcade_score: {
+        Args: { target_team_id: string; game_mode: 'snake' | 'shooter'; run_token: string; final_score: number; duration_ms: number }
+        Returns: number
+      }
+      get_arcade_leaderboard: {
+        Args: { target_team_id: string; game_mode: 'snake' | 'shooter' }
+        Returns: { user_id: string; nickname: string; avatar_path: string | null; active_color: string; score: number; achieved_at: string; rank: number }[]
+      }
       reorder_projects: {
         Args: { payload: Json }
         Returns: Database['public']['Tables']['projects']['Row'][]

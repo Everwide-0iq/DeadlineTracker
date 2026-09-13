@@ -1,0 +1,6 @@
+.board-top-action.arcade-launcher { color: #83edf0; border-color: #55e5ed40; position: relative; }
+.arcade-launcher svg { transition: transform .25s ease; }
+.arcade-launcher:hover svg { transform: rotate(-12deg) scale(1.12); }
+.arcade-launcher:hover { box-shadow: 0 0 18px #55e5ed24; }
+@media (min-width: 1024px) and (max-width: 1439px) { .arcade-launcher span { display: none; } }
+@media (prefers-reduced-motion: reduce) { .arcade-launcher svg { transition: none; } }

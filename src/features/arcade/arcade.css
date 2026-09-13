@@ -1,0 +1,70 @@
+.arcade-dialog { position: fixed; inset: auto; width: 100%; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 1px solid #55e5ed35; border-radius: 28px; color: #f5f8f9; background: #080d10; overflow: hidden; letter-spacing: 0; container-type: inline-size; }
+.arcade-dialog[open] { display: flex; flex-direction: column; }
+.arcade-dialog[open] { animation: arcade-enter .22s ease-out both; }
+.arcade-dialog[data-closing=true] { animation: arcade-exit .16s ease-in both; pointer-events: none; }
+.arcade-dialog::backdrop { background: #0003; }
+@keyframes arcade-enter { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
+@keyframes arcade-exit { from { opacity: 1; } to { opacity: 0; } }
+.arcade-dialog button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; border-radius: 6px; transition: color .15s, background .15s, border-color .15s; }
+.arcade-dialog button:focus-visible, .arcade-dialog canvas:focus-visible { outline: 2px solid #55e5ed; outline-offset: -3px; }
+.arcade-dialog button:disabled { opacity: .3; cursor: default; }
+.arcade-header { flex: 0 0 auto; min-height: 88px; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #ffffff12; background: #0c1115; }
+.arcade-brand { display: flex; align-items: center; gap: 12px; color: #55e5ed; min-width: 0; }
+.arcade-brand > svg { flex-shrink: 0; }
+.arcade-brand strong { display: block; font-size: 16px; color: #f5f8f9; white-space: nowrap; }
+.arcade-brand strong span { color: #55e5ed; }
+.arcade-brand small { display: block; max-width: 230px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #8d9fa7; font-size: 12px; margin-top: 4px; }
+.arcade-modes { display: flex; flex-shrink: 0; gap: 4px; background: #05090c; border: 1px solid #ffffff16; padding: 4px; border-radius: 8px; }
+.arcade-modes button { padding: 0 16px; font-size: 13px; font-weight: 700; color: #91a0a8; border: 1px solid transparent; }
+.arcade-modes button[aria-pressed=true] { background: #173032; border-color: #55e5ed55; color: #a4f9f6; }
+.arcade-modes button:last-child[aria-pressed=true] { color: #ff9b7c; background: #30201e; border-color: #ff775255; }
+.arcade-tools, .arcade-session-tools { display: flex; gap: 6px; }
+.arcade-tools button, .arcade-session-tools button { width: 40px; height: 40px; color: #a2b0b8; border: 1px solid #ffffff15; }
+.arcade-dialog button:hover:not(:disabled) { background: #ffffff0e; color: #fff; }
+.arcade-hud { min-height: 76px; padding: 12px 30px; display: flex; align-items: center; gap: 32px; border-bottom: 1px solid #ffffff0c; }
+.arcade-hud > div { display: flex; align-items: center; gap: 10px; }
+.arcade-hud span { font-size: 11px; text-transform: uppercase; color: #96a7b0; }
+.arcade-hud strong { font-family: monospace; font-size: 23px; font-variant-numeric: tabular-nums; min-width: 2ch; }
+.arcade-hud > div:first-child strong { color: #55e5ed; min-width: 5ch; }
+.arcade-best { color: #f6db42; }
+.arcade-lives { color: #ff6c66; }
+.arcade-session-tools { margin-left: auto; }
+.arcade-stage { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; }
+.arcade-canvas { position: absolute; inset: 0; overflow: hidden; transition: opacity .18s ease; }
+.arcade-stage[data-ready=false] .arcade-canvas { opacity: 0; }
+.arcade-canvas canvas { display: block; }
+.arcade-curtain { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 22px; background: #080d10d9; padding: 24px; text-align: center; animation: arcade-enter .18s ease-out; }
+.arcade-ready { background: linear-gradient(180deg, #080d1000, #080d1070 20%, #080d10dc 60%, #080d1080); }
+.arcade-curtain h1 { font-size: 48px; line-height: 1.1; font-weight: 900; max-width: 100%; overflow-wrap: anywhere; text-shadow: 0 0 35px #55e5ed35; }
+.arcade-eyebrow { font: 11px monospace; color: #55e5ed; padding: 7px 0; border-top: 1px solid #55e5ed65; }
+.arcade-dialog .arcade-play { min-height: 50px; padding: 0 30px; background: #55e5ed; color: #051416; font-weight: 800; border: 1px solid #a3fcfc; box-shadow: 0 0 30px #55e5ed25; }
+.arcade-dialog .arcade-play:hover { background: #97f4f5; color: #051416; }
+.arcade-final-score { display: flex; align-items: center; gap: 15px; color: #f6db42; font: bold 48px monospace; }
+.arcade-storage { position: absolute; bottom: 8px; left: 16px; right: 16px; padding: 10px; background: #201719; color: #ffc1b7; font-size: 12px; }
+.arcade-challenge { min-height: 40px; display: flex; align-items: center; gap: 10px; padding: 8px 24px; color: #f6db42; background: #f6db4208; border-bottom: 1px solid #f6db4220; font-size: 12px; }
+.arcade-challenge > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.arcade-next-target { margin-left: auto; color: #b8c6cb; }
+.arcade-lobby { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 310px); align-content: center; align-items: center; gap: 32px; padding: 32px; }
+.arcade-lobby-action { display: flex; flex-direction: column; align-items: center; gap: 22px; min-width: 0; }
+.arcade-lobby h1 { font-size: 38px; }
+.arcade-leaderboard { min-width: 0; align-self: center; text-align: left; background: #080d10e8; padding: 12px; }
+.arcade-leaderboard header { display: flex; align-items: center; gap: 9px; color: #f6db42; border-bottom: 1px solid #f6db4240; padding-bottom: 12px; }
+.arcade-leaderboard h2 { font-size: 14px; font-weight: 800; margin: 0; flex: 1; }
+.arcade-leaderboard header button { width: 30px; min-height: 30px; }
+.arcade-leaderboard ol { max-height: 300px; overflow-y: auto; margin-top: 8px; }
+.arcade-leaderboard li { display: flex; align-items: center; gap: 9px; padding: 12px 6px; border-bottom: 1px solid #ffffff10; }
+.arcade-leaderboard li[data-self=true] { background: #55e5ed0c; border-left: 2px solid #55e5ed; }
+.arcade-leaderboard li[data-rank="1"] { color: #f6db42; }
+.arcade-rank { flex: 0 0 28px; font: bold 13px monospace; color: #9daeb7; }
+.arcade-leaderboard li[data-rank="1"] .arcade-rank { color: #f6db42; }
+.arcade-ranked-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; }
+.arcade-ranked-name small { display: block; font-size: 10px; color: #55e5ed; margin-top: 2px; }
+.arcade-leaderboard li > strong { font: bold 17px monospace; }
+.arcade-ranking-status { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 1.6; color: #a9b9c0; padding-block: 16px; }
+.arcade-ranking-empty { padding: 26px 8px; display: flex; flex-direction: column; align-items: center; gap: 14px; color: #f6db42; font-size: 13px; }
+.arcade-ranking-retry { color: #ffc1a6; font-size: 12px; padding: 8px; }
+@container (max-width: 800px) { .arcade-lobby { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 20px; overflow-y: auto; align-content: start; } .arcade-lobby-action { gap: 14px; } .arcade-leaderboard { width: min(100%, 370px); justify-self: center; } .arcade-lobby h1 { font-size: 28px; } .arcade-leaderboard ol { max-height: 180px; } }
+@container (max-width: 1000px) { .arcade-header { flex-wrap: wrap; gap: 12px; padding: 12px; } .arcade-modes { order: 3; width: 100%; } .arcade-modes button { flex: 1; padding: 0 8px; } .arcade-brand strong { font-size: 13px; } .arcade-brand small { max-width: 150px; } .arcade-hud { padding: 10px 12px; gap: 15px; flex-wrap: wrap; } .arcade-hud span { display: none; } .arcade-hud strong { font-size: 19px; } .arcade-curtain h1 { font-size: 32px; } .arcade-tools { gap: 3px; } }
+@media (max-height: 550px) { .arcade-header { min-height: 60px; padding: 8px 16px; } .arcade-hud { min-height: 52px; padding-block: 6px; } .arcade-curtain { gap: 12px; } .arcade-curtain h1 { font-size: 30px; } }
+@media (prefers-reduced-motion: reduce) { .arcade-dialog, .arcade-dialog * { animation: none !important; transition: none !important; } }
+.arcade-dialog[data-reduced=true], .arcade-dialog[data-reduced=true] .arcade-curtain { animation: none; }
