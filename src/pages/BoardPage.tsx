@@ -230,6 +230,7 @@ export function BoardPage() {
   const team = useTeamStore((state) => state.team)
   const teamMember = useTeamStore((state) => state.member)
   const projectAccess = useTeamStore((state) => state.projectAccess)
+  const accessVersion = useTeamStore((state) => state.accessVersion)
   const confirm = useFeedbackStore((state) => state.confirm)
   const pushToast = useFeedbackStore((state) => state.pushToast)
   const language = useI18nStore((state) => state.language)
@@ -250,32 +251,34 @@ export function BoardPage() {
     if (!hasLoadedTeamAccess || teamMember) return
 
     setActiveBoardScope('personal')
-    void Promise.all([loadCards(), loadProjects(), loadTodos()])
-  }, [hasLoadedTeamAccess, loadCards, loadProjects, loadTodos, teamMember])
+  }, [hasLoadedTeamAccess, teamMember])
 
   useEffect(() => {
+    if (!hasLoadedTeamAccess) return
     void loadCards()
     const unsubscribe = subscribeRealtime()
 
     return unsubscribe
-  }, [loadCards, subscribeRealtime])
+  }, [accessVersion, hasLoadedTeamAccess, loadCards, subscribeRealtime])
 
   useEffect(() => {
+    if (!hasLoadedTeamAccess) return
     void loadTodos()
     const unsubscribe = subscribeTodoRealtime()
 
     return unsubscribe
-  }, [loadTodos, subscribeTodoRealtime])
+  }, [accessVersion, hasLoadedTeamAccess, loadTodos, subscribeTodoRealtime])
 
   useEffect(() => {
+    if (!hasLoadedTeamAccess) return
     void loadProjects()
     const unsubscribe = subscribeProjectRealtime()
 
     return unsubscribe
-  }, [loadProjects, subscribeProjectRealtime])
+  }, [accessVersion, hasLoadedTeamAccess, loadProjects, subscribeProjectRealtime])
 
   useEffect(() => {
-    if (!isDesktop) {
+    if (!isDesktop || !hasLoadedTeamAccess) {
       return undefined
     }
 
@@ -283,7 +286,7 @@ export function BoardPage() {
     const unsubscribe = subscribeLinkRealtime()
 
     return unsubscribe
-  }, [isDesktop, loadLinks, subscribeLinkRealtime])
+  }, [accessVersion, hasLoadedTeamAccess, isDesktop, loadLinks, subscribeLinkRealtime])
 
   useEffect(() => {
     if (!userId) {
@@ -307,8 +310,10 @@ export function BoardPage() {
         await acceptTeamInvite(inviteToken)
         if (!active) return
 
+        await Promise.all([loadTeamAccess(userId), loadProfiles(userId, userEmail)])
+        if (!active) return
+        setActiveBoardScope('shared')
         setSearchParams({}, { replace: true })
-        await Promise.all([loadTeamAccess(userId), loadProjects(), loadCards(), loadTodos(), loadProfiles(userId, userEmail)])
         pushToast({ title: t.team.saved, tone: 'success' })
       } catch (caughtError) {
         if (!active) return
@@ -321,7 +326,7 @@ export function BoardPage() {
     return () => {
       active = false
     }
-  }, [loadCards, loadProfiles, loadProjects, loadTeamAccess, loadTodos, pushToast, searchParams, setSearchParams, t.team, userEmail, userId])
+  }, [loadProfiles, loadTeamAccess, pushToast, searchParams, setSearchParams, t.team, userEmail, userId])
 
   useEffect(() => {
     if (!userId) {
@@ -333,7 +338,7 @@ export function BoardPage() {
   }, [userId])
 
   useEffect(() => {
-    if (!isDesktop) {
+    if (!isDesktop || !hasLoadedTeamAccess) {
       return undefined
     }
 
@@ -341,7 +346,7 @@ export function BoardPage() {
     const unsubscribe = subscribeTextRealtime()
 
     return unsubscribe
-  }, [isDesktop, loadTexts, subscribeTextRealtime])
+  }, [accessVersion, hasLoadedTeamAccess, isDesktop, loadTexts, subscribeTextRealtime])
 
   useEffect(() => {
     writeStorageValue('fireboard.desktopViewMode', desktopViewMode)

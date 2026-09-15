@@ -68,3 +68,29 @@
 @media (max-height: 550px) { .arcade-header { min-height: 60px; padding: 8px 16px; } .arcade-hud { min-height: 52px; padding-block: 6px; } .arcade-curtain { gap: 12px; } .arcade-curtain h1 { font-size: 30px; } }
 @media (prefers-reduced-motion: reduce) { .arcade-dialog, .arcade-dialog * { animation: none !important; transition: none !important; } }
 .arcade-dialog[data-reduced=true], .arcade-dialog[data-reduced=true] .arcade-curtain { animation: none; }
+
+/* The game is a local layer in the board, not a modal or a replacement board store. */
+.desktop-board-scene[data-arcade-active=true] > :not(.arcade-inline) { opacity: .16; pointer-events: none; }
+.arcade-inline { position: absolute; inset: 0; z-index: 80; width: 100%; height: 100%; display: block; border: 0; border-radius: inherit; background: transparent; animation: arcade-enter .2s ease-out; }
+.arcade-inline .arcade-stage { position: absolute; inset: 0; z-index: 0; }
+.arcade-inline canvas:focus-visible { outline: none; }
+.arcade-inline .arcade-header { position: relative; z-index: 3; min-height: 64px; padding: 10px 14px; gap: 10px; border: 0; background: #080d10ec; }
+.arcade-inline .arcade-brand { display: none; }
+.arcade-inline .arcade-modes { flex: 1; min-width: 0; order: 0; width: auto; }
+.arcade-inline .arcade-modes button { flex: 1; min-width: 0; padding: 0 8px; font-size: 12px; }
+.arcade-inline .arcade-hud { position: absolute; z-index: 2; top: 75px; left: 18px; right: 18px; min-height: 48px; padding: 6px 12px; gap: 18px; background: #080d10d9; border: 1px solid #ffffff12; border-radius: 6px; flex-wrap: nowrap; }
+.arcade-inline .arcade-challenge { position: absolute; z-index: 2; left: 18px; right: 18px; bottom: 12px; min-height: 32px; padding: 6px 12px; background: #080d10e8; border: 1px solid #f6db4220; border-radius: 6px; }
+.arcade-inline .arcade-curtain { padding-top: 150px; padding-bottom: 58px; overflow-y: auto; background: #080d1090; }
+.arcade-inline .arcade-lobby { grid-template-columns: minmax(0, 1fr) minmax(230px, 300px); align-content: center; gap: 24px; }
+.arcade-inline .arcade-lobby h1 { font-size: 36px; text-transform: uppercase; }
+.arcade-upgrades h2 { font-size: 28px; font-weight: 900; }
+.arcade-upgrades > div { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.arcade-upgrades button { display: flex; flex-direction: column; width: 150px; min-height: 150px; padding: 16px; background: #101b1c; border: 1px solid #c0fb7255; color: #c0fb72; }
+.arcade-upgrades small { font-family: monospace; color: #a3b8bd; }
+@container (max-width: 850px) {
+  .arcade-inline .arcade-modes button span { display: none; }
+  .arcade-inline .arcade-header { flex-wrap: nowrap; }
+  .arcade-inline .arcade-lobby { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .arcade-inline .arcade-hud { gap: 10px; }
+  .arcade-inline .arcade-hud strong { font-size: 18px; }
+}

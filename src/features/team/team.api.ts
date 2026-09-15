@@ -231,9 +231,33 @@ export function subscribeToMyTeamMembership(userId: string, onChanged: () => voi
       { event: '*', filter: `user_id=eq.${userId}`, schema: 'public', table: 'team_members' },
       (_payload: RealtimePostgresChangesPayload<TeamMemberRow>) => onChanged(),
     )
-    .subscribe()
+    .on(
+      'postgres_changes',
+      { event: '*', filter: `user_id=eq.${userId}`, schema: 'public', table: 'project_members' },
+      () => onChanged(),
+    )
+    .subscribe(status => { if (status === 'SUBSCRIBED') onChanged() })
+
+  let lastCheck = 0
+  const revalidate = () => {
+    if (document.hidden || Date.now() - lastCheck < 10000) return
+    lastCheck = Date.now()
+    onChanged()
+  }
+  window.addEventListener('focus', revalidate)
+  document.addEventListener('visibilitychange', revalidate)
 
   return () => {
+    window.removeEventListener('focus', revalidate)
+    document.removeEventListener('visibilitychange', revalidate)
     void requireSupabase().removeChannel(channel)
   }
+}
+
+export function subscribeToTeamMembers(teamId: string, onChanged: () => void) {
+  const client = requireSupabase()
+  const channel = client.channel(`fireboard:team-settings:${teamId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members', filter: `team_id=eq.${teamId}` }, onChanged)
+    .subscribe()
+  return () => { void client.removeChannel(channel) }
 }

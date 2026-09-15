@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { getCurrentTranslation } from '../i18n/i18n.store.ts'
 import { fetchMyTeamAccess, subscribeToMyTeamMembership } from './team.api.ts'
-import type { ProjectAccessLevel, Team, TeamMember, TeamRole } from './team.types.ts'
+import { teamAccessKey, type ProjectAccessLevel, type Team, type TeamMember, type TeamRole } from './team.types.ts'
 
 type TeamState = {
+  accessVersion: number
   error: string | null
   hasLoaded: boolean
   isLoading: boolean
@@ -24,21 +25,26 @@ const getMessage = (error: unknown) => {
   return getCurrentTranslation().errors.projectsGeneric
 }
 
+let accessRequest = 0
 export const useTeamStore = create<TeamState>((set, get) => ({
+  accessVersion: 0,
   error: null,
   hasLoaded: false,
   isLoading: false,
   member: null,
   projectAccess: {},
   team: null,
-  clear: () => set({ error: null, hasLoaded: false, isLoading: false, member: null, projectAccess: {}, team: null }),
+  clear: () => { accessRequest++; set(state => ({ accessVersion: state.accessVersion + 1, error: null, hasLoaded: false, isLoading: false, member: null, projectAccess: {}, team: null })) },
   loadAccess: async (userId) => {
+    const request = ++accessRequest
     set({ error: null, isLoading: true })
     try {
       const access = await fetchMyTeamAccess(userId)
-      set({ ...access, error: null, hasLoaded: true, isLoading: false })
+      if (request !== accessRequest) return
+      set(state => ({ ...access, accessVersion: state.accessVersion + Number(!state.hasLoaded || teamAccessKey(state) !== teamAccessKey(access)), error: null, hasLoaded: true, isLoading: false }))
     } catch (error) {
-      set({ error: getMessage(error), hasLoaded: true, isLoading: false, member: null, projectAccess: {}, team: null })
+      if (request !== accessRequest) return
+      set(state => ({ accessVersion: state.accessVersion + Number(!state.hasLoaded), error: getMessage(error), hasLoaded: true, isLoading: false }))
     }
   },
   subscribeRealtime: (userId) =>

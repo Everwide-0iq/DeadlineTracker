@@ -144,6 +144,7 @@ export function applyOptimisticItemPatch(
   return next
 }
 
+let loadVersion = 0
 export const useTodoStore = create<TodoState>((set, get) => ({
   blocks: [],
   items: [],
@@ -226,11 +227,14 @@ export const useTodoStore = create<TodoState>((set, get) => ({
     }
   },
   loadTodos: async () => {
+    const version = ++loadVersion
     set({ error: null, isLoading: true })
     try {
       const data = await fetchTodoData()
+      if (version !== loadVersion) return
       set({ ...data, error: null, isLoading: false })
     } catch (error) {
+      if (version !== loadVersion) return
       set({ error: getMessage(error), isLoading: false })
     }
   },

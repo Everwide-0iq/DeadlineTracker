@@ -425,9 +425,15 @@ button {
 }
 
 .desktop-board-scene {
+  container-type: inline-size;
   --scene-depth-x: 0px;
   --scene-depth-y: 0px;
   isolation: isolate;
+}
+
+@container (max-width: 1100px) {
+  .board-action-cluster .board-top-action { width: 44px; height: 44px; padding: 0; }
+  .board-action-cluster .board-top-action > span { display: none; }
 }
 
 .desktop-board-scene::before,
@@ -1141,6 +1147,29 @@ button {
   display: flex;
   min-height: 128px;
   flex: 1 1 0;
+}
+
+@media (min-width: 1024px) and (pointer: fine) {
+  [role="dialog"][aria-labelledby="card-editor-title"],
+  [role="dialog"][aria-labelledby="project-editor-title"],
+  [role="dialog"][aria-labelledby="team-settings-title"],
+  .profile-settings-dialog[role="dialog"],
+  .todo-editor-shell[role="dialog"],
+  .board-text-editor[role="dialog"] {
+    resize: both;
+    overflow: auto;
+    max-width: calc(100vw - 48px);
+    max-height: calc(100dvh - 48px);
+    min-height: 340px;
+  }
+  [role="dialog"][aria-labelledby="card-editor-title"] { width: min(72rem, calc(100vw - 48px)); min-width: 680px; }
+  [role="dialog"][aria-labelledby="project-editor-title"] { width: min(32rem, calc(100vw - 48px)); min-width: 420px; }
+  .board-text-editor[role="dialog"] { min-width: 680px; }
+  [role="dialog"][aria-labelledby="team-settings-title"] { width: min(64rem, calc(100vw - 48px)); min-width: 680px; }
+  .profile-settings-dialog[role="dialog"] { min-width: 680px; }
+  .todo-editor-shell[role="dialog"] { min-width: 420px; }
+  [role="dialog"][aria-labelledby="todo-block-editor-title"] { width: min(36rem, calc(100vw - 48px)); }
+  [role="dialog"][aria-labelledby="todo-item-editor-title"] { width: min(42rem, calc(100vw - 48px)); }
 }
 
 .deadline-card-image {

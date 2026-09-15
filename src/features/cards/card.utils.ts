@@ -25,16 +25,6 @@ const descriptionBlockMargin = 16
 const imagePreviewMargin = 16
 const maxImagePreviewHeight = 360
 const minImagePreviewHeight = 128
-const typographyReferenceWidth = 400
-const typographyReferenceHeight = 320
-const maxTypographyScale = 2.5
-
-export type CardTypographyMetrics = {
-  descriptionFontSize: number
-  descriptionLineHeight: number
-  titleFontSize: number
-  titleLineHeight: number
-}
 
 type CardContentSizeInput = {
   description: string | null
@@ -64,21 +54,21 @@ const getTextLineCount = (value: string | null, charactersPerLine: number) => {
     }, 0)
 }
 
-export function getCardTypographyMetrics(
-  width = defaultCardSize.w,
-  height = defaultCardSize.h,
-): CardTypographyMetrics {
-  const widthScale = width / typographyReferenceWidth
-  const heightScale = height / typographyReferenceHeight
-  const titleScale = Math.min(Math.max(Math.min(widthScale, heightScale), 1), maxTypographyScale)
-  const descriptionScale = 1 + (titleScale - 1) * 0.55
-
-  return {
-    descriptionFontSize: 14 * descriptionScale,
-    descriptionLineHeight: descriptionLineHeight * descriptionScale,
-    titleFontSize: 22 * titleScale,
-    titleLineHeight: titleLineHeight * titleScale,
+// Fit one common scale, including chrome and metadata, without changing saved geometry.
+// Height is evaluated at the unscaled width to account for text reflow and images.
+export function getCardContentScale(input: CardContentSizeInput) {
+  const width = input.w ?? defaultCardSize.w
+  const height = input.h ?? defaultCardSize.h
+  let low = 1
+  let high = Math.max(1, Math.min(6, width / defaultCardSize.w))
+  if (high === 1) return 1
+  for (let i = 0; i < 10; i++) {
+    const scale = (low + high) / 2
+    const needed = getCardContentHeight({ ...input, w: width / scale, h: undefined }) * scale
+    if (needed <= height) low = scale
+    else high = scale
   }
+  return Math.floor(low * 1000) / 1000
 }
 
 const getImagePreviewHeight = (
@@ -116,25 +106,23 @@ export function getCardContentHeight({
   w,
 }: CardContentSizeInput) {
   const cardWidth = w ?? defaultCardSize.w
-  const cardHeight = h ?? defaultCardSize.h
-  const typography = getCardTypographyMetrics(cardWidth, cardHeight)
   const contentWidth = Math.max(cardWidth - cardHorizontalPadding, 220)
   const titleCharactersPerLine = Math.max(
-    Math.floor(contentWidth / (titleAverageCharWidth * (typography.titleFontSize / 22))),
+    Math.floor(contentWidth / titleAverageCharWidth),
     12,
   )
   const descriptionCharactersPerLine = Math.max(
     Math.floor(
-      contentWidth / (descriptionAverageCharWidth * (typography.descriptionFontSize / 14)),
+      contentWidth / descriptionAverageCharWidth,
     ),
     18,
   )
   const titleLines = Math.max(getTextLineCount(title, titleCharactersPerLine), 1)
   const descriptionLines = getTextLineCount(description, descriptionCharactersPerLine)
-  const titleHeight = titleLines * typography.titleLineHeight + titleBlockMargin
+  const titleHeight = titleLines * titleLineHeight + titleBlockMargin
   const descriptionHeight =
     descriptionLines > 0
-      ? descriptionLines * typography.descriptionLineHeight + descriptionBlockMargin
+      ? descriptionLines * descriptionLineHeight + descriptionBlockMargin
       : 0
   const imageExtraHeight = getImagePreviewHeight(contentWidth, imagePath, imageWidth, imageHeight)
   const stateMetadataHeight = (isActive ? 34 : 0) + (status === 'done' ? 28 : 0)

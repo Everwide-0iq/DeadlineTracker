@@ -3,6 +3,7 @@ import {
   memo,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -27,12 +28,13 @@ import { defaultActiveColor } from '../profile/profile.types.ts'
 import { useCardStore } from './card.store.ts'
 import { CardImageView } from './CardImageView.tsx'
 import type { Card } from './card.types.ts'
-import { getCardRenderSize, getCardTypographyMetrics } from './card.utils.ts'
+import { getCardRenderSize, getCardContentScale } from './card.utils.ts'
 import { formatCompletionDate } from './completion.ts'
 import { formatCountdown } from './countdown.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
 import { useTodoStore } from '../todos/todo.store.ts'
+import { useFittedCardScale } from './useFittedCardScale.ts'
 
 type DeadlineCardProps = {
   cameraZoom: number
@@ -103,7 +105,11 @@ function DeadlineCardComponent({
   const visual = getDeadlineVisualState(card.deadlineAt, card.status, now, language)
   const countdown = formatCountdown(card.deadlineAt, card.status, now, language)
   const renderSize = getCardRenderSize(card)
-  const typography = getCardTypographyMetrics(card.w, card.h)
+  const proposedScale = useMemo(() => getCardContentScale({
+    w: card.w, h: renderSize.h, title: card.title, description: card.description,
+    imagePath: card.imagePath, imageWidth: card.imageWidth, imageHeight: card.imageHeight,
+    isActive: card.isActive, status: card.status,
+  }), [card.w, renderSize.h, card.title, card.description, card.imagePath, card.imageWidth, card.imageHeight, card.isActive, card.status])
   const isCompleting = useCompletionAnimation(card.status === 'done')
   const activeColor = activeProfile?.activeColor ?? defaultActiveColor
   const activeOwnerName = activeProfile?.nickname ?? t.card.activeOwnerUnknown
@@ -116,6 +122,12 @@ function DeadlineCardComponent({
   const completionDate = formatCompletionDate(card.completedAt, language)
   const completedOwnerName = completedProfile?.nickname ?? t.card.activeOwnerUnknown
   const completedOwnerColor = completedProfile?.activeColor ?? defaultActiveColor
+  const layout = useMemo(() => ({
+    proposedScale, width: card.w, height: renderSize.h, title: card.title,
+    description: card.description, imagePath: card.imagePath, isActive: card.isActive,
+    status: card.status, countdown, activeOwnerName, completedOwnerName, completionDate,
+  }), [proposedScale, card.w, renderSize.h, card.title, card.description, card.imagePath, card.isActive, card.status, countdown, activeOwnerName, completedOwnerName, completionDate])
+  const { contentRef, scale: contentScale } = useFittedCardScale(proposedScale, layout)
   const resizeZoom = Math.max(cameraZoom, 0.1)
   const resizeEdgeSize = 16 / resizeZoom
   const resizeCornerSize = 24 / resizeZoom
@@ -133,10 +145,8 @@ function DeadlineCardComponent({
     '--deadline-border': visual.borderColor,
     '--deadline-glow': visual.glowColor,
     '--deadline-text': visual.textColor,
-    '--card-description-font-size': `${typography.descriptionFontSize}px`,
-    '--card-description-line-height': `${typography.descriptionLineHeight}px`,
-    '--card-title-font-size': `${typography.titleFontSize}px`,
-    '--card-title-line-height': `${typography.titleLineHeight}px`,
+    '--card-content-scale': contentScale,
+    padding: 20 * contentScale,
     height: renderSize.h,
     left: card.x,
     minHeight: renderSize.h,
@@ -416,7 +426,7 @@ function DeadlineCardComponent({
             </button>
           ))
         : null}
-      <div className="deadline-card-content relative z-10 flex min-h-0 flex-1 flex-col">
+      <div ref={contentRef} style={{ zoom: contentScale }} className="deadline-card-content relative z-10 flex min-h-0 flex-1 flex-col">
         <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
           <div className="grid h-11 w-11 place-items-center rounded-xl border border-[var(--deadline-border)]/70 bg-black/30 text-[var(--deadline-text)] shadow-[0_0_22px_var(--deadline-glow)]">
             {card.status === 'done' ? (

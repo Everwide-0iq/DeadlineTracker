@@ -5,6 +5,7 @@ import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { snapshotBoard, type ArcadeSnapshot } from './arcade.model.ts'
 import type { ArcadeDialogProps } from './ArcadeDialog.tsx'
 import './arcade-launcher.css'
+import { loadArcadeReserves } from './arcade.reserves.ts'
 
 export function ArcadeLauncher({ getSnapshot, userId, reduced, anchorRef }: { getSnapshot: () => ArcadeSnapshot; userId: string; reduced: boolean; anchorRef: RefObject<HTMLElement | null> }) {
   const [Dialog, setDialog] = useState<ComponentType<ArcadeDialogProps> | null>(null)
@@ -12,23 +13,31 @@ export function ArcadeLauncher({ getSnapshot, userId, reduced, anchorRef }: { ge
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [loading, setLoading] = useState(false)
   const alive = useRef(true)
+  const pending = useRef<AbortController | null>(null)
   const launchButton = useRef<HTMLButtonElement>(null)
   const language = useI18nStore(s => s.language)
-  useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
+  useEffect(() => { alive.current = true; return () => { alive.current = false; pending.current?.abort() } }, [])
 
   const launch = async () => {
+    if (pending.current) return
+    const controller = new AbortController()
+    pending.current = controller
+    const timeout = window.setTimeout(() => controller.abort(), 2500)
     setLoading(true)
     const next = snapshotBoard(getSnapshot())
     const boardElement = anchorRef.current
     try {
       const module = await import('./ArcadeDialog.tsx')
+      let reserves: ArcadeSnapshot['reserves'] = []
+      try { reserves = await loadArcadeReserves(controller.signal, next.nodes) }
+      catch { /* Cross-project decorations are optional; the current board remains playable offline. */ }
       if (!alive.current) return
       setDialog(() => module.default)
       setAnchor(boardElement)
-      setSnapshot(next)
+      setSnapshot(snapshotBoard({ ...next, reserves }))
     } catch {
       if (alive.current) useFeedbackStore.getState().pushToast({ tone: 'danger', title: language === 'ru' ? 'Arcade не загрузился. Проверьте соединение и попробуйте снова.' : 'Could not load Arcade. Check your connection and try again.' })
-    } finally { if (alive.current) setLoading(false) }
+    } finally { clearTimeout(timeout); pending.current = null; if (alive.current) setLoading(false) }
   }
 
   return <>

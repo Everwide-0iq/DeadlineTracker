@@ -79,6 +79,7 @@ const findMatchingLink = (links: CardLink[], input: CreateCardLinkInput) =>
       link.toSide === input.to.side,
   ) ?? null
 
+let loadVersion = 0
 export const useCardLinkStore = create<CardLinkState>((set, get) => ({
   error: null,
   hasLoaded: false,
@@ -182,12 +183,15 @@ export const useCardLinkStore = create<CardLinkState>((set, get) => ({
     }
   },
   loadLinks: async () => {
+    const version = ++loadVersion
     set({ error: null, isLoading: true })
 
     try {
       const links = await fetchCardLinks()
+      if (version !== loadVersion) return
       set({ error: null, hasLoaded: true, isLoading: false, links })
     } catch (error) {
+      if (version !== loadVersion) return
       set({ error: getMessage(error), hasLoaded: true, isLoading: false })
     }
   },

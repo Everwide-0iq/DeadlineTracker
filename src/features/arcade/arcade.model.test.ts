@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { canTurn, placeFood, readBest, sameCell, saveBest, snapshotBoard, stepSnake, wrapArcadeTitle } from './arcade.model.ts'
+import { boardGameNodes, canTurn, placeFood, readBest, sameCell, saveBest, snapshotBoard, stepSnake, wrapArcadeTitle } from './arcade.model.ts'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('arcade snapshot boundary', () => {
+  it('maps the current camera without mutating board positions and bounds reserves', () => {
+    const nodes = [{ id: 'a', title: 'Task', color: '#ffffff', x: 100, y: 200, w: 340, h: 300 }]
+    const snapshot = snapshotBoard({ name: 'Board', nodes, links: [], texts: [], viewport: { x: 50, y: 20, zoom: .5, width: 1200, height: 720 }, reserves: Array.from({ length: 80 }, () => ({ title: 'Remote card', color: 'bad', secret: 'private' })) })
+    expect(boardGameNodes(snapshot)[0]).toMatchObject({ x: 100, y: 120, w: 170, h: 150 })
+    expect(nodes[0].y).toBe(200)
+    expect(snapshot.reserves).toHaveLength(32)
+    expect(snapshot.reserves?.[0]).toEqual({ title: 'Remote card', color: '#55d9e8' })
+    expect(Object.isFrozen(snapshot.reserves?.[0])).toBe(true)
+  })
   it('wraps titles at words and bounds long words to two lines', () => {
     expect(wrapArcadeTitle('One more task', text => text.length, 8)).toEqual(['One more', 'task'])
     const lines = wrapArcadeTitle('a'.repeat(100), text => text.length, 12)

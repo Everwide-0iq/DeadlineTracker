@@ -25,6 +25,8 @@ import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../.
 import { ProfileAvatar } from '../../features/profile/ProfileAvatar.tsx'
 import { defaultActiveColor, getFallbackNickname, type UserProfile } from '../../features/profile/profile.types.ts'
 import { AddMenu } from '../../features/board/AddMenu.tsx'
+import { useSidebarSize } from './useSidebarSize.ts'
+import './sidebar.css'
 
 type SidebarProps = {
   activeFilter: BoardFilter
@@ -97,9 +99,11 @@ export function Sidebar({
   const t = translations[language]
   const profileName = profile?.nickname ?? getFallbackNickname(userEmail, t.profile.memberFallback)
   const profileColor = profile?.activeColor ?? defaultActiveColor
+  const sizing = useSidebarSize(activeBoardScope)
 
   return (
-    <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-black/35 p-5 shadow-2xl backdrop-blur-xl">
+    <aside ref={sizing.root} style={{ width: sizing.size.width }} className="resizable-sidebar relative flex h-full shrink-0 flex-col rounded-[28px] border border-white/10 bg-black/35 p-5 shadow-2xl backdrop-blur-xl">
+      <div {...sizing.handle('width')} data-resize="width" className="sidebar-width-handle" aria-label={language === 'ru' ? 'Ширина боковой панели' : 'Sidebar width'} />
       <div className="mb-4 flex shrink-0 items-center gap-3 px-2 pt-2">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
           <Flame size={30} fill="currentColor" />
@@ -157,6 +161,7 @@ export function Sidebar({
       />
 
       {activeBoardScope === 'shared' ? (
+        <div ref={sizing.projects} className="sidebar-project-area" style={{ height: sizing.size.height }}>
         <ProjectList
           activeProjectId={activeProjectId}
           canCreate={canCreateProject}
@@ -170,7 +175,10 @@ export function Sidebar({
           onMove={onMoveProject}
           onSelect={onProjectChange}
         />
+        </div>
       ) : null}
+
+      {activeBoardScope === 'shared' ? <div {...sizing.handle('height')} className="sidebar-height-handle" aria-label={language === 'ru' ? 'Высота списка проектов' : 'Project list height'} /> : null}
 
       <div className="mb-3 shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
         <div className="grid grid-cols-2 gap-1.5">
@@ -193,7 +201,7 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className={cn('flex shrink-0 flex-col', activeBoardScope === 'personal' && 'mt-auto')}>
+      <div className="mt-auto flex shrink-0 flex-col">
         <div className="mb-2 shrink-0 px-2 text-xs font-bold uppercase tracking-[0.22em] text-white/35">{t.sidebar.filters}</div>
         <nav className="-mx-5 space-y-0.5 pb-2">
           {boardFilters.map((filter) => {

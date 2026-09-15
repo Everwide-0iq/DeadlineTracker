@@ -92,6 +92,7 @@ const applyLocalPatch = (text: BoardText, input: UpdateBoardTextInput): BoardTex
   updatedAt: new Date().toISOString(),
 })
 
+let loadVersion = 0
 export const useBoardTextStore = create<BoardTextState>((set, get) => ({
   editor: null,
   error: null,
@@ -135,12 +136,15 @@ export const useBoardTextStore = create<BoardTextState>((set, get) => ({
     }
   },
   loadTexts: async () => {
+    const version = ++loadVersion
     set({ error: null, isLoading: true })
 
     try {
       const texts = await fetchBoardTexts()
+      if (version !== loadVersion) return
       set({ error: null, hasLoaded: true, isLoading: false, texts })
     } catch (error) {
+      if (version !== loadVersion) return
       set({ error: getMessage(error), hasLoaded: true, isLoading: false })
     }
   },

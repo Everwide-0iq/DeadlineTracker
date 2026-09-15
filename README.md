@@ -29,7 +29,16 @@ Fireboard is a private realtime deadline board for small teams, projects, and pe
 
 ## Arcade
 
-The desktop **Arcade** button opens Neon Snake and Deadline Blaster in the board area. Games use a read-only visual snapshot, never change tasks, and lazy-load Phaser only when opened. WASD/arrows move; in the shooter, aim with the mouse and hold click/Space to fire. P pauses, Esc returns to the unchanged board. Sound can be muted; Performance mode and reduced-motion preferences reduce effects.
+The desktop **Arcade** button starts a local game layer directly on the project board, without a separate window. It never writes task geometry or restores an old board over teammates' changes. Phaser loads only on launch. Card appearances come from the current board plus a bounded, RLS-protected request for other accessible shared cards (titles only, no images or descriptions).
+
+- **Neon Snake:** collect cards with WASD/arrows; each pickup accelerates the game.
+- **Deadline Blaster:** WASD/arrows move, mouse aims, hold click/Space to fire; chained kills increase the score multiplier.
+- **Scope Creep:** survival waves with automatic fire, Shift dash, boss waves, and three upgrades after every 12 eliminations. Choose with 1/2/3 or click.
+- **Sprint Runner:** card platforms, double jump (Space/W/up), checkpoints, hazards, and timed sprints. A/D/arrows move; the green portal starts the next sprint.
+
+P pauses; Esc exits. Losing focus pauses automatically. Sound can be muted; Performance mode and reduced-motion preferences reduce particles and disable flashes/shake. Each mode has a separate leaderboard. Reapply the Arcade SQL section to enable the two new modes on an existing installation; earlier scores are preserved.
+
+Desktop layout: drag the sidebar's right edge to resize its width, or the divider under projects to resize the project area. Arrow keys also work on focused dividers; double-click resets a divider. Preferences stay in the current browser. Project names wrap without truncation. Desktop editors can be resized from their bottom-right corner, within viewport bounds. Enlarged cards scale their entire content together while keeping resize handles independently usable. Current browsers supporting CSS `zoom` are recommended.
 
 Team leaderboards show nicknames, avatars, personal placement, and the next score to beat. Apply the `Fireboard Arcade` section at the end of `supabase/migrations/0001_initial_schema.sql` (or rerun the complete migration). Rankings refresh on opening, changing games, submitting a completed run, or manual refresh, without polling during gameplay. Only finished runs are submitted. Personal bests remain local to this browser/account, including when the leaderboard is unavailable; local scores are not retroactively uploaded.
 
@@ -126,7 +135,16 @@ Fireboard - приватная realtime-доска дедлайнов для м�
 
 ## Arcade
 
-Кнопка **Arcade** на desktop запускает Neon Snake и Deadline Blaster прямо в области доски. Игры получают отдельный визуальный снимок, не меняют задачи и загружают Phaser только при открытии. WASD/стрелки управляют движением; в шутере мышь задаёт прицел, зажатая ЛКМ/пробел стреляет. P ставит паузу, Esc возвращает к неизменённой доске. Звук отключается; Performance mode и настройка уменьшения движения снижают эффекты.
+Кнопка **Arcade** запускает локальный игровой слой прямо на доске проекта, без отдельного окна. Игра не записывает геометрию задач и не восстанавливает старую доску поверх изменений коллег. Phaser загружается только при запуске. Образы карточек берутся с текущей доски и ограниченным запросом из других доступных общих проектов: только названия, без картинок и описаний, с проверкой RLS.
+
+- **Neon Snake:** сбор карточек на WASD/стрелках с постепенным ускорением.
+- **Deadline Blaster:** WASD/стрелки, прицел мышью, огонь зажатой ЛКМ/пробелом. Серии попаданий повышают множитель очков.
+- **Scope Creep:** выживание с автоматическим огнём, рывком на Shift, волнами с боссами и выбором одного из трёх улучшений после каждых 12 устранений. Выбор кнопками 1/2/3 или мышью.
+- **Sprint Runner:** карточки-платформы, двойной прыжок на пробел/W/вверх, контрольные точки, препятствия и ограничение времени. A/D/стрелки для движения; зелёный портал начинает следующий спринт.
+
+P ставит паузу, Esc завершает игру. Потеря фокуса автоматически ставит паузу. Звук отключается; Performance mode и уменьшение движения сокращают частицы и отключают вспышки и тряску. У каждой игры свой рейтинг. Для двух новых режимов повторно примените секцию Arcade в SQL: прежние рекорды сохраняются.
+
+На desktop можно тянуть правый край боковой панели и разделитель под проектами. Сфокусированные разделители поддерживают стрелки клавиатуры, двойной клик сбрасывает размер. Настройки сохраняются в текущем браузере. Названия проектов переносятся без обрезания. Окна редакторов растягиваются за правый нижний угол в пределах экрана. В больших карточках содержимое масштабируется целиком, а области захвата краёв остаются независимыми. Рекомендуется современный браузер с поддержкой CSS `zoom`.
 
 Командный лидерборд показывает никнеймы, аватарки, место и ближайший рекорд для обгона. Примените блок `Fireboard Arcade` в конце `supabase/migrations/0001_initial_schema.sql` или повторите всю миграцию. Рейтинг обновляется при открытии, переключении игр, отправке завершённой партии и вручную, без опроса сервера во время игры. Отправляются только завершённые партии. Личные рекорды сохраняются отдельно для аккаунта в текущем браузере, в том числе без доступного лидерборда; задним числом они не загружаются.
 

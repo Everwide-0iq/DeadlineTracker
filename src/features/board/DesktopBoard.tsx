@@ -1430,7 +1430,7 @@ export function DesktopBoard({
         />
       </div>
 
-      <div className="pointer-events-auto absolute right-6 top-6 z-20 hidden items-center gap-2 lg:flex xl:right-[274px]">
+      <div className="board-action-cluster pointer-events-auto absolute right-6 top-6 z-20 hidden items-center gap-2 lg:flex xl:right-[274px]">
         <ArcadeLauncher
           key={viewKey}
           anchorRef={viewportRef}
@@ -1438,6 +1438,7 @@ export function DesktopBoard({
           reduced={isPerformanceMode}
           getSnapshot={() => ({
             name: exportContext.boardName,
+            viewport: { ...camera, ...viewportSize },
             nodes: linkNodes.map(node => ({ ...node, title: cardById.get(node.id)?.title ?? todoBlockById.get(node.id)?.title ?? '' })),
             links: links.map(link => ({ from: link.fromCardId ?? link.fromTodoBlockId ?? '', to: link.toCardId ?? link.toTodoBlockId ?? '' })),
             texts,
@@ -1445,16 +1446,18 @@ export function DesktopBoard({
         />
         <button
           aria-label={t.board.exportJson}
+          title={t.board.exportJson}
           className="board-top-action"
           type="button"
           onClick={handleExportBoard}
         >
           <Download size={15} />
-          {t.board.exportJson}
+          <span>{t.board.exportJson}</span>
         </button>
 
         <button
           aria-label={t.board.performanceMode}
+          title={t.board.performanceMode}
           aria-pressed={isPerformanceMode}
           className="board-top-action board-performance-toggle"
           data-active={isPerformanceMode ? 'true' : 'false'}
@@ -1462,7 +1465,7 @@ export function DesktopBoard({
           onClick={togglePerformanceMode}
         >
           <Activity size={15} />
-          {t.board.performanceMode}
+          <span>{t.board.performanceMode}</span>
         </button>
       </div>
 

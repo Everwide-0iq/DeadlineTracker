@@ -50,6 +50,13 @@ export type TeamAccess = {
   team: Team | null
 }
 
+export function teamAccessKey(access: Pick<TeamAccess, 'member' | 'projectAccess'>) {
+  return JSON.stringify([
+    access.member?.userId ?? null, access.member?.teamId ?? null, access.member?.role ?? null,
+    Object.entries(access.projectAccess).sort(([a], [b]) => a.localeCompare(b)),
+  ])
+}
+
 export const isTeamAdmin = (role: TeamRole | null) => role === 'owner' || role === 'admin'
 export const canCreateTeamProject = (role: TeamRole | null) =>
   role === 'owner' || role === 'admin' || role === 'editor'

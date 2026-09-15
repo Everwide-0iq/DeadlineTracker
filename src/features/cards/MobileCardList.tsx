@@ -291,8 +291,8 @@ export function MobileCardList({
   return (
     <main className="app-shell min-h-screen bg-[var(--background)] px-4 pb-44 pt-4 text-white">
       <header className="sticky top-0 z-20 -mx-4 mb-4 border-b border-white/10 bg-[var(--background)]/90 px-4 pb-4 pt-2 backdrop-blur-xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex max-w-full shrink-0 items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
               <Flame size={27} fill="currentColor" />
             </div>
@@ -310,7 +310,7 @@ export function MobileCardList({
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             {canManageTeam && boardScope === 'shared' ? <button aria-label={t.team.manage} className="icon-button h-11 w-11" type="button" onClick={onOpenTeam}><ShieldCheck size={18} /></button> : null}
             <LanguageToggle className="h-11 px-2" />
             <button aria-label={t.sidebar.logout} className="icon-button h-11 w-11" type="button" onClick={onLogout}>

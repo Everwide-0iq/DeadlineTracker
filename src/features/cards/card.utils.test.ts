@@ -3,7 +3,7 @@ import type { Card } from './card.types.ts'
 import {
   filterCards,
   getCardContentHeight,
-  getCardTypographyMetrics,
+  getCardContentScale,
   getFilterCounts,
   sortCardsForMobile,
 } from './card.utils.ts'
@@ -48,27 +48,23 @@ afterEach(() => {
 })
 
 describe('card sizing', () => {
-  it('scales typography only when a card grows in both dimensions', () => {
-    expect(getCardTypographyMetrics(340, 320)).toEqual({
-      descriptionFontSize: 14,
-      descriptionLineHeight: 24,
-      titleFontSize: 22,
-      titleLineHeight: 28,
-    })
-
-    const enlarged = getCardTypographyMetrics(900, 760)
-    expect(enlarged.titleFontSize).toBeGreaterThan(22)
-    expect(enlarged.descriptionFontSize).toBeGreaterThan(14)
-
-    const narrow = getCardTypographyMetrics(340, 1200)
-    expect(narrow.titleFontSize).toBe(22)
+  it('scales all content when both dimensions allow it', () => {
+    expect(getCardContentScale(createCard({ w: 340, h: 320 }))).toBe(1)
+    expect(getCardContentScale(createCard({ w: 900, h: 760 }))).toBeGreaterThan(2)
+    expect(getCardContentScale(createCard({ w: 340, h: 1200 }))).toBe(1)
   })
 
-  it('caps typography on extremely large cards', () => {
-    const metrics = getCardTypographyMetrics(3200, 6000)
-
-    expect(metrics.titleFontSize).toBe(55)
-    expect(metrics.descriptionFontSize).toBeLessThan(27)
+  it('keeps scaled content within geometry without recursive height growth', () => {
+    for (const description of [null, 'Long context '.repeat(80)]) {
+      for (const imagePath of [null, 'image.webp']) {
+        const card = createCard({ w: 900, h: 1400, description, imagePath, imageWidth: 200, imageHeight: 600, isActive: true })
+        const height = getCardContentHeight(card)
+        const scale = getCardContentScale({ ...card, h: height })
+        expect(scale).toBeGreaterThanOrEqual(1)
+        expect(getCardContentHeight({ ...card, w: card.w / scale, h: undefined }) * scale).toBeLessThanOrEqual(height + 1)
+        expect(getCardContentHeight({ ...card, h: height })).toBe(height)
+      }
+    }
   })
 
   it('grows to fit long descriptions', () => {

@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { ArcadeAudio } from './arcade.audio.ts'
-import { canTurn, placeFood, stepSnake, wrapArcadeTitle, type ArcadeMode, type ArcadeSnapshot, type ArcadeStats, type Cell, type Direction } from './arcade.model.ts'
+import { boardGameNodes, canTurn, placeFood, stepSnake, wrapArcadeTitle, type ArcadeMode, type ArcadeSnapshot, type ArcadeStats, type Cell, type Direction } from './arcade.model.ts'
 
 const W = 1200
 const H = 720
@@ -10,34 +10,34 @@ const font = 'Arial, sans-serif'
 type Sprite = Phaser.Physics.Arcade.Image
 
 export class BoardArcadeScene extends Phaser.Scene {
-  private mode: ArcadeMode
-  private snapshot: ArcadeSnapshot
-  private reduced: boolean
-  private audio: ArcadeAudio
-  private report: (stats: ArcadeStats) => void
-  private stats: ArcadeStats = { score: 0, lives: 3, level: 1, phase: 'ready' }
-  private keys = new Set<string>()
-  private body: readonly Cell[] = [{ x: 7, y: 7 }, { x: 6, y: 7 }, { x: 5, y: 7 }]
-  private direction: Direction = 'right'
-  private turns: Direction[] = []
-  private food: Cell = { x: 16, y: 7 }
-  private segments: Phaser.GameObjects.Image[] = []
-  private snack!: Phaser.GameObjects.Container
-  private snakeClock = 0
-  private snakeConnections!: Phaser.GameObjects.Graphics
-  private player!: Sprite
-  private enemies!: Phaser.Physics.Arcade.Group
-  private bullets!: Phaser.Physics.Arcade.Group
-  private particles!: Phaser.GameObjects.Particles.ParticleEmitter
-  private aim!: Phaser.GameObjects.Graphics
-  private lastShot = 0
-  private nextSpawn = 0
-  private immuneUntil = 0
-  private elapsed = 0
-  private textureCount = 0
-  private combo = 0
-  private lastKill = 0
-  private alive = false
+  protected mode: ArcadeMode
+  protected snapshot: ArcadeSnapshot
+  protected reduced: boolean
+  protected audio: ArcadeAudio
+  protected report: (stats: ArcadeStats) => void
+  protected stats: ArcadeStats = { score: 0, lives: 3, level: 1, phase: 'ready' }
+  protected keys = new Set<string>()
+  protected body: readonly Cell[] = [{ x: 7, y: 7 }, { x: 6, y: 7 }, { x: 5, y: 7 }]
+  protected direction: Direction = 'right'
+  protected turns: Direction[] = []
+  protected food: Cell = { x: 16, y: 7 }
+  protected segments: Phaser.GameObjects.Image[] = []
+  protected snack!: Phaser.GameObjects.Container
+  protected snakeClock = 0
+  protected snakeConnections!: Phaser.GameObjects.Graphics
+  protected player!: Sprite
+  protected enemies!: Phaser.Physics.Arcade.Group
+  protected bullets!: Phaser.Physics.Arcade.Group
+  protected particles!: Phaser.GameObjects.Particles.ParticleEmitter
+  protected aim!: Phaser.GameObjects.Graphics
+  protected lastShot = 0
+  protected nextSpawn = 0
+  protected immuneUntil = 0
+  protected elapsed = 0
+  protected textureCount = 0
+  protected combo = 0
+  protected lastKill = 0
+  protected alive = false
 
   constructor(options: { mode: ArcadeMode; snapshot: ArcadeSnapshot; reduced: boolean; sound: ArcadeAudio; report: (stats: ArcadeStats) => void }) {
     super('board-arcade')
@@ -57,43 +57,41 @@ export class BoardArcadeScene extends Phaser.Scene {
       scale: { start: 1, end: 0 }, alpha: { start: .9, end: 0 },
       blendMode: 'ADD', emitting: false, maxParticles: this.reduced ? 70 : 280,
     }).setDepth(30)
-    if (this.mode === 'snake') this.createSnake()
-    else this.createShooter()
-    this.events.once('shutdown', () => { this.alive = false; this.keys.clear() })
+    this.createMode()
+    const dispose = () => { this.alive = false; this.keys.clear() }
+    this.events.once('shutdown', dispose)
+    this.events.once('destroy', dispose)
     this.report({ ...this.stats })
   }
 
-  private drawBoard() {
+  protected createMode() {
+    if (this.mode === 'snake') this.createSnake()
+    else this.createShooter()
+  }
+
+  protected drawBoard() {
     const g = this.add.graphics()
-    g.fillStyle(0x080d10).fillRect(0, 0, W, H)
+    g.fillStyle(0x080d10, .5).fillRect(0, 0, W, H)
     g.lineStyle(1, 0x28464a, .3)
     for (let x = 24; x < W; x += 48) g.lineBetween(x, 24, x, H - 24)
     for (let y = 24; y < H; y += 48) g.lineBetween(24, y, W - 24, y)
-    g.lineStyle(1, CYAN, .35).strokeRoundedRect(24, 24, W - 48, H - 48, 8)
-    const nodes = this.snapshot.nodes
-    if (!nodes.length) return
-    const left = Math.min(...nodes.map(n => n.x))
-    const top = Math.min(...nodes.map(n => n.y))
-    const width = Math.max(...nodes.map(n => n.x + n.w)) - left
-    const height = Math.max(...nodes.map(n => n.y + n.h)) - top
-    const scale = Math.min(1000 / Math.max(1, width), 540 / Math.max(1, height), 1)
-    const tx = (x: number) => (x - left) * scale + (W - width * scale) / 2
-    const ty = (y: number) => (y - top) * scale + (H - height * scale) / 2
+    const nodes = boardGameNodes(this.snapshot)
     const byId = new Map(nodes.map(n => [n.id, n]))
-    g.lineStyle(1, CYAN, .12)
+    g.lineStyle(1, CYAN, .22)
     this.snapshot.links.forEach(l => {
       const a = byId.get(l.from), b = byId.get(l.to)
-      if (a && b) g.lineBetween(tx(a.x + a.w / 2), ty(a.y + a.h / 2), tx(b.x + b.w / 2), ty(b.y + b.h / 2))
+      if (a && b) g.lineBetween(a.x + a.w / 2, a.y + a.h / 2, b.x + b.w / 2, b.y + b.h / 2)
     })
     nodes.forEach(n => {
       const color = Phaser.Display.Color.HexStringToColor(n.color).color
-      g.lineStyle(1, color, .13).strokeRoundedRect(tx(n.x), ty(n.y), n.w * scale, n.h * scale, 4)
-      if (n.w * scale > 90) this.add.text(tx(n.x) + 8, ty(n.y) + 8, n.title.slice(0, 28), { fontFamily: font, fontSize: '12px', color: n.color }).setAlpha(.14)
+      g.lineStyle(1, color, .28).strokeRoundedRect(n.x, n.y, n.w, n.h, 4)
+      if (n.w > 90) this.add.text(n.x + 8, n.y + 8, n.title.slice(0, 36), { fontFamily: font, fontSize: '12px', color: n.color }).setAlpha(.35)
     })
-    this.snapshot.texts.forEach(t => this.add.text(tx(t.x), ty(t.y), t.content.slice(0, 32), { fontFamily: font, fontSize: '20px', color: t.color }).setAlpha(.12))
+    const textNodes = boardGameNodes({ ...this.snapshot, nodes: this.snapshot.texts.map((t, i) => ({ id: String(i), title: t.content, x: t.x, y: t.y, w: 1, h: 1, color: t.color })) })
+    textNodes.forEach(t => this.add.text(t.x, t.y, t.title, { fontFamily: font, fontSize: '18px', color: t.color }).setAlpha(.25))
   }
 
-  private makeTextures() {
+  protected makeTextures() {
     const graphics = this.make.graphics({ x: 0, y: 0 })
     graphics.fillStyle(0xffffff).fillRect(0, 0, 4, 4).generateTexture('spark', 4, 4)
     graphics.clear().fillStyle(0xffffff).fillRoundedRect(0, 0, 18, 5, 2).generateTexture('bolt', 18, 5)
@@ -105,7 +103,8 @@ export class BoardArcadeScene extends Phaser.Scene {
     graphics.lineStyle(2, CYAN).strokeRoundedRect(1, 1, 56, 40, 6)
     graphics.fillStyle(CYAN).fillTriangle(20, 12, 39, 21, 20, 30).generateTexture('player', 58, 42)
     graphics.destroy()
-    const templates = this.snapshot.nodes.length ? this.snapshot.nodes.slice(0, 24) : [
+    const source = [...this.snapshot.nodes.slice(0, 24), ...(this.snapshot.reserves ?? []).slice(0, 24)]
+    const templates = source.length ? source.slice(0, 48) : [
       { title: 'SHIP IT', color: '#ff534b' }, { title: 'ONE MORE THING', color: '#55e5ed' },
       { title: 'SIDE QUEST', color: '#f6db42' }, { title: 'NEXT LEVEL', color: '#83ef75' },
     ]
@@ -128,7 +127,7 @@ export class BoardArcadeScene extends Phaser.Scene {
     })
   }
 
-  private createSnake() {
+  protected createSnake() {
     this.stats.lives = 1
     this.snakeConnections = this.add.graphics().setDepth(9)
     this.snack = this.add.container(0, 0).setDepth(10)
@@ -137,7 +136,7 @@ export class BoardArcadeScene extends Phaser.Scene {
     this.drawSnake(false)
   }
 
-  private drawSnake(animate: boolean) {
+  protected drawSnake(animate: boolean) {
     this.snakeConnections.clear()
     if (!this.reduced && this.body.length > 1) {
       for (const [width, alpha] of [[12, .06], [5, .15], [1, .8]]) {
@@ -170,7 +169,7 @@ export class BoardArcadeScene extends Phaser.Scene {
     this.snack.setPosition(48 + this.food.x * 48, 24 + this.food.y * 48)
   }
 
-  private createShooter() {
+  protected createShooter() {
     this.physics.world.setBounds(30, 30, W - 60, H - 60)
     this.player = this.physics.add.image(W / 2, H / 2, 'player').setDepth(12).setCollideWorldBounds(true)
     this.player.setCircle(20, 9, 1)
@@ -208,7 +207,7 @@ export class BoardArcadeScene extends Phaser.Scene {
     this.physics.world.pause()
   }
 
-  private spawnEnemy() {
+  protected spawnEnemy() {
     if (this.enemies.countActive(true) >= 28) return
     const side = Phaser.Math.Between(0, 3)
     const x = side === 0 ? -70 : side === 1 ? W + 70 : Phaser.Math.Between(90, W - 90)
@@ -220,15 +219,22 @@ export class BoardArcadeScene extends Phaser.Scene {
     enemy.setData('sway', Phaser.Math.FloatBetween(-1, 1))
   }
 
-  private burst(x: number, y: number, color: number) {
+  protected burst(x: number, y: number, color: number) {
     this.particles.setParticleTint(color)
     this.particles.explode(this.reduced ? 6 : 25, x, y)
     if (this.reduced) return
     const ring = this.add.circle(x, y, 8).setStrokeStyle(2, color).setDepth(20)
     this.tweens.add({ targets: ring, scale: 6, alpha: 0, duration: 330, onComplete: () => ring.destroy() })
+    const shards = this.add.graphics().setPosition(x, y).setDepth(21)
+    shards.lineStyle(2, color, .8)
+    for (let i = 0; i < 6; i++) {
+      const angle = i * Math.PI / 3
+      shards.lineBetween(Math.cos(angle) * 12, Math.sin(angle) * 12, Math.cos(angle) * 22, Math.sin(angle) * 22)
+    }
+    this.tweens.add({ targets: shards, scale: 3.5, angle: 35, alpha: 0, duration: 300, onComplete: () => shards.destroy() })
   }
 
-  private popup(x: number, y: number, value: string) {
+  protected popup(x: number, y: number, value: string) {
     const text = this.add.text(x, y, value, { fontFamily: font, fontSize: '21px', fontStyle: 'bold', color: '#f6db42' }).setOrigin(.5).setDepth(40)
     this.tweens.add({ targets: text, y: y - 50, alpha: 0, duration: 600, onComplete: () => text.destroy() })
   }
@@ -251,6 +257,8 @@ export class BoardArcadeScene extends Phaser.Scene {
     this.publish()
   }
 
+  chooseUpgrade(_index: number) { /* Only survival runs offer upgrades. */ }
+
   pause() {
     this.keys.clear()
     if (!this.alive || this.stats.phase !== 'playing') return
@@ -269,9 +277,9 @@ export class BoardArcadeScene extends Phaser.Scene {
     this.publish()
   }
 
-  private publish() { this.report({ ...this.stats, elapsedMs: Math.floor(this.elapsed) }) }
+  protected publish() { this.report({ ...this.stats, elapsedMs: Math.floor(this.elapsed) }) }
 
-  private finish() {
+  protected finish() {
     this.stats.phase = 'over'
     this.keys.clear()
     this.physics.world.pause()
@@ -324,6 +332,7 @@ export class BoardArcadeScene extends Phaser.Scene {
       if (bullet) {
         bullet.enableBody(true, this.player.x, this.player.y, true, true).setTint(CYAN).setRotation(angle).setDepth(15)
         bullet.setVelocity(Math.cos(angle) * 820, Math.sin(angle) * 820)
+        if (!this.reduced) this.particles.setParticleTint(CYAN).emitParticleAt(this.player.x + Math.cos(angle) * 26, this.player.y + Math.sin(angle) * 26, 4)
         this.audio.play('shoot')
       }
       this.lastShot = this.elapsed
@@ -351,7 +360,7 @@ export class BoardArcadeScene extends Phaser.Scene {
 
 export function createArcadeGame(parent: HTMLElement, scene: BoardArcadeScene) {
   return new Phaser.Game({
-    type: Phaser.AUTO, parent, width: W, height: H, backgroundColor: '#080d10',
+    type: Phaser.AUTO, parent, width: W, height: H, transparent: true,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     physics: { default: 'arcade', arcade: { debug: false } },
     input: { keyboard: false }, audio: { noAudio: true },

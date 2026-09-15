@@ -1,5 +1,5 @@
 import { Check, Copy, Link2, Settings2, ShieldCheck, Trash2, UserPlus, UsersRound, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useDialogFocus } from '../../lib/useDialogFocus.ts'
 import { cn } from '../../lib/cn.ts'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
@@ -17,6 +17,7 @@ import {
   removeTeamMember,
   revokeTeamInvite,
   updateTeamMemberAccess,
+  subscribeToTeamMembers,
 } from './team.api.ts'
 import {
   assignableTeamRoles,
@@ -106,6 +107,7 @@ export function TeamSettings({
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([])
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
   const [role, setRole] = useState<AssignableTeamRole>('member')
+  const reloadVersion = useRef(0)
 
   const canManage = isTeamAdmin(currentRole)
   const centerProjectId = projects.find((project) => project.id === '00000000-0000-0000-0000-000000000001')?.id ?? null
@@ -116,6 +118,7 @@ export function TeamSettings({
   const dialogRef = useDialogFocus<HTMLElement>({ active: isOpen, onEscape: onClose })
 
   const reload = useCallback(async () => {
+    const version = ++reloadVersion.current
     setIsLoading(true)
     setError(null)
     try {
@@ -124,20 +127,25 @@ export function TeamSettings({
         fetchProjectMembers(projects.map((project) => project.id)),
         fetchTeamInvites(team.id),
       ])
+      if (version !== reloadVersion.current) return
       setMembers(nextMembers)
       setProjectMembers(nextProjectMembers)
       setInvites(nextInvites)
     } catch (caughtError) {
+      if (version !== reloadVersion.current) return
       setError(getTeamErrorMessage(caughtError, t.team.inviteFailed))
     } finally {
-      setIsLoading(false)
+      if (version === reloadVersion.current) setIsLoading(false)
     }
   }, [projects, t.team.inviteFailed, team.id])
 
   useEffect(() => {
     if (!isOpen || !canManage) return
+    const requestVersion = reloadVersion
     void reload()
-  }, [canManage, isOpen, reload])
+    const unsubscribe = subscribeToTeamMembers(team.id, () => void reload())
+    return () => { requestVersion.current++; unsubscribe() }
+  }, [canManage, isOpen, reload, team.id])
 
   useEffect(() => {
     if (!centerProjectId) return

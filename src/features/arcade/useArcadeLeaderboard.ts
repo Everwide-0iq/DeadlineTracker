@@ -5,7 +5,10 @@ import type { ArcadeMode } from './arcade.model.ts'
 export type LeaderboardEntry = Database['public']['Functions']['get_arcade_leaderboard']['Returns'][number]
 export type LeaderboardStatus = 'loading' | 'ready' | 'offline' | 'setup' | 'no-team'
 type PendingScore = { teamId: string; mode: ArcadeMode; token: string; score: number; duration: number }
-const missingSchema = (error: unknown) => typeof error === 'object' && error !== null && 'code' in error && (error.code === 'PGRST202' || error.code === '42883')
+const missingSchema = (error: unknown) => typeof error === 'object' && error !== null && 'code' in error && (
+  error.code === 'PGRST202' || error.code === '42883'
+  || (error.code === '22023' && 'message' in error && error.message === 'Invalid arcade mode')
+)
 
 export function useArcadeLeaderboard(teamId: string | null, mode: ArcadeMode) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([])

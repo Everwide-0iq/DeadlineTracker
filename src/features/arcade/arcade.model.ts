@@ -1,13 +1,19 @@
-export type ArcadeMode = 'snake' | 'shooter'
+export type ArcadeMode = 'snake' | 'shooter' | 'rogue' | 'platformer'
+export const arcadeModes: ReadonlyArray<{ id: ArcadeMode; name: string }> = [
+  { id: 'snake', name: 'Neon Snake' }, { id: 'shooter', name: 'Deadline Blaster' },
+  { id: 'rogue', name: 'Scope Creep' }, { id: 'platformer', name: 'Sprint Runner' },
+]
 export type ArcadePhase = 'ready' | 'playing' | 'paused' | 'over'
 export type ArcadeNode = Readonly<{ id: string; title: string; color: string; x: number; y: number; w: number; h: number }>
 export type ArcadeSnapshot = Readonly<{
   name: string
+  viewport?: Readonly<{ x: number; y: number; zoom: number; width: number; height: number }>
+  reserves?: readonly Readonly<{ title: string; color: string }>[]
   nodes: readonly ArcadeNode[]
   links: readonly Readonly<{ from: string; to: string }>[]
   texts: readonly Readonly<{ content: string; color: string; x: number; y: number }>[]
 }>
-export type ArcadeStats = { score: number; lives: number; level: number; phase: ArcadePhase; elapsedMs?: number }
+export type ArcadeStats = { score: number; lives: number; level: number; phase: ArcadePhase; elapsedMs?: number; upgrade?: boolean }
 
 export function wrapArcadeTitle(value: string, measure: (text: string) => number, width: number): string[] {
   const lines: string[] = []
@@ -39,9 +45,24 @@ export function snapshotBoard(input: ArcadeSnapshot): ArcadeSnapshot {
   const ids = new Set(nodes.map(n => n.id))
   return Object.freeze({
     name: input.name.slice(0, 100), nodes: Object.freeze(nodes),
+    viewport: input.viewport ? Object.freeze({ x: finite(input.viewport.x), y: finite(input.viewport.y), zoom: Math.max(.1, Math.min(2, input.viewport.zoom || 1)), width: Math.max(1, finite(input.viewport.width)), height: Math.max(1, finite(input.viewport.height)) }) : undefined,
+    reserves: Object.freeze((input.reserves ?? []).slice(0, 32).map(n => Object.freeze({ title: n.title.slice(0, 100), color: color(n.color) }))),
     links: Object.freeze(input.links.filter(l => ids.has(l.from) && ids.has(l.to)).slice(0, 120).map(l => Object.freeze({ from: l.from, to: l.to }))),
     texts: Object.freeze(input.texts.slice(0, 20).map(t => Object.freeze({ content: t.content.slice(0, 80), color: color(t.color), x: finite(t.x), y: finite(t.y) }))),
   })
+}
+
+export function boardGameNodes(snapshot: ArcadeSnapshot, width = 1200, height = 720) {
+  const view = snapshot.viewport
+  if (!view) return snapshot.nodes.map(n => ({ ...n }))
+  const scale = Math.min(width / view.width, height / view.height)
+  const offsetX = (width - view.width * scale) / 2
+  const offsetY = (height - view.height * scale) / 2
+  return snapshot.nodes.map(n => ({ ...n,
+    x: (n.x * view.zoom + view.x) * scale + offsetX,
+    y: (n.y * view.zoom + view.y) * scale + offsetY,
+    w: n.w * view.zoom * scale, h: n.h * view.zoom * scale,
+  })).filter(n => n.x + n.w > 0 && n.x < width && n.y + n.h > 0 && n.y < height)
 }
 
 export type Cell = Readonly<{ x: number; y: number }>

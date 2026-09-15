@@ -3837,7 +3837,7 @@ $$;
 create table if not exists public.arcade_scores (
   team_id uuid not null references public.teams(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
-  mode text not null check (mode in ('snake', 'shooter')),
+  mode text not null check (mode in ('snake', 'shooter', 'rogue', 'platformer')),
   score integer not null check (score between 1 and 500000),
   achieved_at timestamptz not null default now(),
   primary key (team_id, user_id, mode)
@@ -3850,7 +3850,7 @@ revoke all on public.arcade_scores from public, anon, authenticated;
 create table if not exists private.arcade_runs (
   team_id uuid not null references public.teams(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
-  mode text not null check (mode in ('snake', 'shooter')),
+  mode text not null check (mode in ('snake', 'shooter', 'rogue', 'platformer')),
   token uuid not null default gen_random_uuid(),
   started_at timestamptz not null default clock_timestamp(),
   submitted_score integer,
@@ -3858,6 +3858,12 @@ create table if not exists private.arcade_runs (
 );
 alter table private.arcade_runs enable row level security;
 revoke all on private.arcade_runs from public, anon, authenticated;
+
+-- Upgrade existing installations as well as fresh ones; preserve every previous score.
+alter table public.arcade_scores drop constraint if exists arcade_scores_mode_check;
+alter table public.arcade_scores add constraint arcade_scores_mode_check check (mode in ('snake', 'shooter', 'rogue', 'platformer'));
+alter table private.arcade_runs drop constraint if exists arcade_runs_mode_check;
+alter table private.arcade_runs add constraint arcade_runs_mode_check check (mode in ('snake', 'shooter', 'rogue', 'platformer'));
 
 create or replace function public.begin_arcade_run(target_team_id uuid, game_mode text)
 returns uuid
@@ -3869,7 +3875,7 @@ begin
   if auth.uid() is null or not private.is_team_member(target_team_id) then
     raise exception 'Team membership required' using errcode = '42501';
   end if;
-  if game_mode is null or game_mode not in ('snake', 'shooter') then
+  if game_mode is null or game_mode not in ('snake', 'shooter', 'rogue', 'platformer') then
     raise exception 'Invalid arcade mode' using errcode = '22023';
   end if;
   insert into private.arcade_runs as run (team_id, user_id, mode)
@@ -3912,7 +3918,9 @@ begin
   end if;
   -- Plausibility checks for a casual leaderboard, not a substitute for server-replayed gameplay.
   if (game_mode = 'snake' and (final_score % 25 <> 0 or final_score > 8325 or final_score > (duration_ms / 90 + 1) * 25))
-    or (game_mode = 'shooter' and (final_score % 10 <> 0 or final_score > (duration_ms / 145 + 1) * 50)) then
+    or (game_mode = 'shooter' and (final_score % 10 <> 0 or final_score > (duration_ms / 145 + 1) * 50))
+    or (game_mode = 'rogue' and (final_score % 20 <> 0 or final_score > (duration_ms / 100 + 1) * 100))
+    or (game_mode = 'platformer' and (final_score % 10 <> 0 or final_score > (duration_ms / 1000 + 1) * 300)) then
     raise exception 'Impossible arcade score' using errcode = '22023';
   end if;
   if current_run.submitted_score is not null and current_run.submitted_score <> final_score then
@@ -3943,7 +3951,7 @@ begin
   if auth.uid() is null or not private.is_team_member(target_team_id) then
     raise exception 'Team membership required' using errcode = '42501';
   end if;
-  if game_mode is null or game_mode not in ('snake', 'shooter') then
+  if game_mode is null or game_mode not in ('snake', 'shooter', 'rogue', 'platformer') then
     raise exception 'Invalid arcade mode' using errcode = '22023';
   end if;
   return query

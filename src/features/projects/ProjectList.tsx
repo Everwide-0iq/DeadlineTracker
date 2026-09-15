@@ -70,7 +70,7 @@ export function ProjectList({
               >
                 <button className="flex min-w-0 items-center gap-2 px-3 py-2.5" type="button" onClick={() => onSelect(project.id)}>
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--project-color)] shadow-[0_0_12px_var(--project-color)]" />
-                  <span className="max-w-32 truncate">{displayName}</span>
+                  <span className="max-w-52 whitespace-normal text-left [overflow-wrap:anywhere]">{displayName}</span>
                   <span
                     className={cn('rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/55', deadline && 'text-[var(--deadline-color)]')}
                     style={deadline ? ({ '--deadline-color': deadline.color } as ProjectStyle) : undefined}
@@ -143,10 +143,7 @@ export function ProjectList({
               style={getProjectStyle(project)}
             >
               <button
-                className={cn(
-                  'flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2.5 pr-3 text-left transition-[padding] duration-200',
-                  canDelete && 'group-hover:pr-24 group-focus-within:pr-24',
-                )}
+                className="flex min-w-0 flex-1 items-center gap-3 px-2.5 py-2.5 text-left"
                 type="button"
                 onClick={() => onSelect(project.id)}
               >
@@ -154,8 +151,8 @@ export function ProjectList({
                   <span className="h-2.5 w-2.5 rounded-full bg-[var(--project-color)] shadow-[0_0_16px_var(--project-color)]" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="mb-1 flex min-w-0 items-center justify-between gap-2">
-                    <span className="truncate text-sm font-black text-white">{displayName}</span>
+                  <span className="mb-1 flex min-w-0 flex-col items-start gap-1">
+                    <span className="project-row-title text-sm font-black text-white">{displayName}</span>
                     {deadline ? (
                       <span
                         className="project-deadline-pill shrink-0"
@@ -179,7 +176,7 @@ export function ProjectList({
                 </span>
               </button>
               {canDelete ? (
-                <div className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5 opacity-0 transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                <div className="project-row-actions">
                   <div className="flex flex-col gap-1">
                     <button
                       aria-label={t.project.moveUp(displayName)}

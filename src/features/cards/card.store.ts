@@ -183,6 +183,7 @@ export function getActivityTogglePatch(
 
 const uniqueIds = (ids: string[]) => Array.from(new Set(ids))
 
+let loadVersion = 0
 export const useCardStore = create<CardState>((set, get) => ({
   cards: [],
   dragGuide: null,
@@ -268,12 +269,15 @@ export const useCardStore = create<CardState>((set, get) => ({
     }
   },
   loadCards: async () => {
+    const version = ++loadVersion
     set({ error: null, isLoading: true })
 
     try {
       const cards = await fetchCards()
+      if (version !== loadVersion) return
       set({ cards, error: null, hasLoaded: true, isLoading: false })
     } catch (error) {
+      if (version !== loadVersion) return
       set({ error: getMessage(error), hasLoaded: true, isLoading: false })
     }
   },

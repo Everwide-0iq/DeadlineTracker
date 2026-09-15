@@ -124,6 +124,7 @@ const moveProjectInList = (projects: Project[], id: string, direction: ProjectMo
   return withNormalizedSortOrder(sharedProject ? [sharedProject, ...nextMovableProjects] : nextMovableProjects)
 }
 
+let loadVersion = 0
 export const useProjectStore = create<ProjectState>((set, get) => ({
   error: null,
   hasLoaded: false,
@@ -190,12 +191,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
   loadProjects: async () => {
+    const version = ++loadVersion
     set({ error: null, isLoading: true })
 
     try {
       const projects = await fetchProjects()
+      if (version !== loadVersion) return
       set({ error: null, hasLoaded: true, isLoading: false, projects })
     } catch (error) {
+      if (version !== loadVersion) return
       set({ error: getMessage(error), hasLoaded: true, isLoading: false })
     }
   },

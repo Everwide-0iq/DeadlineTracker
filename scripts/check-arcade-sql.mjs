@@ -63,5 +63,16 @@ assert.equal((await query('select public.submit_arcade_score($1,$2,$3,$4,$5) as 
 await db.exec(`reset role; update private.arcade_runs set started_at=clock_timestamp()-interval '3 hours';`)
 await as(a)
 await fails(()=>query('select public.submit_arcade_score($1,$2,$3,$4,$5)',[team,'snake',secondToken,50,500]),'22023')
-console.log(`Arcade SQL: ${passed} checks passed; schema applied twice; no production connection.`)
+for (const mode of ['rogue', 'platformer']) {
+  await as(a)
+  const nextToken = (await query('select public.begin_arcade_run($1,$2) as token', [team, mode])).rows[0].token
+  await fails(() => query('select public.submit_arcade_score($1,$2,$3,$4,$5)', [team, mode, nextToken, 99999, 1]), '22023')
+  assert.equal((await query('select public.submit_arcade_score($1,$2,$3,$4,$5) as score', [team, mode, nextToken, 100, 1000])).rows[0].score, 100); passed++
+  assert.equal((await query('select * from public.get_arcade_leaderboard($1,$2)', [team, mode])).rows[0].score, 100); passed++
+  await fails(() => query('select public.submit_arcade_score($1,$2,$3,$4,$5)', [team, mode, nextToken, 120, 1000]), '22023')
+}
+await db.exec('reset role;')
+await db.exec(section)
+assert.equal((await query('select count(*)::int as count from public.arcade_scores')).rows[0].count, 4); passed++
+console.log(`Arcade SQL: ${passed} checks passed; schema reapplied with existing scores; no production connection.`)
 await db.close()

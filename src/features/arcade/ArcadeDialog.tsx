@@ -1,11 +1,13 @@
-import { Crosshair, Gamepad2, Heart, Keyboard, LoaderCircle, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X, Zap, Route } from 'lucide-react'
+import { Crosshair, Gamepad2, Heart, Keyboard, LoaderCircle, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X, Zap, Route, Swords, Footprints, Shield, Gauge } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogFocus } from '../../lib/useDialogFocus.ts'
 import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
 import { ArcadeAudio } from './arcade.audio.ts'
-import { readBest, saveBest, type ArcadeMode, type ArcadeSnapshot, type ArcadeStats } from './arcade.model.ts'
+import { arcadeModes, readBest, saveBest, type ArcadeMode, type ArcadeSnapshot, type ArcadeStats } from './arcade.model.ts'
 import { BoardArcadeScene, createArcadeGame } from './BoardArcadeScene.ts'
+import { RogueArcadeScene } from './RogueArcadeScene.ts'
+import { PlatformArcadeScene } from './PlatformArcadeScene.ts'
 import { useTeamStore } from '../team/team.store.ts'
 import { ArcadeLeaderboard } from './ArcadeLeaderboard.tsx'
 import { useArcadeLeaderboard } from './useArcadeLeaderboard.ts'
@@ -16,6 +18,7 @@ const copy = {
   en: { score: 'Score', best: 'Personal best', level: 'Level', lives: 'Lives', play: 'Play', resume: 'Resume', pause: 'Pause', paused: 'Paused', over: 'Run complete', restart: 'New run', exit: 'Back to board', sound: 'Sound', loading: 'Loading Arcade', error: 'Arcade could not start. Try a new run or return to the board.', record: 'New personal best', storage: 'Record could not be saved in this browser.', keys: 'Snake: WASD / arrows. Shooter: WASD / arrows to move, mouse to aim, hold click / Space to fire. P pauses, Esc exits.', local: 'LOCAL ARCADE' },
   ru: { score: 'Очки', best: 'Личный рекорд', level: 'Уровень', lives: 'Жизни', play: 'Играть', resume: 'Продолжить', pause: 'Пауза', paused: 'Пауза', over: 'Игра завершена', restart: 'Новая игра', exit: 'Вернуться к доске', sound: 'Звук', loading: 'Загрузка Arcade', error: 'Не удалось запустить Arcade. Начните новую игру или вернитесь к доске.', record: 'Новый личный рекорд', storage: 'Не удалось сохранить рекорд в этом браузере.', keys: 'Змейка: WASD / стрелки. Шутер: WASD / стрелки для движения, мышь для прицела, зажать ЛКМ / пробел для стрельбы. P — пауза, Esc — выход.', local: 'LOCAL ARCADE' },
 }
+const modeIcons = { snake: Route, shooter: Crosshair, rogue: Swords, platformer: Footprints }
 
 export default function ArcadeDialog({ snapshot, userId, reduced, language, anchor, onClose }: ArcadeDialogProps) {
   const t = copy[language]
@@ -52,19 +55,26 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
     closeTimer.current = window.setTimeout(onClose, reduced || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 160)
   }, [onClose, reduced, invalidateRun])
   closeRef.current = requestClose
-  const dialog = useDialogFocus<HTMLDialogElement>({ active: true })
+  const dialog = useDialogFocus<HTMLDivElement>({ active: true })
   useLayoutEffect(() => {
-    const element = dialog.current
-    if (!element || !anchor) return
-    const position = () => {
-      const rect = anchor.getBoundingClientRect()
-      Object.assign(element.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` })
+    if (!anchor) return
+    const previous = new Map<HTMLElement, boolean>()
+    const isolate = () => {
+      for (const child of Array.from(anchor.children)) {
+        if (!(child instanceof HTMLElement) || child === dialog.current) continue
+        if (!previous.has(child)) previous.set(child, child.inert)
+        child.inert = true
+      }
     }
-    position()
-    const observer = new ResizeObserver(position)
-    observer.observe(anchor)
-    window.addEventListener('resize', position)
-    return () => { observer.disconnect(); window.removeEventListener('resize', position) }
+    anchor.dataset.arcadeActive = 'true'
+    isolate()
+    const observer = new MutationObserver(isolate)
+    observer.observe(anchor, { childList: true })
+    return () => {
+      observer.disconnect()
+      delete anchor.dataset.arcadeActive
+      for (const [element, inert] of previous) element.inert = inert
+    }
   }, [anchor, dialog])
 
   useEffect(() => () => { if (closeTimer.current !== null) clearTimeout(closeTimer.current) }, [])
@@ -73,12 +83,6 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
     if (liveStats.current.phase === 'playing') { scene.current?.pause(); sound.current?.silence() }
     else if (liveStats.current.phase === 'paused') { sound.current?.unlock(); scene.current?.resume(); container.current?.querySelector('canvas')?.focus() }
   }, [])
-
-  useEffect(() => {
-    const element = dialog.current
-    element?.showModal()
-    return () => element?.close()
-  }, [dialog])
 
   useEffect(() => {
     const audio = new ArcadeAudio()
@@ -105,7 +109,8 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
     const initialBest = readBest(userId, mode)
     setBest(initialBest); setRecord(false); setReady(false); setError(false); setStorageError(false)
     setStats({ score: 0, lives: mode === 'snake' ? 1 : 3, level: 1, phase: 'ready' })
-    const next = new BoardArcadeScene({ mode, snapshot, reduced: reduced || window.matchMedia('(prefers-reduced-motion: reduce)').matches, sound: sound.current,
+    const Scene = mode === 'rogue' ? RogueArcadeScene : mode === 'platformer' ? PlatformArcadeScene : BoardArcadeScene
+    const next = new Scene({ mode, snapshot, reduced: reduced || window.matchMedia('(prefers-reduced-motion: reduce)').matches, sound: sound.current,
       report: value => {
         if (disposed) return
         liveStats.current = value
@@ -123,7 +128,7 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
       try {
         game = createArcadeGame(host, next)
         game.canvas.tabIndex = 0
-        game.canvas.setAttribute('aria-label', mode === 'snake' ? 'Neon Snake' : 'Deadline Blaster')
+        game.canvas.setAttribute('aria-label', arcadeModes.find(m => m.id === mode)?.name ?? 'Arcade')
         game.canvas.addEventListener('webglcontextlost', onContextLost)
       } catch { setError(true) }
     })
@@ -194,17 +199,18 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
   const target = leaderboard.entries.filter(entry => entry.user_id !== userId && entry.score >= stats.score).at(-1)
   const leaderboardPanel = <ArcadeLeaderboard entries={leaderboard.entries} status={leaderboard.status} saving={leaderboard.saving} userId={userId} language={language} onRefresh={leaderboard.retry} />
 
-  return createPortal(<dialog ref={dialog} className="arcade-dialog" aria-labelledby="arcade-title" onCancel={e => { e.preventDefault(); requestClose() }} data-reduced={reduced} data-closing={closing}
+  const controls = mode === 'rogue' ? (language === 'ru' ? 'WASD / стрелки: движение. Огонь автоматический. Shift: рывок. 1 / 2 / 3: улучшение.' : 'WASD / arrows: move. Auto-fire. Shift: dash. 1 / 2 / 3: upgrade.') : mode === 'platformer' ? (language === 'ru' ? 'A / D или стрелки: движение. Пробел / W / вверх: двойной прыжок. Доберись до зелёного портала.' : 'A / D or arrows: move. Space / W / up: double jump. Reach the green portal.') : t.keys
+
+  return createPortal(<div ref={dialog} role="dialog" aria-modal="false" className="arcade-dialog arcade-inline" aria-labelledby="arcade-title" data-reduced={reduced} data-closing={closing} data-phase={stats.phase}
     onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onPointerMove={e => e.stopPropagation()}
     onWheel={e => e.stopPropagation()} onContextMenu={e => { e.preventDefault(); e.stopPropagation() }}>
     <header className="arcade-header">
       <div className="arcade-brand"><Gamepad2 size={25} /><div><strong id="arcade-title">FIREBOARD <span>ARCADE</span></strong><small>{snapshot.name}</small></div></div>
       <div className="arcade-modes" role="group" aria-label="Arcade">
-        <button type="button" disabled={starting || leaderboard.saving === 'saving'} aria-pressed={mode === 'snake'} onClick={() => switchMode('snake')}><Route size={17} />Neon Snake</button>
-        <button type="button" disabled={starting || leaderboard.saving === 'saving'} aria-pressed={mode === 'shooter'} onClick={() => switchMode('shooter')}><Crosshair size={17} />Deadline Blaster</button>
+        {arcadeModes.map(item => { const Icon = modeIcons[item.id]; return <button key={item.id} type="button" title={item.name} aria-label={item.name} disabled={starting || leaderboard.saving === 'saving'} aria-pressed={mode === item.id} onClick={() => switchMode(item.id)}><Icon size={17} /><span>{item.name}</span></button> })}
       </div>
       <div className="arcade-tools">
-        <button type="button" title={t.keys} aria-label={t.keys}><Keyboard size={19} /></button>
+        <button type="button" title={controls} aria-label={controls}><Keyboard size={19} /></button>
         <button type="button" title={t.sound} aria-label={t.sound} aria-pressed={!muted} onClick={() => setMuted(v => !v)}>{muted ? <VolumeX size={19} /> : <Volume2 size={19} />}</button>
         <button type="button" title={t.exit} aria-label={t.exit} onClick={requestClose}><X size={21} /></button>
       </div>
@@ -222,12 +228,16 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
     {leader ? <div className="arcade-challenge"><Trophy size={15} /><span title={leader.nickname}>{language === 'ru' ? 'Лидер' : 'Leader'}: <b>{leader.nickname}</b></span><strong>{leader.score}</strong>{target ? <span className="arcade-next-target" title={target.nickname}>{language === 'ru' ? `До обгона ${target.nickname}` : `To beat ${target.nickname}`}: <b>+{Math.max(mode === 'snake' ? 25 : 10, target.score - stats.score + (mode === 'snake' ? 25 : 10))}</b></span> : <span className="arcade-next-target">{language === 'ru' ? 'Задай новый рекорд' : 'Set the next record'}</span>}</div> : null}
     <main className="arcade-stage" data-ready={ready}>
       <div className="arcade-canvas" ref={container} onPointerDown={() => { sound.current?.unlock(); container.current?.querySelector('canvas')?.focus() }} />
+      {stats.upgrade && stats.phase === 'playing' ? <div className="arcade-curtain arcade-upgrades">
+        <h2>{language === 'ru' ? 'Новый уровень' : 'Level up'}</h2>
+        <div>{[Zap, Shield, Gauge].map((Icon, index) => <button type="button" key={index} onClick={() => scene.current?.chooseUpgrade(index)}><Icon size={30} /><strong>{language === 'ru' ? ['Мощность', 'Восстановление', 'Скорость'][index] : ['Overclock', 'Recovery', 'Velocity'][index]}</strong><small>{index + 1}</small></button>)}</div>
+      </div> : null}
       {error ? <div className="arcade-curtain"><p role="alert">{t.error}</p><button type="button" className="arcade-play" onClick={reset}><RotateCcw size={19} />{t.restart}</button></div> : !ready ?
         <div className="arcade-curtain" role="status"><LoaderCircle className="animate-spin" /><p>{t.loading}</p></div> : stats.phase !== 'playing' ?
         <div className={`arcade-curtain arcade-${stats.phase} arcade-lobby`}>
           <div className="arcade-lobby-action">
           <span className="arcade-eyebrow">{stats.phase === 'over' && record && stats.score > recordBaseline ? t.record : leaderboard.status === 'ready' ? 'TEAM CHALLENGE' : t.local}</span>
-          <h1>{stats.phase === 'ready' ? mode === 'snake' ? 'NEON SNAKE' : 'DEADLINE BLASTER' : stats.phase === 'paused' ? t.paused : t.over}</h1>
+          <h1>{stats.phase === 'ready' ? arcadeModes.find(item => item.id === mode)?.name : stats.phase === 'paused' ? t.paused : t.over}</h1>
           {stats.phase === 'over' ? <strong className="arcade-final-score">{stats.score}<Trophy size={26} /></strong> : null}
           <button type="button" className="arcade-play" disabled={starting || leaderboard.saving === 'saving'} onClick={stats.phase === 'over' ? reset : () => void start()}>{starting ? <LoaderCircle size={21} className="animate-spin" /> : <Play size={21} fill="currentColor" />}{stats.phase === 'over' ? t.restart : stats.phase === 'paused' ? t.resume : t.play}</button>
           </div>
@@ -235,5 +245,5 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
         </div> : null}
     </main>
     {storageError ? <p className="arcade-storage" role="status">{t.storage}</p> : null}
-  </dialog>, document.body)
+  </div>, anchor ?? document.body)
 }
