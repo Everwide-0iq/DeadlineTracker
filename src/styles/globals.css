@@ -1079,6 +1079,34 @@ button {
   line-height: var(--card-description-line-height, 24px);
 }
 
+.deadline-card-copy {
+  flex-shrink: 0;
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.deadline-card-copy[data-fill="true"] {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.deadline-card-copy-text {
+  display: flow-root;
+  overflow-wrap: anywhere;
+}
+
+.deadline-card-copy-text .deadline-card-title {
+  font-size: calc(22px * var(--card-text-fit, 1));
+  line-height: calc(28px * var(--card-text-fit, 1) * var(--card-text-leading, 1));
+}
+
+.deadline-card-copy-text .deadline-card-description {
+  margin-top: 12px;
+  font-size: calc(14px * var(--card-text-fit, 1));
+  line-height: calc(24px * var(--card-text-fit, 1) * var(--card-text-leading, 1));
+}
+
 .desktop-board-scene[data-camera-moving="true"] .countdown-text {
   text-shadow: 0 0 10px var(--deadline-glow);
 }

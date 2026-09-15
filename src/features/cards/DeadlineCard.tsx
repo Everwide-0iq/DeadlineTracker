@@ -27,6 +27,7 @@ import { useProfileStore } from '../profile/profile.store.ts'
 import { defaultActiveColor } from '../profile/profile.types.ts'
 import { useCardStore } from './card.store.ts'
 import { CardImageView } from './CardImageView.tsx'
+import { CardTextContent } from './CardTextContent.tsx'
 import type { Card } from './card.types.ts'
 import { getCardRenderSize, getCardContentScale } from './card.utils.ts'
 import { formatCompletionDate } from './completion.ts'
@@ -487,20 +488,7 @@ function DeadlineCardComponent({
           </div>
         ) : null}
 
-        <h3
-          className={cn(
-            'deadline-card-title mb-3 shrink-0 whitespace-pre-wrap break-words font-bold text-white drop-shadow',
-            card.status === 'done' && 'text-white/55 line-through',
-          )}
-        >
-          {card.title}
-        </h3>
-
-        {card.description ? (
-          <p className="deadline-card-description mb-4 shrink-0 whitespace-pre-wrap break-words text-white/55">
-            {card.description}
-          </p>
-        ) : null}
+        <CardTextContent title={card.title} description={card.description} completed={card.status === 'done'} fill={!card.imagePath} />
 
         {card.imagePath ? (
           <div className="deadline-card-image-slot mb-4">
