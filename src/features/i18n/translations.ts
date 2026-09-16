@@ -141,7 +141,7 @@ const ru = {
     deadlineMode: 'Срок карточки',
     edit: 'Редактирование',
     noDeadline: 'Без срока',
-    personalScope: 'Личная доска, видишь только ты',
+    personalScope: 'Личная доска, скрыта от участников команды',
     projectScope: (projectName: string | null) =>
       `Командный проект${projectName ? `: ${projectName}` : ', видно всем участникам'}`,
     save: 'Сохранить',
@@ -617,7 +617,7 @@ const en = {
     deadlineMode: 'Card timing',
     edit: 'Editing',
     noDeadline: 'No deadline',
-    personalScope: 'Personal board, visible only to you',
+    personalScope: 'Personal board, hidden from teammates',
     projectScope: (projectName: string | null) =>
       `Team project${projectName ? `: ${projectName}` : ', visible to every member'}`,
     save: 'Save',

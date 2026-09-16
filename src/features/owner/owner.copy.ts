@@ -1,0 +1,31 @@
+export const ownerCopy = {
+  ru: {
+    title: 'Панель владельца', overview: 'Обзор', audit: 'Журнал', members: 'Пользователи', projects: 'Проекты', invites: 'Приглашения', board: 'Просмотр доски',
+    unlock: 'Открыть панель', pin: 'PIN-код', incorrect: 'Неверный PIN-код.', blocked: 'Вход временно заблокирован до', close: 'Закрыть', lock: 'Заблокировать',
+    error: 'Не удалось выполнить запрос. Проверьте подключение и SQL-обновление.', retry: 'Повторить', search: 'Поиск', newest: 'Сначала новые', oldest: 'Сначала старые',
+    all: 'Все события', empty: 'Записей нет', refresh: 'Обновить', export: 'Экспорт страницы', previous: 'Назад', next: 'Далее', back: 'К списку',
+    cards: 'Карточки', todos: 'To-do', texts: 'Тексты', links: 'Связи', items: 'Задачи', personal: 'Личная доска', readOnly: 'Только просмотр',
+    done: 'Выполнено', todo: 'Не выполнено', active: 'Активно', deadline: 'Дедлайн', completed: 'Выполнено', created: 'Создано',
+    image: 'Открыть изображение', hideImage: 'Скрыть изображение', imageError: 'Изображение недоступно',
+    revoke: 'Отозвать приглашение', revokeConfirm: 'Отозвать эту ссылку-приглашение?', purge: 'Очистить старые события', purgeConfirm: 'Удалить до 5000 событий старше 90 дней? Это необратимо.',
+    lockError: 'Локально панель закрыта, но сервер не подтвердил блокировку. Повторите запрос; доступ истечёт автоматически.',
+    allEntities: 'Все объекты', since: 'Начиная с даты', actor: 'ID пользователя', expires: 'До', session: 'Сессия',
+    metrics: { users: 'Пользователей', projects: 'Проектов', cards: 'Карточек', done: 'Выполненных карточек', personalCards: 'Личных карточек', todoItems: 'Задач To-do', pendingInvites: 'Приглашений', imageBytes: 'Изображения в задачах', auditEvents: 'Событий', auditBytes: 'Журнал с индексами', cleanupQueue: 'Изображений на очистку' },
+    actions: { insert: 'Создание', update: 'Изменение', delete: 'Удаление', sign_in: 'Сессия замечена', pin_failed: 'Ошибка PIN', console_unlocked: 'Панель открыта', console_locked: 'Панель закрыта', owner_configured: 'Владелец назначен', board_viewed: 'Просмотр доски', revoke_invite: 'Отзыв приглашения', purge_old_audit: 'Очистка журнала', export_page: 'Экспорт страницы' },
+  },
+  en: {
+    title: 'Owner console', overview: 'Overview', audit: 'Audit log', members: 'Users', projects: 'Projects', invites: 'Invitations', board: 'Board reader',
+    unlock: 'Unlock console', pin: 'PIN', incorrect: 'Incorrect PIN.', blocked: 'Sign-in temporarily blocked until', close: 'Close', lock: 'Lock console',
+    error: 'Request failed. Check your connection and SQL migration.', retry: 'Retry', search: 'Search', newest: 'Newest first', oldest: 'Oldest first',
+    all: 'All events', empty: 'No records', refresh: 'Refresh', export: 'Export page', previous: 'Previous', next: 'Next', back: 'Back to list',
+    cards: 'Cards', todos: 'To-do', texts: 'Texts', links: 'Links', items: 'Tasks', personal: 'Personal board', readOnly: 'Read only',
+    done: 'Done', todo: 'Not done', active: 'Active', deadline: 'Deadline', completed: 'Completed', created: 'Created',
+    image: 'Open image', hideImage: 'Hide image', imageError: 'Image unavailable',
+    revoke: 'Revoke invitation', revokeConfirm: 'Revoke this invitation link?', purge: 'Clean old events', purgeConfirm: 'Delete up to 5,000 events older than 90 days? This cannot be undone.',
+    lockError: 'Console hidden locally, but server lock was not confirmed. Retry; access will expire automatically.',
+    allEntities: 'All objects', since: 'Since', actor: 'User ID', expires: 'Until', session: 'Session',
+    metrics: { users: 'Users', projects: 'Projects', cards: 'Cards', done: 'Completed cards', personalCards: 'Personal cards', todoItems: 'To-do tasks', pendingInvites: 'Invitations', imageBytes: 'Task images', auditEvents: 'Events', auditBytes: 'Audit log and indexes', cleanupQueue: 'Images awaiting cleanup' },
+    actions: { insert: 'Created', update: 'Updated', delete: 'Deleted', sign_in: 'Session observed', pin_failed: 'Incorrect PIN', console_unlocked: 'Console unlocked', console_locked: 'Console locked', owner_configured: 'Owner configured', board_viewed: 'Board viewed', revoke_invite: 'Invitation revoked', purge_old_audit: 'Audit cleanup', export_page: 'Page exported' },
+  },
+}
+export type OwnerCopy = typeof ownerCopy.en

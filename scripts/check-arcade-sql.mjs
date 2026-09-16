@@ -14,7 +14,8 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 create function private.is_team_member(t uuid) returns boolean language sql stable security definer set search_path='' as $$ select exists(select 1 from public.team_members where team_id=t and user_id=auth.uid()) $$;
 `)
 const file = readFileSync('supabase/migrations/0001_initial_schema.sql','utf8')
-const section = file.slice(file.indexOf('-- Fireboard Arcade:')).replace(/commit;\s*$/, '')
+const ownerStart = file.indexOf('-- Fireboard Owner Console:')
+const section = file.slice(file.indexOf('-- Fireboard Arcade:'), ownerStart < 0 ? undefined : ownerStart).replace(/commit;\s*$/, '')
 await db.exec(section)
 await db.exec(section)
 const team = '00000000-0000-0000-0000-000000000001'

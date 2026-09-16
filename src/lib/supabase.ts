@@ -458,6 +458,12 @@ export type Database = {
     }
     Views: Record<string, never>
     Functions: {
+      owner_console_status: { Args: Record<string, never>; Returns: Json }
+      owner_console_unlock: { Args: { pin_value: string }; Returns: Json }
+      owner_console_lock: { Args: Record<string, never>; Returns: undefined }
+      owner_console_read: { Args: { view_name: string; filters?: Json }; Returns: Json }
+      owner_console_action: { Args: { action_name: string; target_id?: string | null }; Returns: undefined }
+      record_app_session_audit: { Args: Record<string, never>; Returns: undefined }
       begin_arcade_run: {
         Args: { target_team_id: string; game_mode: 'snake' | 'shooter' | 'rogue' | 'platformer' }
         Returns: string

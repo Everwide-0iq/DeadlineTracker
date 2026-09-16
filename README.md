@@ -82,6 +82,24 @@ If the project already exists, run `0001_initial_schema.sql` again after pulling
 - Removing a member revokes access immediately but preserves their existing shared content.
 - For private presence channels, keep Realtime Authorization enabled in Supabase and disable public Realtime access. The app already joins those channels with `private: true`.
 
+## Owner Console
+
+An optional console is available inside **Profile settings**, only to one explicitly configured account. Team owners/admins do not gain this privilege. It includes filtered audit events, user/project summaries, read-only personal/project board contents, pending-invitation revocation, page exports, and manual cleanup of up to 5,000 audit events older than 90 days.
+
+After running the migration, copy your exact account UUID from **Supabase > Authentication > Users** and execute the following in **SQL Editor only**, replacing both placeholders:
+
+```sql
+select private.configure_owner_console('YOUR_ACCOUNT_UUID'::uuid, 'YOUR_NUMERIC_PIN');
+```
+
+Reload Fireboard, open profile settings, then **Owner console**. The PIN accepts 4-12 digits and is stored as a bcrypt hash. It is secondary protection, **not MFA**; choose an unpredictable PIN. Five failed attempts block PIN entry for 15 minutes. An unlock lasts 10 minutes and is bound to the authenticated Supabase session. Closing or hiding the console requests a server lock and clears local contents. Offline locking cannot be guaranteed; the server lease still expires. Re-run the configuration function to change the owner/PIN and invalidate all console unlocks. Never put a service-role key or the real PIN in frontend code.
+
+Personal boards are hidden from teammates, **not from the configured service owner**. Inform users before enabling this access; profile settings display this policy. Board reads and administrative actions are audited. Images are downloaded on demand without a reusable signed URL in the console; already downloaded/exported data cannot be remotely revoked. Normal board RLS and team privileges remain unchanged.
+
+Audit begins when this migration is applied; earlier events cannot be reconstructed. It records successful database changes and one app-session observation per authenticated session, not all authentication attempts or Vercel/Supabase server logs. Geometry-only changes, description/content snapshots, passwords, tokens, and invitation hashes are not retained. Actor IDs and short task titles are retained in the private audit table. Task-image bytes are metadata totals, **not total Supabase usage or billing**; check provider dashboards for actual quotas. Old events are not automatically deleted. Exports contain the current page (up to 50 records), not the entire database, and may contain personal data.
+
+Run `npm run test:owner-sql` for isolated PostgreSQL authorization, PIN, expiry, audit and read-only checks. No production database is contacted.
+
 ## Vercel Deployment
 
 - Framework Preset: `Vite`
@@ -187,6 +205,24 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 - Ссылка приглашения привязана к одному email, действует 72 часа и перестаёт работать после первого использования. У приглашённого уже должен быть аккаунт Fireboard/Supabase с тем же email.
 - Удаление участника сразу отзывает доступ, но его уже созданный общий контент остаётся на досках.
 - Для приватных presence-каналов оставь Realtime Authorization включённой в Supabase и отключи public Realtime access. Приложение уже подключается к ним с `private: true`.
+
+## Панель владельца
+
+Необязательная панель находится в **настройках профиля** и доступна только одному явно назначенному аккаунту. Владельцы и администраторы команд этих прав не получают. В панели есть журнал с фильтрами, обзор пользователей и проектов, чтение личных и проектных досок, отзыв приглашений, экспорт текущей страницы и ручная очистка до 5000 событий старше 90 дней.
+
+После выполнения миграции скопируй UUID своего аккаунта из **Supabase > Authentication > Users** и выполни **только в SQL Editor**, заменив оба значения:
+
+```sql
+select private.configure_owner_console('UUID_ТВОЕГО_АККАУНТА'::uuid, 'ТВОЙ_ЦИФРОВОЙ_PIN');
+```
+
+Перезагрузи Fireboard, открой настройки профиля и **Панель владельца**. PIN состоит из 4-12 цифр и хранится как bcrypt-хеш. Это дополнительная защита, **не MFA**; лучше использовать непредсказуемый PIN. Пять ошибок блокируют ввод на 15 минут. Разблокировка действует 10 минут и привязана к авторизованной сессии Supabase. Закрытие панели или скрытие вкладки очищает её содержимое и запрашивает серверную блокировку. Без сети немедленная блокировка не гарантируется, но серверный срок доступа всё равно истечёт. Повторное выполнение функции настройки меняет владельца/PIN и отзывает все разблокировки. Реальный PIN и service-role ключ нельзя добавлять в клиентский код.
+
+Личные доски скрыты от участников команды, **но не от назначенного владельца сервиса**. Предупреди пользователей перед включением доступа; в настройках профиля есть соответствующее уведомление. Просмотры досок и административные действия записываются в журнал. Картинки загружаются по нажатию без многоразовых подписанных ссылок в панели; уже скачанные или экспортированные данные отозвать невозможно. Обычные RLS-политики досок и права команды не расширяются.
+
+Журнал начинает работать после применения миграции: старые события восстановить нельзя. Он записывает успешные изменения БД и одно обнаружение сессии приложения, а не все попытки авторизации или серверные логи Vercel/Supabase. Перемещения и изменение размеров, копии описаний/текстов, пароли, токены и хеши приглашений не сохраняются. В приватной таблице журнала остаются ID участников и короткие заголовки задач. Объём картинок считается по метаданным задач: это **не полное использование Supabase и не расчёт тарифа**; реальные лимиты смотри в кабинетах провайдеров. Старые события автоматически не удаляются. Экспорт содержит текущую страницу (до 50 записей), а не всю БД, и может содержать личные данные.
+
+`npm run test:owner-sql` проверяет права, PIN, срок сессии, аудит и запрет редактирования в изолированном PostgreSQL. Подключений к рабочей БД нет.
 
 ## Деплой на Vercel
 

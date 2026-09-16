@@ -16,7 +16,7 @@ import {
   UserRound,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn.ts'
 import { useDialogFocus } from '../../lib/useDialogFocus.ts'
@@ -26,6 +26,7 @@ import { LanguageToggle } from '../i18n/LanguageToggle.tsx'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import { usePreferencesStore } from '../preferences/preferences.store.ts'
+import { ownerStatus } from '../owner/owner.api.ts'
 import {
   prepareAvatar,
   removeAvatar,
@@ -45,6 +46,7 @@ type ProfileSettingsProps = {
 }
 
 type PreviewStyle = CSSProperties & Record<`--${string}`, string>
+const OwnerConsole = lazy(() => import('../owner/OwnerConsole.tsx'))
 
 const activeColors = [
   '#65e7ff',
@@ -82,12 +84,29 @@ export function ProfileSettings({ isOpen, onClose, userEmail, userId }: ProfileS
   const [pendingAvatar, setPendingAvatar] = useState<PreparedAvatar | null>(null)
   const [removeExistingAvatar, setRemoveExistingAvatar] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
+  const [ownerOpen, setOwnerOpen] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const fallbackNickname = getFallbackNickname(userEmail, t.profile.memberFallback)
   const dialogRef = useDialogFocus<HTMLElement>({
     active: isOpen,
     onEscape: () => void requestClose(),
   })
+
+  useEffect(() => {
+    setIsOwner(false)
+    setOwnerOpen(false)
+    if (!isOpen) return
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 15_000)
+    void ownerStatus(controller.signal).then(value => {
+      if (!controller.signal.aborted) setIsOwner(value.isOwner)
+    }).catch(() => {
+      // Fail closed: optional owner controls never become available on a failed check.
+      if (!controller.signal.aborted) setIsOwner(false)
+    }).finally(() => window.clearTimeout(timeout))
+    return () => { controller.abort(); window.clearTimeout(timeout) }
+  }, [isOpen, userId])
 
   useEffect(() => {
     if (!isOpen) {
@@ -269,6 +288,7 @@ export function ProfileSettings({ isOpen, onClose, userEmail, userId }: ProfileS
         aria-labelledby="profile-settings-title"
         aria-modal="true"
         className="profile-settings-dialog"
+        inert={ownerOpen}
         ref={dialogRef}
         role="dialog"
       >
@@ -483,12 +503,20 @@ export function ProfileSettings({ isOpen, onClose, userEmail, userId }: ProfileS
               </button>
             </form>
 
+            {isOwner && <button className="secondary-button justify-center" type="button" onClick={() => setOwnerOpen(true)}>
+              <ShieldCheck size={17} />{language === 'ru' ? 'Панель владельца' : 'Owner console'}
+            </button>}
+            <p className="profile-time-zone">{language === 'ru'
+              ? 'Личные доски скрыты от участников команды. Владелец сервиса имеет административный доступ только для просмотра; обращения фиксируются в журнале.'
+              : 'Personal boards are hidden from teammates. The service owner has audited, read-only administrative access.'}</p>
+
             {formError || profileError ? (
               <div className="profile-settings-error">{formError ?? profileError}</div>
             ) : null}
           </aside>
         </div>
       </section>
+      {ownerOpen && <Suspense fallback={<button className="secondary-button" onClick={() => setOwnerOpen(false)}><Loader2 className="animate-spin" size={16} />{t.common.close}</button>}><OwnerConsole key={userId} userId={userId} onClose={() => setOwnerOpen(false)} /></Suspense>}
     </div>,
     document.body,
   )
