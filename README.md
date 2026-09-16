@@ -84,6 +84,8 @@ If the project already exists, run `0001_initial_schema.sql` again after pulling
 
 ## Owner Console
 
+If PIN entry fails with `UPDATE requires a WHERE clause`, run `supabase/patches/owner_console_safeupdate.sql` once in SQL Editor. This targeted patch preserves the configured account/PIN and board data; do not disable database safety checks. Fresh installations already include this fix in the main migration.
+
 An optional console is available inside **Profile settings**, only to one explicitly configured account. Team owners/admins do not gain this privilege. It includes filtered audit events, user/project summaries, read-only personal/project board contents, pending-invitation revocation, page exports, and manual cleanup of up to 5,000 audit events older than 90 days.
 
 After running the migration, copy your exact account UUID from **Supabase > Authentication > Users** and execute the following in **SQL Editor only**, replacing both placeholders:
@@ -207,6 +209,8 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 - Для приватных presence-каналов оставь Realtime Authorization включённой в Supabase и отключи public Realtime access. Приложение уже подключается к ним с `private: true`.
 
 ## Панель владельца
+
+Если при вводе PIN возникает `UPDATE requires a WHERE clause`, выполни `supabase/patches/owner_console_safeupdate.sql` в SQL Editor. Этот точечный патч сохраняет назначенный аккаунт, PIN и данные досок; отключать защиту БД не нужно. Для новой установки исправление уже включено в основную миграцию.
 
 Необязательная панель находится в **настройках профиля** и доступна только одному явно назначенному аккаунту. Владельцы и администраторы команд этих прав не получают. В панели есть журнал с фильтрами, обзор пользователей и проектов, чтение личных и проектных досок, отзыв приглашений, экспорт текущей страницы и ручная очистка до 5000 событий старше 90 дней.
 

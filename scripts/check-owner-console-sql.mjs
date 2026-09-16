@@ -7,6 +7,7 @@ const file = readFileSync('supabase/migrations/0001_initial_schema.sql', 'utf8')
 const start = file.indexOf('-- Fireboard Owner Console:')
 assert.ok(start > 0)
 const section = file.slice(start).replace(/commit;\s*$/, '')
+const hotfix = readFileSync('supabase/patches/owner_console_safeupdate.sql', 'utf8')
 const db = new PGlite({ extensions: { pgcrypto } })
 const id = n => `10000000-0000-0000-0000-${String(n).padStart(12, '0')}`
 let passed = 0
@@ -51,6 +52,20 @@ try {
   await db.exec(section)
   await db.exec(section)
   passed++ // Idempotent application of the actual SQL section.
+  // PGlite does not ship safeupdate: guard the exact statements that failed in Supabase.
+  const pinUpdates = section.match(/update private\.owner_console_config set[\s\S]*?;/g) ?? []
+  check(pinUpdates.length, 2)
+  for (const statement of pinUpdates) {
+    assert.match(statement, /where singleton = true and user_id = auth\.uid\(\)/)
+    passed++
+  }
+  assert.match(section, /delete from private\.owner_console_sessions where user_id is not null;/)
+  passed++
+  const definitions = async () => (await query("select pg_get_functiondef(oid) as definition from pg_proc where oid in ('private.configure_owner_console(uuid,text)'::regprocedure,'public.owner_console_unlock(text)'::regprocedure) order by oid")).rows
+  const originalDefinitions = await definitions()
+  await db.exec(hotfix)
+  await db.exec(hotfix)
+  check(await definitions(), originalDefinitions)
   for (const n of [1, 2, 3]) {
     await query('insert into auth.users values($1);', [id(n)])
     await query('insert into auth.sessions(id,user_id) values($1,$2)', [id(10 + n), id(n)])
@@ -60,6 +75,9 @@ try {
   await query("insert into team_members values($1,$2,'admin')", [id(20), id(2)])
   await query("insert into projects(id,name,team_id) values($1,'Project',$2)", [id(21), id(20)])
   await query("select private.configure_owner_console($1,'1337')", [id(1)])
+  const configured = (await query('select * from private.owner_console_config')).rows
+  await db.exec(hotfix)
+  check((await query('select * from private.owner_console_config')).rows, configured)
   await as(2)
   check((await rpc('owner_console_status()')).isOwner, false)
   await fails("select owner_console_unlock('1337')")

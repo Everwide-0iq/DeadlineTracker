@@ -4040,7 +4040,8 @@ begin
   insert into private.owner_console_config(singleton, user_id, pin_hash)
   values(true, owner_user_id, private.owner_pin_crypt(new_pin, salt_value))
   on conflict(singleton) do update set user_id = excluded.user_id, pin_hash = excluded.pin_hash, failed_attempts = 0, blocked_until = null;
-  delete from private.owner_console_sessions;
+  -- Explicitly revoke every configured console lease; compatible with safeupdate.
+  delete from private.owner_console_sessions where user_id is not null;
   insert into private.owner_audit(action, entity_type, entity_id) values('owner_configured', 'security', owner_user_id);
 end;
 $$;
@@ -4083,12 +4084,14 @@ begin
     or private.owner_pin_crypt(pin_value, config.pin_hash) is distinct from config.pin_hash then
     attempt := case when config.blocked_until is not null then 1 else config.failed_attempts + 1 end;
     update private.owner_console_config set failed_attempts = attempt,
-      blocked_until = case when attempt >= 5 then clock_timestamp() + interval '15 minutes' else null end;
+      blocked_until = case when attempt >= 5 then clock_timestamp() + interval '15 minutes' else null end
+      where singleton = true and user_id = auth.uid();
     insert into private.owner_audit(actor_id, action, entity_type) values(auth.uid(), 'pin_failed', 'security');
     -- Return instead of raising: a rollback would erase the rate-limit counter.
     return public.owner_console_status() || jsonb_build_object('ok', false);
   end if;
-  update private.owner_console_config set failed_attempts = 0, blocked_until = null;
+  update private.owner_console_config set failed_attempts = 0, blocked_until = null
+    where singleton = true and user_id = auth.uid();
   delete from private.owner_console_sessions where expires_at <= now();
   insert into private.owner_console_sessions(session_id, user_id, expires_at)
     values(sid, auth.uid(), clock_timestamp() + interval '10 minutes')
