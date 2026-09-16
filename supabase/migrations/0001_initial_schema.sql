@@ -3989,6 +3989,16 @@ create table if not exists private.owner_console_sessions (
   user_id uuid not null references auth.users(id) on delete cascade,
   expires_at timestamptz not null
 );
+create table if not exists private.owner_console_delegates (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  pin_hash text not null,
+  failed_attempts integer not null default 0,
+  blocked_until timestamptz,
+  granted_by uuid not null references auth.users(id),
+  created_at timestamptz not null default now()
+);
+alter table private.owner_console_delegates enable row level security;
+revoke all on private.owner_console_delegates from public, anon, authenticated;
 create table if not exists private.owner_audit (
   id bigint generated always as identity primary key,
   occurred_at timestamptz not null default clock_timestamp(),
@@ -4030,13 +4040,17 @@ $$;
 -- SQL Editor only. No account is promoted by applying the migration or changing a team role.
 create or replace function private.configure_owner_console(owner_user_id uuid, new_pin text)
 returns void language plpgsql security definer set search_path = '' as $$
-declare crypto_schema text; salt_value text;
+declare crypto_schema text; salt_value text; previous_owner uuid;
 begin
   if new_pin is null or new_pin !~ '^[0-9]{4,12}$' then raise exception 'PIN must contain 4-12 digits'; end if;
   if not exists(select 1 from auth.users where id = owner_user_id) then raise exception 'Unknown account'; end if;
   select n.nspname into crypto_schema from pg_catalog.pg_extension e
   join pg_catalog.pg_namespace n on n.oid = e.extnamespace where e.extname = 'pgcrypto';
   execute format('select %I.gen_salt(''bf'', 10)', crypto_schema) into salt_value;
+  select user_id into previous_owner from private.owner_console_config where singleton = true for update;
+  if previous_owner is distinct from owner_user_id then
+    delete from private.owner_console_delegates where granted_by = previous_owner or user_id = owner_user_id;
+  end if;
   insert into private.owner_console_config(singleton, user_id, pin_hash)
   values(true, owner_user_id, private.owner_pin_crypt(new_pin, salt_value))
   on conflict(singleton) do update set user_id = excluded.user_id, pin_hash = excluded.pin_hash, failed_attempts = 0, blocked_until = null;
@@ -4046,13 +4060,24 @@ begin
 end;
 $$;
 
+create or replace function private.owner_console_authorized()
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists(select 1 from private.owner_console_config where user_id=auth.uid())
+    or exists(select 1 from private.owner_console_delegates d
+      join private.owner_console_config c on c.singleton=true and c.user_id=d.granted_by
+      join public.team_members a on a.user_id=c.user_id
+      join public.team_members b on b.team_id=a.team_id and b.user_id=d.user_id
+      where d.user_id=auth.uid());
+$$;
+revoke all on function private.owner_console_authorized() from public,anon,authenticated;
+
 create or replace function private.owner_console_unlocked()
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
-    select 1 from private.owner_console_config c
-    join private.owner_console_sessions s on s.user_id = c.user_id
-    join auth.sessions a on a.id = s.session_id and a.user_id = c.user_id
-    where c.user_id = (select auth.uid()) and s.session_id::text = (select auth.jwt()->>'session_id')
+    select 1 from private.owner_console_sessions s
+    join auth.sessions a on a.id = s.session_id and a.user_id = s.user_id
+    where s.user_id = (select auth.uid()) and s.session_id::text = (select auth.jwt()->>'session_id')
+      and private.owner_console_authorized()
       and s.expires_at > now() and (a.not_after is null or a.not_after > now())
   );
 $$;
@@ -4060,19 +4085,27 @@ $$;
 create or replace function public.owner_console_status()
 returns jsonb language sql stable security definer set search_path = '' as $$
   select jsonb_build_object(
-    'isOwner', exists(select 1 from private.owner_console_config where user_id = (select auth.uid())),
+    'isOwner', private.owner_console_authorized(),
+    'canManageAccess', exists(select 1 from private.owner_console_config where user_id = (select auth.uid())),
     'unlockedUntil', (select s.expires_at from private.owner_console_sessions s
       where s.user_id = (select auth.uid()) and s.session_id::text = (select auth.jwt()->>'session_id')
         and private.owner_console_unlocked()),
-    'blockedUntil', (select blocked_until from private.owner_console_config where user_id = (select auth.uid()))
+    'blockedUntil', coalesce((select blocked_until from private.owner_console_config where user_id = (select auth.uid())),
+      (select blocked_until from private.owner_console_delegates where user_id = (select auth.uid())))
   );
 $$;
 
 create or replace function public.owner_console_unlock(pin_value text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare config private.owner_console_config%rowtype; sid uuid; attempt integer;
+declare config record; sid uuid; attempt integer; is_primary boolean;
 begin
-  select * into config from private.owner_console_config where user_id = auth.uid() for update;
+  if not private.owner_console_authorized() then raise exception 'Owner access required' using errcode='42501'; end if;
+  is_primary := exists(select 1 from private.owner_console_config where user_id = auth.uid());
+  if is_primary then
+    select pin_hash,failed_attempts,blocked_until into config from private.owner_console_config where user_id = auth.uid() for update;
+  else
+    select pin_hash,failed_attempts,blocked_until into config from private.owner_console_delegates where user_id = auth.uid() for update;
+  end if;
   if not found then raise exception 'Owner access required' using errcode = '42501'; end if;
   select id into sid from auth.sessions where id::text = (auth.jwt()->>'session_id') and user_id = auth.uid()
     and (not_after is null or not_after > now());
@@ -4083,15 +4116,25 @@ begin
   if pin_value is null or char_length(pin_value) > 12
     or private.owner_pin_crypt(pin_value, config.pin_hash) is distinct from config.pin_hash then
     attempt := case when config.blocked_until is not null then 1 else config.failed_attempts + 1 end;
-    update private.owner_console_config set failed_attempts = attempt,
-      blocked_until = case when attempt >= 5 then clock_timestamp() + interval '15 minutes' else null end
-      where singleton = true and user_id = auth.uid();
+    if is_primary then
+      update private.owner_console_config set failed_attempts = attempt,
+        blocked_until = case when attempt >= 5 then clock_timestamp() + interval '15 minutes' else null end
+        where singleton = true and user_id = auth.uid();
+    else
+      update private.owner_console_delegates set failed_attempts = attempt,
+        blocked_until = case when attempt >= 5 then clock_timestamp() + interval '15 minutes' else null end
+        where user_id = auth.uid();
+    end if;
     insert into private.owner_audit(actor_id, action, entity_type) values(auth.uid(), 'pin_failed', 'security');
     -- Return instead of raising: a rollback would erase the rate-limit counter.
     return public.owner_console_status() || jsonb_build_object('ok', false);
   end if;
-  update private.owner_console_config set failed_attempts = 0, blocked_until = null
-    where singleton = true and user_id = auth.uid();
+  if is_primary then
+    update private.owner_console_config set failed_attempts = 0, blocked_until = null
+      where singleton = true and user_id = auth.uid();
+  else
+    update private.owner_console_delegates set failed_attempts = 0, blocked_until = null where user_id = auth.uid();
+  end if;
   delete from private.owner_console_sessions where expires_at <= now();
   insert into private.owner_console_sessions(session_id, user_id, expires_at)
     values(sid, auth.uid(), clock_timestamp() + interval '10 minutes')
@@ -4280,6 +4323,9 @@ create or replace function public.owner_console_action(action_name text, target_
 returns void language plpgsql security definer set search_path = '' as $$
 begin
   if not private.owner_console_unlocked() then raise exception 'Owner console is locked' using errcode='42501'; end if;
+  if action_name is distinct from 'export_page' and not exists(select 1 from private.owner_console_config where user_id=auth.uid()) then
+    raise exception 'Primary owner required' using errcode='42501';
+  end if;
   if action_name='revoke_invite' then
     update public.team_invites set revoked_at=now() where id=target_id and accepted_at is null and revoked_at is null;
     if not found then raise exception 'Invitation is no longer pending'; end if;
@@ -4290,6 +4336,101 @@ begin
   insert into private.owner_audit(actor_id,action,entity_type,entity_id) values(auth.uid(),action_name,'owner_console',target_id);
 end;
 $$;
+
+create or replace function public.owner_console_access(action_name text default 'list', target_email text default null, new_pin text default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare target uuid; salt_value text; crypto_schema text; result jsonb;
+begin
+  -- Serialize grants with owner transfer; recheck authority after acquiring the lock.
+  perform 1 from private.owner_console_config where singleton=true for update;
+  if not private.owner_console_unlocked() or not exists(select 1 from private.owner_console_config where user_id=auth.uid()) then
+    raise exception 'Primary owner required' using errcode='42501';
+  end if;
+  if action_name in ('grant','revoke') then
+    select id into target from auth.users where lower(email)=lower(trim(target_email));
+    if target is null then raise exception 'Account not found' using errcode='22023'; end if;
+    if target=auth.uid() then raise exception 'Cannot change the primary owner here' using errcode='22023'; end if;
+    if action_name='grant' then
+      if not exists(select 1 from auth.users where id=target and email_confirmed_at is not null) then
+        raise exception 'Account email must be verified' using errcode='22023';
+      end if;
+      if not exists(select 1 from public.team_members a join public.team_members b on b.team_id=a.team_id where a.user_id=auth.uid() and b.user_id=target) then
+        raise exception 'Account must belong to your team' using errcode='22023';
+      end if;
+      if new_pin is null or new_pin !~ '^[0-9]{6,12}$' then raise exception 'PIN must contain 6-12 digits' using errcode='22023'; end if;
+      select n.nspname into crypto_schema from pg_catalog.pg_extension e join pg_catalog.pg_namespace n on n.oid=e.extnamespace where e.extname='pgcrypto';
+      execute format('select %I.gen_salt(''bf'',10)',crypto_schema) into salt_value;
+      insert into private.owner_console_delegates(user_id,pin_hash,granted_by)
+      values(target,private.owner_pin_crypt(new_pin,salt_value),auth.uid())
+      on conflict(user_id) do update set pin_hash=excluded.pin_hash,granted_by=excluded.granted_by,failed_attempts=0,blocked_until=null;
+    else
+      delete from private.owner_console_delegates where user_id=target;
+    end if;
+    delete from private.owner_console_sessions where user_id=target;
+    insert into private.owner_audit(actor_id,action,entity_type,entity_id) values(auth.uid(),'access_'||action_name,'security',target);
+  elsif action_name is distinct from 'list' then raise exception 'Unknown access action' using errcode='22023'; end if;
+  select coalesce(jsonb_agg(to_jsonb(r)),'[]') into result from (
+    select d.user_id as id,u.email,p.nickname,d.created_at from private.owner_console_delegates d
+    join auth.users u on u.id=d.user_id left join public.profiles p on p.id=d.user_id order by d.created_at,d.user_id
+  ) r;
+  return result;
+end;
+$$;
+
+create or replace function public.owner_console_board(target_user_id uuid default null, target_project_id uuid default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare result jsonb; board_name text; total integer;
+begin
+  if not private.owner_console_unlocked() then raise exception 'Owner console is locked' using errcode='42501'; end if;
+  if (target_user_id is null) = (target_project_id is null) then raise exception 'Choose one board' using errcode='22023'; end if;
+  if target_user_id is not null then select nickname into board_name from public.profiles where id=target_user_id;
+  else select name into board_name from public.projects where id=target_project_id; end if;
+  if board_name is null then raise exception 'Board not found' using errcode='22023'; end if;
+  with cards as materialized (
+    select c.id,c.title,c.description,c.deadline_at,c.status,c.is_active,c.active_by,c.completed_by,c.completed_at,
+      c.x,c.y,c.w,c.h,c.image_path,c.image_width,c.image_height,c.image_size,c.created_by,c.created_at,c.updated_at,c.board_scope,c.project_id
+    from public.cards c where (target_user_id is not null and c.board_scope='personal' and c.created_by=target_user_id)
+      or (c.board_scope='shared' and c.project_id=target_project_id) order by c.created_at,c.id limit 2001
+  ), blocks as materialized (
+    select b.id,b.title,b.deadline_at,b.x,b.y,b.w,b.created_by,b.created_at from public.todo_blocks b
+    where (target_user_id is not null and b.board_scope='personal' and b.created_by=target_user_id)
+      or (b.board_scope='shared' and b.project_id=target_project_id) order by b.created_at,b.id limit 2001
+  ), items as materialized (
+    select i.id,i.block_id,i.title,i.description,i.is_done,i.is_active,i.active_by,i.completed_by,i.completed_at,
+      i.sort_order,i.image_path,i.image_width,i.image_height,i.created_by,i.created_at
+    from public.todo_items i join blocks b on b.id=i.block_id order by i.sort_order,i.id limit 2001
+  ), texts as materialized (
+    select t.id,t.content,t.x,t.y,t.w,t.font_size,t.font_family,t.color,t.created_by,t.created_at from public.board_texts t
+    where (target_user_id is not null and t.board_scope='personal' and t.created_by=target_user_id)
+      or (t.board_scope='shared' and t.project_id=target_project_id) order by t.created_at,t.id limit 2001
+  ), links as materialized (
+    select l.id,l.from_card_id,l.to_card_id,l.from_todo_block_id,l.to_todo_block_id,l.from_side,l.to_side
+    from public.card_links l where (target_user_id is not null and l.board_scope='personal' and l.created_by=target_user_id)
+      or (l.board_scope='shared' and l.project_id=target_project_id) order by l.id limit 2001
+  ), people as (
+    select created_by as id from cards union select active_by from cards union select completed_by from cards
+    union select created_by from items union select active_by from items union select completed_by from items
+    union select created_by from blocks union select created_by from texts
+  )
+  select jsonb_build_object('name',board_name,'capturedAt',clock_timestamp(),
+    'cards',coalesce((select jsonb_agg(to_jsonb(c)) from cards c),'[]'),
+    'todos',coalesce((select jsonb_agg(to_jsonb(b)) from blocks b),'[]'),
+    'items',coalesce((select jsonb_agg(to_jsonb(i)) from items i),'[]'),
+    'texts',coalesce((select jsonb_agg(to_jsonb(t)) from texts t),'[]'),
+    'links',coalesce((select jsonb_agg(to_jsonb(l)) from links l),'[]'),
+    'profiles',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'nickname',p.nickname,'avatar_path',p.avatar_path,'active_color',p.active_color))
+      from public.profiles p join people on people.id=p.id),'[]')) into result;
+  select sum(jsonb_array_length(result->k)) into total from unnest(array['cards','todos','items','texts','links']) k;
+  if total>2000 then raise exception 'Board exceeds 2000 objects; use list view' using errcode='54000'; end if;
+  insert into private.owner_audit(actor_id,action,entity_type,entity_id,project_id,board_scope,title)
+  values(auth.uid(),'board_viewed','owner_console',target_user_id,target_project_id,
+    case when target_user_id is not null then 'personal' else 'shared' end,board_name);
+  return result;
+end;
+$$;
+
+revoke all on function public.owner_console_access(text,text,text),public.owner_console_board(uuid,uuid) from public,anon;
+grant execute on function public.owner_console_access(text,text,text),public.owner_console_board(uuid,uuid) to authenticated;
 
 -- Image access is SELECT-only. Do not add privileged policies to board tables.
 drop policy if exists owner_console_images_select on storage.objects;

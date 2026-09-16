@@ -17,6 +17,7 @@ export type DraftCardLink = {
 }
 
 type CardLinkLayerProps = {
+  idPrefix?: string
   draftLink: DraftCardLink | null
   links: CardLink[]
   nodes: ConnectableBoardObjectMetric[]
@@ -344,6 +345,7 @@ function stopLinkPointer(event: PointerEvent<SVGPathElement>) {
 }
 
 function CardLinkLayerComponent({
+  idPrefix = 'card-link',
   draftLink,
   links,
   nodes,
@@ -447,8 +449,8 @@ function CardLinkLayerComponent({
       <svg className="absolute left-0 top-0 h-px w-px overflow-visible">
         <defs>
           {renderedLinks.map(({ geometry, link, sourceColor, targetColor }) => {
-            const gradientId = `card-link-gradient-${sanitizeSvgId(link.id)}`
-            const markerId = `card-link-marker-${sanitizeSvgId(link.id)}`
+            const gradientId = `${idPrefix}-gradient-${sanitizeSvgId(link.id)}`
+            const markerId = `${idPrefix}-marker-${sanitizeSvgId(link.id)}`
             const start = geometry.points[0]
             const end = geometry.points[geometry.points.length - 1]
 
@@ -485,8 +487,8 @@ function CardLinkLayerComponent({
         </defs>
 
         {renderedLinks.map(({ geometry, link }) => {
-          const gradientId = `card-link-gradient-${sanitizeSvgId(link.id)}`
-          const markerId = `card-link-marker-${sanitizeSvgId(link.id)}`
+          const gradientId = `${idPrefix}-gradient-${sanitizeSvgId(link.id)}`
+          const markerId = `${idPrefix}-marker-${sanitizeSvgId(link.id)}`
           const isSelected = selectedLinkId === link.id
 
           return (

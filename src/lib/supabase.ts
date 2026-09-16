@@ -459,6 +459,8 @@ export type Database = {
     Views: Record<string, never>
     Functions: {
       owner_console_status: { Args: Record<string, never>; Returns: Json }
+      owner_console_board: { Args: { target_user_id?: string; target_project_id?: string }; Returns: Json }
+      owner_console_access: { Args: { action_name?: string; target_email?: string; new_pin?: string }; Returns: Json }
       owner_console_unlock: { Args: { pin_value: string }; Returns: Json }
       owner_console_lock: { Args: Record<string, never>; Returns: undefined }
       owner_console_read: { Args: { view_name: string; filters?: Json }; Returns: Json }

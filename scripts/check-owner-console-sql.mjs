@@ -7,7 +7,8 @@ const file = readFileSync('supabase/migrations/0001_initial_schema.sql', 'utf8')
 const start = file.indexOf('-- Fireboard Owner Console:')
 assert.ok(start > 0)
 const section = file.slice(start).replace(/commit;\s*$/, '')
-const hotfix = readFileSync('supabase/patches/owner_console_safeupdate.sql', 'utf8')
+const hotfix = readFileSync('supabase/patches/owner_console_upgrade.sql', 'utf8')
+assert.equal(hotfix.replace(/^begin;\s*/, '').trim(), file.slice(start).trim())
 const db = new PGlite({ extensions: { pgcrypto } })
 const id = n => `10000000-0000-0000-0000-${String(n).padStart(12, '0')}`
 let passed = 0
@@ -24,7 +25,7 @@ try {
     create extension pgcrypto;
     create role anon; create role authenticated;
     create schema auth; create schema private; create schema storage;
-    create table auth.users(id uuid primary key);
+    create table auth.users(id uuid primary key,email text unique,email_confirmed_at timestamptz);
     create table auth.sessions(id uuid primary key,user_id uuid,not_after timestamptz);
     create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.sub',true),'')::uuid$$;
     create function auth.jwt() returns jsonb language sql stable as $$select jsonb_build_object('session_id',current_setting('request.sid',true))$$;
@@ -42,10 +43,10 @@ try {
     alter table cards enable row level security;
     grant select,update on cards to authenticated;
     create policy own_cards on cards for select to authenticated using(created_by=auth.uid());
-    create table todo_blocks(id uuid primary key,title text,deadline_at timestamptz,created_at timestamptz default now(),board_scope text,created_by uuid,project_id uuid);
-    create table todo_items(id uuid primary key,block_id uuid,title text,description text,is_done boolean,is_active boolean,completed_at timestamptz,image_path text,image_width integer,image_height integer,image_size bigint,sort_order integer);
-    create table board_texts(id uuid primary key,content text,color text,font_family text,font_size integer,created_at timestamptz default now(),created_by uuid,project_id uuid,board_scope text);
-    create table card_links(id uuid primary key,from_card_id uuid,to_card_id uuid,from_todo_block_id uuid,to_todo_block_id uuid,created_at timestamptz default now(),created_by uuid,project_id uuid,board_scope text);
+    create table todo_blocks(id uuid primary key,title text,deadline_at timestamptz,created_at timestamptz default now(),board_scope text,created_by uuid,project_id uuid,x double precision,y double precision,w double precision);
+    create table todo_items(id uuid primary key,block_id uuid,title text,description text,is_done boolean,is_active boolean,active_by uuid,completed_by uuid,created_by uuid,created_at timestamptz default now(),completed_at timestamptz,image_path text,image_width integer,image_height integer,image_size bigint,sort_order integer);
+    create table board_texts(id uuid primary key,content text,color text,font_family text,font_size integer,created_at timestamptz default now(),created_by uuid,project_id uuid,board_scope text,x double precision,y double precision,w double precision);
+    create table card_links(id uuid primary key,from_card_id uuid,to_card_id uuid,from_todo_block_id uuid,to_todo_block_id uuid,from_side text,to_side text,created_at timestamptz default now(),created_by uuid,project_id uuid,board_scope text);
     create table card_image_cleanup_queue(image_path text);
     create table todo_image_cleanup_queue(image_path text);
   `)
@@ -67,11 +68,12 @@ try {
   await db.exec(hotfix)
   check(await definitions(), originalDefinitions)
   for (const n of [1, 2, 3]) {
-    await query('insert into auth.users values($1);', [id(n)])
+    await query('insert into auth.users values($1,$2,now());', [id(n), `member${n}@example.invalid`])
     await query('insert into auth.sessions(id,user_id) values($1,$2)', [id(10 + n), id(n)])
     await query('insert into profiles(id,nickname) values($1,$2)', [id(n), `Member ${n}`])
   }
   await query('insert into teams values($1,$2)', [id(20), 'Team'])
+  await query("insert into team_members values($1,$2,'owner')", [id(20), id(1)])
   await query("insert into team_members values($1,$2,'admin')", [id(20), id(2)])
   await query("insert into projects(id,name,team_id) values($1,'Project',$2)", [id(21), id(20)])
   await query("select private.configure_owner_console($1,'1337')", [id(1)])
@@ -88,6 +90,8 @@ try {
   await fails("update private.owner_console_config set failed_attempts=0")
   await as(1, 'anon')
   await fails('select owner_console_status()')
+  await fails('select owner_console_board($1)', [id(2)])
+  await fails("select owner_console_access('list')")
   await as(1)
   check((await rpc('owner_console_status()')).isOwner, true)
   await fails("select owner_console_read('overview')")
@@ -136,6 +140,86 @@ try {
   await rpc("owner_console_action('revoke_invite',$1)", [id(60)])
   check(await rpc("owner_console_read('invites')"), [])
   await fails("select owner_console_action('delete_board',$1)", [id(30)], '22023')
+  // A board snapshot preserves layout and scope without broadening normal table access.
+  const snapshot = await rpc('owner_console_board($1)', [id(2)])
+  check(snapshot.cards.map(c => [c.id,c.x,c.y,c.w,c.h]), [[id(30),10,20,500,600]])
+  check(snapshot.profiles.map(p => p.id), [id(2)])
+  await fails('select owner_console_board()', [], '22023')
+  await fails('select owner_console_board($1,$2)', [id(2),id(21)], '22023')
+  await fails('select owner_console_board($1)', [id(999)], '22023')
+  await db.exec('reset role')
+  await query("insert into cards(id,title,created_by,board_scope,project_id,x,y,w,h) values($1,'Shared',$2,'shared',$3,-400,800,320,400)", [id(32),id(2),id(21)])
+  await query("insert into todo_blocks(id,title,created_by,board_scope,project_id,x,y,w) values($1,'Checklist',$2,'shared',$3,30,50,400)", [id(40),id(2),id(21)])
+  await query("insert into todo_items(id,block_id,title,created_by,sort_order) values($1,$2,'Task',$3,0)", [id(41),id(40),id(2)])
+  await query("insert into board_texts(id,content,created_by,board_scope,project_id,x,y,w,font_size) values($1,'Note',$2,'shared',$3,100,200,300,40)", [id(42),id(2),id(21)])
+  await query("insert into card_links(id,from_card_id,to_todo_block_id,from_side,to_side,created_by,board_scope,project_id) values($1,$2,$3,'right','left',$4,'shared',$5)", [id(43),id(32),id(40),id(2),id(21)])
+  await as(1)
+  const projectSnapshot = await rpc('owner_console_board(null,$1)', [id(21)])
+  check(projectSnapshot.cards.map(c => c.id), [id(32)])
+  check(projectSnapshot.todos.map(c => [c.id,c.x,c.y,c.w]), [[id(40),30,50,400]])
+  check(projectSnapshot.items.map(c => c.id), [id(41)])
+  check(projectSnapshot.texts.map(c => c.id), [id(42)])
+  check(projectSnapshot.links.map(c => c.to_todo_block_id), [id(40)])
+  check((await rpc('owner_console_board($1)', [id(2)])).todos, [])
+  // Delegation is separate from team admin, root-only, verified and team-scoped.
+  check((await rpc('owner_console_status()')).canManageAccess, true)
+  await fails("select owner_console_access('grant','member3@example.invalid','654321')", [], '22023')
+  await fails("select owner_console_access('grant','missing@example.invalid','654321')", [], '22023')
+  await fails("select owner_console_access('grant','member1@example.invalid','654321')", [], '22023')
+  await fails("select owner_console_access('grant','member2@example.invalid','1234')", [], '22023')
+  await db.exec('reset role')
+  await query('update auth.users set email_confirmed_at=null where id=$1', [id(2)])
+  await as(1)
+  await fails("select owner_console_access('grant','member2@example.invalid','654321')", [], '22023')
+  await db.exec('reset role')
+  await query('update auth.users set email_confirmed_at=now() where id=$1', [id(2)])
+  await as(1)
+  const delegates = await rpc("owner_console_access('grant','  MEMBER2@example.invalid  ','654321')")
+  check(delegates.map(d => d.id), [id(2)])
+  check(JSON.stringify(delegates).includes('pin_hash'), false)
+  await as(2)
+  check((await rpc('owner_console_status()')).isOwner, true)
+  check((await rpc('owner_console_status()')).canManageAccess, false)
+  await fails('select owner_console_board($1)', [id(3)])
+  await fails("select owner_console_access('list')")
+  await fails('select * from private.owner_console_delegates')
+  check((await rpc("owner_console_unlock('654321')")).ok, true)
+  check((await rpc('owner_console_board($1)', [id(3)])).cards.map(c => c.id), [id(31)])
+  check((await rpc("owner_console_read('members')")).length, 3)
+  check((await query('select * from cards')).rows.every(c => c.created_by === id(2)), true)
+  await rpc("owner_console_action('export_page')")
+  await fails("select owner_console_action('purge_old_audit')")
+  await fails("select owner_console_action('revoke_invite',$1)", [id(60)])
+  await fails("select owner_console_access('grant','member3@example.invalid','111111')")
+  for (let n = 0; n < 5; n++) check((await rpc("owner_console_unlock('000000')")).ok, false)
+  check((await rpc("owner_console_unlock('654321')")).ok, false)
+  await as(1)
+  check((await rpc("owner_console_unlock('1337')")).ok, true)
+  await rpc("owner_console_access('grant','member2@example.invalid','765432')")
+  await as(2)
+  await fails("select owner_console_read('members')")
+  check((await rpc("owner_console_unlock('654321')")).ok, false)
+  check((await rpc("owner_console_unlock('765432')")).ok, true)
+  await db.exec('reset role')
+  await query('delete from team_members where user_id=$1', [id(2)])
+  await as(2)
+  check((await rpc('owner_console_status()')).isOwner, false)
+  await fails('select owner_console_board($1)', [id(3)])
+  await fails("select owner_console_unlock('765432')")
+  await db.exec('reset role')
+  await query("insert into team_members values($1,$2,'admin')", [id(20),id(2)])
+  await as(1)
+  await rpc("owner_console_access('revoke','member2@example.invalid')")
+  await as(2)
+  check((await rpc('owner_console_status()')).isOwner, false)
+  await fails('select owner_console_board($1)', [id(3)])
+  await db.exec('reset role')
+  check(await rpc("count(*)::int from private.owner_audit where action in ('access_grant','access_revoke')"), 3)
+  check(JSON.stringify((await query('select * from private.owner_audit')).rows).includes('765432'), false)
+  await db.exec("insert into board_texts(id,content,created_by,board_scope,x,y,w,font_size) select gen_random_uuid(),'Load test','" + id(3) + "','personal',0,0,300,20 from generate_series(1,2000)")
+  await as(1)
+  await fails('select owner_console_board($1)', [id(3)], '54000')
+  check((await rpc("owner_console_read('board',$1)", [{ userId:id(3),kind:'texts' }])).length, 51) // Extra row signals the next page.
   await rpc('owner_console_lock()')
   await fails("select owner_console_read('board',$1)", [{ userId: id(2) }])
   check((await query('select * from storage.objects')).rows.length, 0)
@@ -152,13 +236,23 @@ try {
   await as(1)
   await rpc("owner_console_unlock('1337')")
   await db.exec('reset role')
+  await as(1)
+  await rpc("owner_console_access('grant','member2@example.invalid','654321')")
+  await as(2)
+  await rpc("owner_console_unlock('654321')")
+  await db.exec('reset role')
   await query("select private.configure_owner_console($1,'854721')", [id(1)])
+  check(await rpc('count(*)::int from private.owner_console_delegates'), 1)
+  await as(2)
+  await fails("select owner_console_read('audit')")
+  check((await rpc("owner_console_unlock('654321')")).ok, true)
   await as(1)
   await fails("select owner_console_read('audit')")
   check((await rpc("owner_console_unlock('1337')")).ok, false)
   check((await rpc("owner_console_unlock('854721')")).ok, true)
   await db.exec('reset role')
   await query("select private.configure_owner_console($1,'854721')", [id(2)])
+  check(await rpc('count(*)::int from private.owner_console_delegates'), 0)
   await as(1)
   check((await rpc('owner_console_status()')).isOwner, false)
   await fails("select owner_console_unlock('854721')")

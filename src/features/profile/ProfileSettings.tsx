@@ -504,11 +504,11 @@ export function ProfileSettings({ isOpen, onClose, userEmail, userId }: ProfileS
             </form>
 
             {isOwner && <button className="secondary-button justify-center" type="button" onClick={() => setOwnerOpen(true)}>
-              <ShieldCheck size={17} />{language === 'ru' ? 'Панель владельца' : 'Owner console'}
+              <ShieldCheck size={17} />{language === 'ru' ? 'Админ-панель' : 'Admin console'}
             </button>}
             <p className="profile-time-zone">{language === 'ru'
-              ? 'Личные доски скрыты от участников команды. Владелец сервиса имеет административный доступ только для просмотра; обращения фиксируются в журнале.'
-              : 'Personal boards are hidden from teammates. The service owner has audited, read-only administrative access.'}</p>
+              ? 'Личные доски скрыты от участников команды. Владелец сервиса и явно назначенные им администраторы имеют доступ только для просмотра; обращения фиксируются в журнале.'
+              : 'Personal boards are hidden from teammates. The service owner and explicitly appointed console administrators have audited, read-only access.'}</p>
 
             {formError || profileError ? (
               <div className="profile-settings-error">{formError ?? profileError}</div>

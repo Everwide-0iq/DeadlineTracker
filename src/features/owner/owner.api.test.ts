@@ -8,6 +8,10 @@ describe('owner console response boundaries', () => {
     }
   })
   it('requires explicit owner flag and a valid lease timestamp', () => {
+    for (const canManageAccess of [undefined, false, 'true']) {
+      expect(parseOwnerStatus({ isOwner: true, canManageAccess: canManageAccess ?? null, unlockedUntil: null, blockedUntil: null }).canManageAccess).toBe(false)
+    }
+    expect(parseOwnerStatus({ isOwner: true, canManageAccess: true, unlockedUntil: null, blockedUntil: null }).canManageAccess).toBe(true)
     expect(parseOwnerStatus({ isOwner: false, unlockedUntil: null, blockedUntil: null }).isOwner).toBe(false)
     expect(parseOwnerStatus({ isOwner: true, unlockedUntil: '2026-09-16T10:00:00Z', blockedUntil: null, ok: true }).ok).toBe(true)
   })

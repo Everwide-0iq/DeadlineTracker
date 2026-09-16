@@ -1,4 +1,4 @@
-import { KeyRound, Loader2, LockKeyhole, ShieldCheck, X } from 'lucide-react'
+import { KeyRound, Loader2, LockKeyhole, Maximize2, ShieldCheck, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogFocus } from '../../lib/useDialogFocus.ts'
@@ -17,6 +17,7 @@ export default function OwnerConsole({ onClose, userId }: { onClose: () => void;
   const [status, setStatus] = useState<OwnerStatus | null>(null)
   const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
+  const [wide, setWide] = useState(false)
   const [error, setError] = useState<'error' | 'incorrect' | 'lockError' | null>(null)
   const [now, setNow] = useState(Date.now)
   const generation = useRef(0)
@@ -92,12 +93,13 @@ export default function OwnerConsole({ onClose, userId }: { onClose: () => void;
     finally { if (mounted.current) setBusy(false) }
   }
   const remaining = Math.max(0, Math.ceil((Date.parse(status?.unlockedUntil ?? '') - now) / 1000))
-  return createPortal(<div className="owner-backdrop"><section className="owner-dialog" role="dialog" aria-modal="true" aria-labelledby="owner-title" ref={dialogRef}>
+  return createPortal(<div className="owner-backdrop"><section className={wide ? 'owner-dialog owner-dialog-wide' : 'owner-dialog'} role="dialog" aria-modal="true" aria-labelledby="owner-title" ref={dialogRef}>
     <header className="owner-header"><ShieldCheck size={24} /><div><span>FIREBOARD</span><h2 id="owner-title">{t.title}</h2></div>
       {unlocked && <><time>{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}</time><button className="icon-button" title={t.lock} aria-label={t.lock} onClick={() => void lock()}><LockKeyhole size={18} /></button></>}
+      <button className="icon-button" title={t.maximize} aria-label={t.maximize} aria-pressed={wide} onClick={() => setWide(v => !v)}><Maximize2 size={18} /></button>
       <button className="icon-button" title={t.close} aria-label={t.close} onClick={close}><X size={20} /></button>
     </header>
-    {unlocked ? <OwnerData t={t} onLocked={handleLocked} /> : <form className="owner-gate" onSubmit={submit}>
+    {unlocked ? <OwnerData t={t} onLocked={handleLocked} canManageAccess={status?.canManageAccess === true} /> : <form className="owner-gate" onSubmit={submit}>
       <LockKeyhole size={36} />
       <label className="form-field"><span>{t.pin}</span><input aria-label={t.pin} autoComplete="off" inputMode="numeric" type="password" pattern="[0-9]{4,12}" minLength={4} maxLength={12} required value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} /></label>
       {blocked && <p role="status">{t.blocked} {new Date(status!.blockedUntil!).toLocaleTimeString()}</p>}

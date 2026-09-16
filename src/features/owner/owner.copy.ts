@@ -1,6 +1,13 @@
 export const ownerCopy = {
   ru: {
-    title: 'Панель владельца', overview: 'Обзор', audit: 'Журнал', members: 'Пользователи', projects: 'Проекты', invites: 'Приглашения', board: 'Просмотр доски',
+    canvas: 'Доска', list: 'Список', fit: 'Показать всю доску', zoomIn: 'Приблизить', zoomOut: 'Отдалить', minimap: 'Миникарта',
+    objects: 'объектов', snapshot: 'Снимок', details: 'Подробности', exportBoard: 'Экспорт доски', noDeadline: 'Без срока', expand: 'Раскрыть', collapse: 'Свернуть',
+    boardTooLarge: 'На доске больше 2000 объектов. Используйте список для просмотра всех записей.',
+    access: 'Доступ', grant: 'Выдать / обновить доступ', revokeAccess: 'Отозвать доступ', delegatePin: 'Отдельный PIN (6–12 цифр)', email: 'Email участника',
+    accessWarning: 'Участник получит доступ к просмотру всех личных и командных досок, журналу и экспорту. Выдавать права и удалять журнал он не сможет. Существующий PIN этого участника будет заменён.',
+    accessError: 'Не удалось изменить доступ. Проверьте email: аккаунт должен быть подтверждён и состоять в вашей команде. PIN: 6–12 цифр.',
+    revokeAccessConfirm: 'Отозвать доступ к панели и заблокировать все её сессии у этого участника?', accessSaved: 'Доступ обновлён', maximize: 'Развернуть панель',
+    title: 'Админ-панель', overview: 'Обзор', audit: 'Журнал', members: 'Пользователи', projects: 'Проекты', invites: 'Приглашения', board: 'Просмотр доски',
     unlock: 'Открыть панель', pin: 'PIN-код', incorrect: 'Неверный PIN-код.', blocked: 'Вход временно заблокирован до', close: 'Закрыть', lock: 'Заблокировать',
     error: 'Не удалось выполнить запрос. Проверьте подключение и SQL-обновление.', retry: 'Повторить', search: 'Поиск', newest: 'Сначала новые', oldest: 'Сначала старые',
     all: 'Все события', empty: 'Записей нет', refresh: 'Обновить', export: 'Экспорт страницы', previous: 'Назад', next: 'Далее', back: 'К списку',
@@ -11,10 +18,17 @@ export const ownerCopy = {
     lockError: 'Локально панель закрыта, но сервер не подтвердил блокировку. Повторите запрос; доступ истечёт автоматически.',
     allEntities: 'Все объекты', since: 'Начиная с даты', actor: 'ID пользователя', expires: 'До', session: 'Сессия',
     metrics: { users: 'Пользователей', projects: 'Проектов', cards: 'Карточек', done: 'Выполненных карточек', personalCards: 'Личных карточек', todoItems: 'Задач To-do', pendingInvites: 'Приглашений', imageBytes: 'Изображения в задачах', auditEvents: 'Событий', auditBytes: 'Журнал с индексами', cleanupQueue: 'Изображений на очистку' },
-    actions: { insert: 'Создание', update: 'Изменение', delete: 'Удаление', sign_in: 'Сессия замечена', pin_failed: 'Ошибка PIN', console_unlocked: 'Панель открыта', console_locked: 'Панель закрыта', owner_configured: 'Владелец назначен', board_viewed: 'Просмотр доски', revoke_invite: 'Отзыв приглашения', purge_old_audit: 'Очистка журнала', export_page: 'Экспорт страницы' },
+    actions: { access_grant: 'Выдан доступ к панели', access_revoke: 'Отозван доступ к панели', insert: 'Создание', update: 'Изменение', delete: 'Удаление', sign_in: 'Сессия замечена', pin_failed: 'Ошибка PIN', console_unlocked: 'Панель открыта', console_locked: 'Панель закрыта', owner_configured: 'Владелец назначен', board_viewed: 'Просмотр доски', revoke_invite: 'Отзыв приглашения', purge_old_audit: 'Очистка журнала', export_page: 'Экспорт страницы' },
   },
   en: {
-    title: 'Owner console', overview: 'Overview', audit: 'Audit log', members: 'Users', projects: 'Projects', invites: 'Invitations', board: 'Board reader',
+    canvas: 'Board', list: 'List', fit: 'Fit board', zoomIn: 'Zoom in', zoomOut: 'Zoom out', minimap: 'Minimap',
+    objects: 'objects', snapshot: 'Snapshot', details: 'Details', exportBoard: 'Export board', noDeadline: 'No deadline', expand: 'Expand', collapse: 'Collapse',
+    boardTooLarge: 'This board exceeds 2,000 objects. Use the list to browse all records.',
+    access: 'Access', grant: 'Grant / update access', revokeAccess: 'Revoke access', delegatePin: 'Separate PIN (6–12 digits)', email: 'Member email',
+    accessWarning: 'This member will be able to read all personal and team boards, audit events, and exports. They cannot grant access or delete audit events. Their existing console PIN will be replaced.',
+    accessError: 'Access update failed. Check the email: the account must be verified and belong to your team. PIN: 6–12 digits.',
+    revokeAccessConfirm: 'Revoke console access and lock all console sessions for this member?', accessSaved: 'Access updated', maximize: 'Expand console',
+    title: 'Admin console', overview: 'Overview', audit: 'Audit log', members: 'Users', projects: 'Projects', invites: 'Invitations', board: 'Board reader',
     unlock: 'Unlock console', pin: 'PIN', incorrect: 'Incorrect PIN.', blocked: 'Sign-in temporarily blocked until', close: 'Close', lock: 'Lock console',
     error: 'Request failed. Check your connection and SQL migration.', retry: 'Retry', search: 'Search', newest: 'Newest first', oldest: 'Oldest first',
     all: 'All events', empty: 'No records', refresh: 'Refresh', export: 'Export page', previous: 'Previous', next: 'Next', back: 'Back to list',
@@ -25,7 +39,7 @@ export const ownerCopy = {
     lockError: 'Console hidden locally, but server lock was not confirmed. Retry; access will expire automatically.',
     allEntities: 'All objects', since: 'Since', actor: 'User ID', expires: 'Until', session: 'Session',
     metrics: { users: 'Users', projects: 'Projects', cards: 'Cards', done: 'Completed cards', personalCards: 'Personal cards', todoItems: 'To-do tasks', pendingInvites: 'Invitations', imageBytes: 'Task images', auditEvents: 'Events', auditBytes: 'Audit log and indexes', cleanupQueue: 'Images awaiting cleanup' },
-    actions: { insert: 'Created', update: 'Updated', delete: 'Deleted', sign_in: 'Session observed', pin_failed: 'Incorrect PIN', console_unlocked: 'Console unlocked', console_locked: 'Console locked', owner_configured: 'Owner configured', board_viewed: 'Board viewed', revoke_invite: 'Invitation revoked', purge_old_audit: 'Audit cleanup', export_page: 'Page exported' },
+    actions: { access_grant: 'Console access granted', access_revoke: 'Console access revoked', insert: 'Created', update: 'Updated', delete: 'Deleted', sign_in: 'Session observed', pin_failed: 'Incorrect PIN', console_unlocked: 'Console unlocked', console_locked: 'Console locked', owner_configured: 'Owner configured', board_viewed: 'Board viewed', revoke_invite: 'Invitation revoked', purge_old_audit: 'Audit cleanup', export_page: 'Page exported' },
   },
 }
 export type OwnerCopy = typeof ownerCopy.en

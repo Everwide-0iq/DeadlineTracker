@@ -2,19 +2,22 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Download, ExternalLink, FileText,
 import { memo, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useFeedbackStore } from '../feedback/feedback.store.ts'
 import { ProfileAvatar } from '../profile/ProfileAvatar.tsx'
-import { asRow, field, isLockedError, ownerAction, readOwner, type OwnerRow, type OwnerView } from './owner.api.ts'
+import { asRow, field, isLockedError, ownerAction, readOwner, type OwnerRow, type OwnerView, type OwnerBoardTarget } from './owner.api.ts'
 import type { OwnerCopy } from './owner.copy.ts'
 import { OwnerImage } from './OwnerImage.tsx'
+import { OwnerBoardInspector } from './OwnerBoardInspector.tsx'
+import { OwnerAccess } from './OwnerAccess.tsx'
 
-type Target = { userId?: string; projectId?: string; name: string }
+type Target = OwnerBoardTarget
 const views = ['overview', 'audit', 'members', 'projects', 'invites'] as const
 const kinds = ['cards', 'todos', 'texts', 'links'] as const
 const entities = ['cards', 'todo_blocks', 'todo_items', 'board_texts', 'card_links', 'projects', 'profiles', 'team_members', 'project_members', 'team_invites', 'security', 'owner_console']
 const date = (value: string) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString() : ''
 const bytes = (value: string) => `${(Number(value) / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 2 })} MB`
 
-function OwnerDataView({ t, onLocked }: { t: OwnerCopy; onLocked: () => void }) {
-  const [view, setView] = useState<OwnerView>('overview')
+function OwnerDataView({ t, onLocked, canManageAccess }: { t: OwnerCopy; onLocked: () => void; canManageAccess: boolean }) {
+  const [view, setView] = useState<OwnerView | 'access'>('overview')
+  const [boardMode, setBoardMode] = useState<'canvas' | 'list'>('canvas')
   const [filters, setFilters] = useState<OwnerRow>({})
   const [target, setTarget] = useState<Target | null>(null)
   const [kind, setKind] = useState<string>('cards')
@@ -32,6 +35,7 @@ function OwnerDataView({ t, onLocked }: { t: OwnerCopy; onLocked: () => void }) 
   locked.current = onLocked
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   useEffect(() => {
+    if (view === 'access' || (view === 'board' && boardMode === 'canvas')) { setLoading(false); setData(null); setError(false); return }
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 20_000)
     let current = true
@@ -46,11 +50,11 @@ function OwnerDataView({ t, onLocked }: { t: OwnerCopy; onLocked: () => void }) 
       else setError(true)
     }).finally(() => { window.clearTimeout(timeout); if (current) setLoading(false) })
     return () => { current = false; window.clearTimeout(timeout); controller.abort() }
-  }, [view, filters, target, kind, blockId, page, cursors, refresh])
+  }, [view, boardMode, filters, target, kind, blockId, page, cursors, refresh])
   const rows = Array.isArray(data) ? data.slice(0, 50) : []
   const resetPage = () => { setPage(0); setCursors([null]) }
-  const navigate = (next: OwnerView) => { setView(next); setTarget(null); setFilters({}); setBlockId(null); resetPage() }
-  const openBoard = (next: Target) => { setTarget(next); setView('board'); setKind('cards'); setBlockId(null); setFilters({}); resetPage() }
+  const navigate = (next: OwnerView | 'access') => { setView(next); setTarget(null); setFilters({}); setBlockId(null); resetPage() }
+  const openBoard = (next: Target) => { setTarget(next); setView('board'); setBoardMode('canvas'); setKind('cards'); setBlockId(null); setFilters({}); resetPage() }
   const search = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
@@ -80,18 +84,21 @@ function OwnerDataView({ t, onLocked }: { t: OwnerCopy; onLocked: () => void }) 
   return <>
     <nav className="owner-tabs" aria-label={t.title}>
       {views.map(item => <button key={item} type="button" aria-current={view === item ? 'page' : undefined} onClick={() => navigate(item)}>{t[item]}</button>)}
+      {canManageAccess && <button type="button" aria-current={view === 'access' ? 'page' : undefined} onClick={() => navigate('access')}>{t.access}</button>}
     </nav>
-    <div className="owner-workspace">
+    <div className={view === 'board' && boardMode === 'canvas' ? 'owner-workspace owner-workspace-canvas' : 'owner-workspace'}>
       <div className="owner-section-heading">
         <div>{target && <button type="button" className="owner-back" onClick={() => navigate(target.userId ? 'members' : 'projects')}><ArrowLeft size={15} />{t.back}</button>}
           <h3>{target?.name ?? t[view]}</h3>{target && <span className="owner-badge">{t.readOnly} · {target.userId ? t.personal : t.projects}</span>}
         </div>
         <div className="owner-commands">
+          {target && <div className="owner-view-toggle"><button aria-pressed={boardMode === 'canvas'} onClick={() => setBoardMode('canvas')}>{t.canvas}</button><button aria-pressed={boardMode === 'list'} onClick={() => setBoardMode('list')}>{t.list}</button></div>}
           <button className="icon-button" title={t.refresh} aria-label={t.refresh} disabled={loading || busy} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={17} /></button>
-          <button className="secondary-button" disabled={loading || busy || !data} onClick={() => void act('export_page')}><Download size={16} />{t.export}</button>
-          {view === 'audit' && <button className="icon-button" title={t.purge} aria-label={t.purge} disabled={busy} onClick={() => void act('purge_old_audit')}><Trash2 size={17} /></button>}
+          {view !== 'access' && !(target && boardMode === 'canvas') && <button className="secondary-button" disabled={loading || busy || !data} onClick={() => void act('export_page')}><Download size={16} />{t.export}</button>}
+          {view === 'audit' && canManageAccess && <button className="icon-button" title={t.purge} aria-label={t.purge} disabled={busy} onClick={() => void act('purge_old_audit')}><Trash2 size={17} /></button>}
         </div>
       </div>
+      {view === 'access' ? (canManageAccess && <OwnerAccess t={t} refresh={refresh} onLocked={onLocked} />) : target && boardMode === 'canvas' ? <OwnerBoardInspector key={target.userId ?? target.projectId} target={target} refresh={refresh} t={t} onLocked={onLocked} /> : <>
       {target && <nav className="owner-kinds" aria-label={t.board}>{kinds.map(item => <button type="button" key={item} aria-pressed={kind === item || (item === 'todos' && kind === 'items')} onClick={() => { setKind(item); setBlockId(null); resetPage() }}>{t[item]}</button>)}</nav>}
       {view !== 'overview' && view !== 'invites' && <form className="owner-filters" key={view} onSubmit={search}>
         <label><span>{t.search}</span><input name="search" type="search" maxLength={100} defaultValue={field(filters, 'search')} /></label>
@@ -123,7 +130,7 @@ function OwnerDataView({ t, onLocked }: { t: OwnerCopy; onLocked: () => void }) 
           </> : view === 'projects' ? <>
             <div className="owner-identity"><Folder size={22} /><div><strong>{field(row, 'name')}</strong><p>{field(row, 'team')} · {t.done}: {field(row, 'done')} / {field(row, 'cards')}</p></div><button className="icon-button" aria-label={t.board} title={t.board} onClick={() => openBoard({ projectId: field(row, 'id'), name: field(row, 'name') })}><ExternalLink size={17} /></button></div>
           </> : view === 'invites' ? <>
-            <div className="owner-identity"><div><strong>{field(row, 'invitee_email')}</strong><p>{field(row, 'team')} · {field(row, 'role')} · {t.expires}: {date(field(row, 'expires_at'))}</p></div><button className="icon-button" aria-label={t.revoke} title={t.revoke} disabled={busy} onClick={() => void act('revoke_invite', field(row, 'id'))}><Trash2 size={17} /></button></div>
+            <div className="owner-identity"><div><strong>{field(row, 'invitee_email')}</strong><p>{field(row, 'team')} · {field(row, 'role')} · {t.expires}: {date(field(row, 'expires_at'))}</p></div>{canManageAccess && <button className="icon-button" aria-label={t.revoke} title={t.revoke} disabled={busy} onClick={() => void act('revoke_invite', field(row, 'id'))}><Trash2 size={17} /></button>}</div>
           </> : <>
             <div className="owner-event-meta">{(kind === 'cards' || kind === 'items') && <span className="owner-badge" data-done={row.status === 'done' || row.is_done === true}>{row.status === 'done' || row.is_done === true ? t.done : t.todo}{row.is_active === true ? ` · ${t.active}` : ''}</span>}
               {field(row, 'deadline_at') && <time>{t.deadline}: {date(field(row, 'deadline_at'))}</time>}</div>
@@ -141,6 +148,7 @@ function OwnerDataView({ t, onLocked }: { t: OwnerCopy; onLocked: () => void }) 
         <button className="icon-button" aria-label={t.previous} title={t.previous} disabled={loading || page === 0} onClick={() => setPage(n => n - 1)}><ChevronLeft size={18} /></button><span>{page + 1}</span>
         <button className="icon-button" aria-label={t.next} title={t.next} disabled={loading || data.length <= 50 || page >= 1000} onClick={() => { setCursors(current => [...current.slice(0, page + 1), field(rows[49], 'id')]); setPage(n => n + 1) }}><ChevronRight size={18} /></button>
       </footer>}
+      </>}
     </div>
   </>
 }
