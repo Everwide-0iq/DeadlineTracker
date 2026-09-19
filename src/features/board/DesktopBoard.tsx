@@ -42,6 +42,7 @@ import { BoardControls } from './BoardControls.tsx'
 import type { ConnectableBoardObjectMetric } from './boardObject.types.ts'
 import { CardLinkLayer, type DraftCardLink } from './CardLinkLayer.tsx'
 import { useBoardMotionStore } from './boardMotion.store.ts'
+import { getBoardGridStyle } from './boardGrid.ts'
 import type { DragGuide } from './dragGuide.types.ts'
 import { HeatHorizon } from './HeatHorizon.tsx'
 import { MiniMap } from './MiniMap.tsx'
@@ -329,6 +330,7 @@ export function DesktopBoard({
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const boardViewportRef = useRef<HTMLDivElement | null>(null)
   const boardWorldRef = useRef<HTMLDivElement | null>(null)
+  const boardGridRef = useRef<HTMLDivElement | null>(null)
   const cameraRef = useRef(camera)
   const cameraMoveEndTimerRef = useRef<number | null>(null)
   const isCameraMovingRef = useRef(false)
@@ -380,7 +382,6 @@ export function DesktopBoard({
     userId,
     userName: userProfile?.nickname,
   })
-  const gridSize = clamp(34 * camera.zoom, 18, 72)
   const devicePixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
   const displayCameraX = Math.round(camera.x * devicePixelRatio) / devicePixelRatio
   const displayCameraY = Math.round(camera.y * devicePixelRatio) / devicePixelRatio
@@ -489,20 +490,17 @@ export function DesktopBoard({
     const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
     const nextDisplayX = Math.round(nextCamera.x * dpr) / dpr
     const nextDisplayY = Math.round(nextCamera.y * dpr) / dpr
-    const nextGridSize = clamp(34 * nextCamera.zoom, 18, 72)
 
     if (boardWorldRef.current) {
       boardWorldRef.current.style.transform = `translate(${nextDisplayX}px, ${nextDisplayY}px) scale(${nextCamera.zoom})`
     }
 
-    if (boardViewportRef.current) {
-      boardViewportRef.current.style.backgroundPosition = `${nextCamera.x}px ${nextCamera.y}px`
-      boardViewportRef.current.style.backgroundSize = `${nextGridSize}px ${nextGridSize}px`
-    }
-
-    if (viewportRef.current) {
-      viewportRef.current.style.setProperty('--scene-depth-x', `${nextCamera.x * 0.018}px`)
-      viewportRef.current.style.setProperty('--scene-depth-y', `${nextCamera.y * 0.018}px`)
+    if (boardGridRef.current) {
+      const grid = getBoardGridStyle(nextCamera)
+      boardGridRef.current.style.transform = grid.transform
+      if (boardGridRef.current.style.backgroundSize !== grid.backgroundSize) {
+        boardGridRef.current.style.backgroundSize = grid.backgroundSize
+      }
     }
   }, [])
 
@@ -1319,11 +1317,8 @@ export function DesktopBoard({
         onContextMenu={handleBoardContextMenu}
         onPointerDown={handlePanStart}
         ref={boardViewportRef}
-        style={{
-          backgroundPosition: `${camera.x}px ${camera.y}px`,
-          backgroundSize: `${gridSize}px ${gridSize}px`,
-        }}
       >
+        <div aria-hidden="true" className="board-grid" ref={boardGridRef} style={getBoardGridStyle(camera)} />
         <div
           className="board-world absolute left-0 top-0 h-0 w-0"
           ref={boardWorldRef}

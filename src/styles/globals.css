@@ -468,6 +468,14 @@ button {
 
 .board-viewport {
   z-index: 1;
+}
+
+.board-grid {
+  position: absolute;
+  inset: -72px;
+  pointer-events: none;
+  will-change: transform;
+  background-position: 72px 72px;
   background-image:
     linear-gradient(rgba(255, 94, 75, 0.105) 1px, transparent 1px),
     linear-gradient(90deg, rgba(108, 255, 118, 0.085) 1px, transparent 1px);

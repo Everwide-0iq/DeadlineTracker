@@ -1,5 +1,6 @@
 import {
   memo,
+  useLayoutEffect,
   useMemo,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -97,12 +98,28 @@ function getMiniMapGeometry(
 function MiniMapComponent({ camera, cursors, nodes, setCamera, viewportSize }: MiniMapProps) {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
-  const liveCamera = useBoardMotionStore((state) => state.liveCamera)
-  const displayCamera = liveCamera ?? camera
+  const viewportRef = useRef<HTMLDivElement>(null)
   const geometry = useMemo(
-    () => getMiniMapGeometry(nodes, displayCamera, viewportSize),
-    [displayCamera, nodes, viewportSize],
+    () => getMiniMapGeometry(nodes, camera, viewportSize),
+    [camera, nodes, viewportSize],
   )
+  // A camera frame moves only the viewport marker; node layout stays stable until commit.
+  useLayoutEffect(() => {
+    const update = () => {
+      const element = viewportRef.current
+      if (!element) return
+      const bounds = getViewportBounds(useBoardMotionStore.getState().liveCamera ?? camera, viewportSize)
+      const x = geometry.offsetX + (bounds.minX - geometry.bounds.minX) * geometry.scale
+      const y = geometry.offsetY + (bounds.minY - geometry.bounds.minY) * geometry.scale
+      element.style.transform = `translate(${x}px, ${y}px)`
+      const width = `${Math.max((bounds.maxX - bounds.minX) * geometry.scale, 14)}px`
+      const height = `${Math.max((bounds.maxY - bounds.minY) * geometry.scale, 14)}px`
+      if (element.style.width !== width) element.style.width = width
+      if (element.style.height !== height) element.style.height = height
+    }
+    update()
+    return useBoardMotionStore.subscribe(update)
+  }, [camera, geometry, viewportSize])
   const pointerInteractionRef = useRef<{
     geometry: ReturnType<typeof getMiniMapGeometry>
     pointerId: number
@@ -247,11 +264,11 @@ function MiniMapComponent({ camera, cursors, nodes, setCamera, viewportSize }: M
           />
         ))}
         <div
-          className="absolute rounded border border-[var(--accent)]/80 bg-[var(--accent)]/10 shadow-[0_0_16px_rgb(255_70_61_/_0.28)]"
+          ref={viewportRef}
+          className="mini-map-viewport absolute left-0 top-0 rounded border border-[var(--accent)]/80 bg-[var(--accent)]/10 shadow-[0_0_16px_rgb(255_70_61_/_0.28)]"
           style={{
             height: viewportHeight,
-            left: viewportX,
-            top: viewportY,
+            transform: `translate(${viewportX}px, ${viewportY}px)`,
             width: viewportWidth,
           }}
         />
