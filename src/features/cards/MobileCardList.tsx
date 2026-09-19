@@ -1,4 +1,4 @@
-import { CalendarCheck2, CalendarOff, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, ShieldCheck, Trash2, UsersRound, Zap } from 'lucide-react'
+import { CalendarCheck2, CalendarOff, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, Settings2, ShieldCheck, Trash2, UsersRound, Zap } from 'lucide-react'
 import { BrandIcon } from '../../components/BrandIcon.tsx'
 import { memo, useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
@@ -24,6 +24,7 @@ import { defaultActiveColor, getFallbackNickname, type UserProfile } from '../pr
 import { AddMenu } from '../board/AddMenu.tsx'
 import { TodoListBlock } from '../todos/TodoListBlock.tsx'
 import type { TodoBlock, TodoItem } from '../todos/todo.types.ts'
+import './mobile.css'
 
 type MobileCardListProps = {
   activeProjectId: string
@@ -122,7 +123,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
     <article
       data-reminder-card-id={card.id}
       className={cn(
-        'deadline-card relative rounded-[18px] border p-4',
+        'deadline-card mobile-deadline-card relative rounded-[18px] border p-4',
         card.status === 'done' && 'deadline-card-done',
         card.isActive && 'deadline-card-active',
         isCompleting && 'deadline-card-completed',
@@ -190,6 +191,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
 
         {card.imagePath ? (
           <CardImageView
+            deferUntilVisible
             alt={t.cardImage.previewAlt(card.title)}
             className="mobile-card-image mb-4"
             height={card.imageHeight}
@@ -293,14 +295,14 @@ export function MobileCardList({
   const hasEntries = cards.length > 0 || todoBlocks.length > 0
 
   return (
-    <main className="app-shell min-h-screen bg-[var(--background)] px-4 pb-44 pt-4 text-white">
-      <header className="sticky top-0 z-20 -mx-4 mb-4 border-b border-white/10 bg-[var(--background)]/90 px-4 pb-4 pt-2 backdrop-blur-xl">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex max-w-full shrink-0 items-center gap-3">
+    <main className="app-shell mobile-board min-h-screen bg-[var(--background)] px-4 pb-44 pt-4 text-white">
+      <header className="mobile-board-header -mx-4 mb-4 border-b border-white/10 px-4 pb-3 pt-2">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
               <BrandIcon size={44} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-2xl font-black">Fireboard</h1>
               <button
                 aria-label={t.profile.openSettings}
@@ -314,13 +316,16 @@ export function MobileCardList({
               </button>
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <details className="mobile-settings">
+            <summary aria-label={t.profile.openSettings} title={t.profile.openSettings} className="icon-button"><Settings2 size={20} /></summary>
+            <div className="mobile-settings-panel">
             {canManageTeam && boardScope === 'shared' ? <button aria-label={t.team.manage} className="icon-button h-11 w-11" type="button" onClick={onOpenTeam}><ShieldCheck size={18} /></button> : null}
             <LanguageToggle className="h-11 px-2" />
             <button aria-label={t.sidebar.logout} className="icon-button h-11 w-11" type="button" onClick={onLogout}>
               <LogOut size={19} />
             </button>
-          </div>
+            </div>
+          </details>
         </div>
 
         <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
@@ -363,6 +368,7 @@ export function MobileCardList({
             <button
               className={cn('mobile-filter-chip', filter === item.id && 'mobile-filter-chip-active')}
               key={item.id}
+              aria-pressed={filter === item.id}
               type="button"
               onClick={() => onFilterChange(item.id)}
             >
@@ -399,7 +405,7 @@ export function MobileCardList({
               ? t.mobile.emptyPersonalDescription
               : t.mobile.emptySharedDescription}
           </p>
-          <button className="primary-button mx-auto" type="button" onClick={onCreate}>
+          <button className="primary-button mx-auto" disabled={boardScope === 'shared' && !canContribute} type="button" onClick={onCreate}>
             <Plus size={18} />
             {t.common.createCard}
           </button>

@@ -12,10 +12,17 @@ export function AppProviders({ children }: PropsWithChildren) {
   useEffect(() => initializeAuth(), [initializeAuth])
 
   useEffect(() => {
-    setNow(Date.now())
-    const timerId = window.setInterval(() => setNow(Date.now()), 30_000)
+    const refresh = () => {
+      if (document.visibilityState !== 'hidden') setNow(Date.now())
+    }
+    refresh()
+    const timerId = window.setInterval(refresh, 30_000)
+    document.addEventListener('visibilitychange', refresh)
 
-    return () => window.clearInterval(timerId)
+    return () => {
+      window.clearInterval(timerId)
+      document.removeEventListener('visibilitychange', refresh)
+    }
   }, [setNow])
 
   useEffect(() => {

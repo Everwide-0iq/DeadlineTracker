@@ -1,12 +1,14 @@
 import { ImageOff } from 'lucide-react'
-import { useMemo, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { usePrivateImage } from '../../lib/usePrivateImage.ts'
 import { getCachedCardImageSignedUrl, getCardImageSignedUrl } from './cardImage.api.ts'
+import { observeNearViewport } from '../../lib/observeNearViewport.ts'
 
 type CardImageViewProps = {
   alt: string
   className?: string
+  deferUntilVisible?: boolean
   height?: number | null
   imageClassName?: string
   path: string | null
@@ -18,12 +20,19 @@ type ImageFrameStyle = CSSProperties & Record<`--${string}`, string | number>
 export function CardImageView({
   alt,
   className,
+  deferUntilVisible = false,
   height,
   imageClassName,
   path,
   width,
 }: CardImageViewProps) {
-  const { failed: isUnavailable, isLoaded, markFailed, markLoaded, url } = usePrivateImage(path, {
+  const frame = useRef<HTMLDivElement>(null)
+  const [nearViewport, setNearViewport] = useState(false)
+  useEffect(() => {
+    if (!deferUntilVisible || nearViewport || !frame.current) return
+    return observeNearViewport(frame.current, () => setNearViewport(true))
+  }, [deferUntilVisible, nearViewport, path])
+  const { failed: isUnavailable, isLoaded, markFailed, markLoaded, url } = usePrivateImage(!deferUntilVisible || nearViewport ? path : null, {
     getCachedUrl: getCachedCardImageSignedUrl,
     getUrl: getCardImageSignedUrl,
   })
@@ -44,6 +53,7 @@ export function CardImageView({
 
   return (
     <div
+      ref={frame}
       className={cn('card-image-frame', className)}
       data-loaded={isLoaded ? 'true' : 'false'}
       data-orientation={imageRatio && imageRatio < 0.82 ? 'portrait' : 'landscape'}

@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FolderKanban, Plus, Trash2 } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import { useRef, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
@@ -42,12 +42,20 @@ export function ProjectList({
   variant,
 }: ProjectListProps) {
   const language = useI18nStore((state) => state.language)
+  const mobilePicker = useRef<HTMLDetailsElement>(null)
   const t = translations[language]
   const movableProjects = projects.filter((project) => project.id !== defaultProjectId)
 
   if (variant === 'mobile') {
     return (
-      <section className="mb-3">
+      <section className="mobile-project-picker mb-3">
+        <details ref={mobilePicker}>
+          <summary>
+            <FolderKanban size={18} />
+            <span>{getProjectDisplayName(projects.find((project) => project.id === activeProjectId), t) ?? t.project.projects}</span>
+            <ChevronDown size={18} />
+          </summary>
+        <div className="mobile-project-options">
         <div className="mb-2 flex items-center justify-between px-1">
           <span className="text-xs font-black uppercase tracking-[0.18em] text-white/35">{t.project.projects}</span>
           {canCreate ? <button aria-label={t.project.create} className="icon-button h-9 w-9 rounded-full" type="button" onClick={onCreate}><Plus size={17} /></button> : null}
@@ -68,7 +76,7 @@ export function ProjectList({
                 key={project.id}
                 style={getProjectStyle(project)}
               >
-                <button className="flex min-w-0 items-center gap-2 px-3 py-2.5" type="button" onClick={() => onSelect(project.id)}>
+                <button aria-current={isActive ? 'true' : undefined} className="mobile-project-select flex min-w-0 items-center gap-2 px-3 py-2.5" type="button" onClick={() => { onSelect(project.id); if (mobilePicker.current) mobilePicker.current.open = false }}>
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--project-color)] shadow-[0_0_12px_var(--project-color)]" />
                   <span className="max-w-52 whitespace-normal text-left [overflow-wrap:anywhere]">{displayName}</span>
                   <span
@@ -112,6 +120,8 @@ export function ProjectList({
             )
           })}
         </div>
+        </div>
+        </details>
       </section>
     )
   }

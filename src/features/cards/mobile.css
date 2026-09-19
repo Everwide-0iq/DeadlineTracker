@@ -1,0 +1,66 @@
+.mobile-board .mobile-board-header {
+  z-index: 20;
+  padding-top: max(8px, env(safe-area-inset-top));
+  background: var(--background);
+}
+
+.mobile-settings { position: relative; flex: 0 0 auto; }
+.mobile-settings > summary { width: 44px; height: 44px; list-style: none; cursor: pointer; }
+.mobile-settings > summary::-webkit-details-marker,
+.mobile-project-picker summary::-webkit-details-marker { display: none; }
+.mobile-settings-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #ffffff26;
+  border-radius: 8px;
+  background: #111315;
+  box-shadow: 0 8px 24px #0008;
+}
+.mobile-project-picker summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid #ffffff26;
+  border-radius: 8px;
+  background: #ffffff06;
+  cursor: pointer;
+  list-style: none;
+}
+.mobile-project-picker summary span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+.mobile-project-picker summary svg { flex-shrink: 0; }
+.mobile-project-picker details[open] > summary > svg:last-child { transform: rotate(180deg); }
+.mobile-project-options { margin-top: 8px; max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain; }
+.mobile-project-options > .scrollbar-hidden { flex-direction: column; overflow: visible; margin: 0; padding: 0; }
+.mobile-project-options .mobile-project-chip { width: 100%; flex-wrap: wrap; border-radius: 8px; }
+.mobile-project-select { flex: 1 1 100%; width: 100%; min-height: 44px; }
+.mobile-project-select > span:nth-child(2) { flex: 1; max-width: none; }
+.mobile-project-select > span:last-child { flex-shrink: 0; }
+.mobile-project-options .mobile-project-chip > div { margin: 0 8px 8px auto; }
+.mobile-project-options .mobile-project-chip > div button { width: 44px; height: 44px; }
+.mobile-board .mobile-filter-chip { min-height: 44px; }
+.mobile-board .mobile-profile-trigger { max-width: 100%; }
+.mobile-board .mobile-profile-trigger > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Keep long lists cheap to paint without unmounting editors or losing scroll targets. */
+.mobile-board .mobile-deadline-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 350px;
+  backdrop-filter: none;
+  box-shadow: 0 0 12px var(--deadline-glow), inset 0 1px 0 #ffffff14;
+}
+.mobile-board .mobile-deadline-card:hover { transform: none; will-change: auto; }
+.mobile-board .mobile-deadline-card .icon-button { min-width: 44px; min-height: 44px; }
+.mobile-board .mobile-deadline-card h3,
+.mobile-board .mobile-deadline-card p { overflow-wrap: anywhere; }
+.mobile-board .mobile-deadline-card .card-image-backdrop { display: none; }
+@media (max-width: 1023px) {
+  /* Avoid iOS input-focus zoom without preventing user pinch zoom. */
+  input:not([type="range"]):not([type="checkbox"]):not([type="color"]), textarea, select { font-size: 16px; }
+}
