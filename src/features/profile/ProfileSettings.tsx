@@ -27,6 +27,7 @@ import { useI18nStore } from '../i18n/i18n.store.ts'
 import { translations } from '../i18n/translations.ts'
 import { usePreferencesStore } from '../preferences/preferences.store.ts'
 import { ownerStatus } from '../owner/owner.api.ts'
+import { TelegramConnection } from '../reminders/TelegramConnection.tsx'
 import {
   prepareAvatar,
   removeAvatar,
@@ -503,6 +504,7 @@ export function ProfileSettings({ isOpen, onClose, userEmail, userId }: ProfileS
               </button>
             </form>
 
+            <TelegramConnection/>
             {isOwner && <button className="secondary-button justify-center" type="button" onClick={() => setOwnerOpen(true)}>
               <ShieldCheck size={17} />{language === 'ru' ? 'Админ-панель' : 'Admin console'}
             </button>}

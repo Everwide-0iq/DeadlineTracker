@@ -3,7 +3,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
-  Flame,
   Grid2X2,
   List,
   LockKeyhole,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { cn } from '../../lib/cn.ts'
+import { BrandIcon } from '../BrandIcon.tsx'
 import { boardFilters } from '../../features/cards/card.utils.ts'
 import type { BoardFilter, BoardScope, FilterCounts } from '../../features/cards/card.types.ts'
 import { LanguageToggle } from '../../features/i18n/LanguageToggle.tsx'
@@ -106,7 +106,7 @@ export function Sidebar({
       <div {...sizing.handle('width')} data-resize="width" className="sidebar-width-handle" aria-label={language === 'ru' ? 'Ширина боковой панели' : 'Sidebar width'} />
       <div className="mb-4 flex shrink-0 items-center gap-3 px-2 pt-2">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
-          <Flame size={30} fill="currentColor" />
+          <BrandIcon size={48} />
         </div>
         <div className="min-w-0">
           <h1 className="text-3xl font-black tracking-normal text-white">Fireboard</h1>

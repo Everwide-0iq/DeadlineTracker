@@ -1,4 +1,5 @@
-import { Crosshair, Gamepad2, Heart, Keyboard, LoaderCircle, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X, Zap, Route, Swords, Footprints, Shield, Gauge } from 'lucide-react'
+import { Crosshair, Heart, Keyboard, LoaderCircle, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X, Zap, Route, Swords, Footprints, Shield, Gauge } from 'lucide-react'
+import { BrandIcon } from '../../components/BrandIcon.tsx'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogFocus } from '../../lib/useDialogFocus.ts'
@@ -205,7 +206,7 @@ export default function ArcadeDialog({ snapshot, userId, reduced, language, anch
     onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onPointerMove={e => e.stopPropagation()}
     onWheel={e => e.stopPropagation()} onContextMenu={e => { e.preventDefault(); e.stopPropagation() }}>
     <header className="arcade-header">
-      <div className="arcade-brand"><Gamepad2 size={25} /><div><strong id="arcade-title">FIREBOARD <span>ARCADE</span></strong><small>{snapshot.name}</small></div></div>
+      <div className="arcade-brand"><BrandIcon size={40} /><div><strong id="arcade-title">FIREBOARD <span>ARCADE</span></strong><small>{snapshot.name}</small></div></div>
       <div className="arcade-modes" role="group" aria-label="Arcade">
         {arcadeModes.map(item => { const Icon = modeIcons[item.id]; return <button key={item.id} type="button" title={item.name} aria-label={item.name} disabled={starting || leaderboard.saving === 'saving'} aria-pressed={mode === item.id} onClick={() => switchMode(item.id)}><Icon size={17} /><span>{item.name}</span></button> })}
       </div>

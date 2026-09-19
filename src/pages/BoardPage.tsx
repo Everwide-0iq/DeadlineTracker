@@ -49,6 +49,8 @@ import {
   matchesTodoFilter,
 } from '../features/todos/todo.utils.ts'
 import { cleanupPendingTodoImages } from '../features/todos/todoImage.api.ts'
+import { useReminderSession } from '../features/reminders/reminder.store.ts'
+import { getCardRenderSize } from '../features/cards/card.utils.ts'
 
 const CardEditor = lazy(() =>
   import('../features/cards/CardEditor.tsx').then((module) => ({ default: module.CardEditor })),
@@ -219,6 +221,8 @@ export function BoardPage() {
   const logout = useAuthStore((state) => state.logout)
   const userEmail = useAuthStore((state) => state.user?.email ?? null)
   const userId = useAuthStore((state) => state.user?.id ?? null)
+  useReminderSession(userId)
+  const [linkedCardId,setLinkedCardId] = useState<string | null>(null)
   const clearProfiles = useProfileStore((state) => state.clear)
   const loadProfiles = useProfileStore((state) => state.loadProfiles)
   const profiles = useProfileStore((state) => state.profiles)
@@ -236,6 +240,38 @@ export function BoardPage() {
   const language = useI18nStore((state) => state.language)
   const t = translations[language]
   const isDesktop = useMediaQuery('(min-width: 1024px)')
+
+  useEffect(() => {
+    const id = searchParams.get('card')
+    if (!id || !userId || !hasLoadedTeamAccess || isLoading || !useCardStore.getState().hasLoaded) return
+    const card = cards.find(c=>c.id===id)
+    const next = new URLSearchParams(searchParams)
+    next.delete('card')
+    setSearchParams(next,{replace:true})
+    if (!card) {
+      pushToast({title:language==='ru'?'Карточка удалена или недоступна':'Card deleted or unavailable',tone:'danger'})
+      return
+    }
+    setActiveBoardScope(card.boardScope)
+    if (card.projectId) setActiveProjectId(card.projectId)
+    setFilter('all')
+    useCardStore.getState().selectCard(card.id)
+    if(isDesktop){
+      setDesktopViewMode('board')
+      const size=getCardRenderSize(card)
+      const viewport=document.querySelector('.board-viewport')
+      const width=viewport?.clientWidth ?? Math.max(400,window.innerWidth-360)
+      const height=viewport?.clientHeight ?? window.innerHeight-40
+      const zoom=Math.max(0.1,Math.min(1,(width-100)/size.w,(height-100)/size.h))
+      setCamera({x:width/2-(card.x+size.w/2)*zoom,y:height/2-(card.y+size.h/2)*zoom,zoom})
+    }else setLinkedCardId(card.id)
+  },[searchParams,userId,hasLoadedTeamAccess,isLoading,cards,setSearchParams,setFilter,isDesktop,setCamera,language,pushToast])
+
+  useEffect(()=>{
+    if(!linkedCardId)return
+    const frame=requestAnimationFrame(()=>document.querySelector(`[data-reminder-card-id="${linkedCardId}"]`)?.scrollIntoView({block:'center',behavior:'smooth'}))
+    return()=>cancelAnimationFrame(frame)
+  },[linkedCardId,activeBoardScope,activeProjectId])
 
   useEffect(() => {
     if (!userId) {

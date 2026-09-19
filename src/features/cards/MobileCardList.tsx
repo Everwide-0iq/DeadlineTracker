@@ -1,4 +1,5 @@
 import { CalendarCheck2, CalendarOff, CheckCircle2, Flame, LockKeyhole, LogOut, MoreHorizontal, Plus, ShieldCheck, Trash2, UsersRound, Zap } from 'lucide-react'
+import { BrandIcon } from '../../components/BrandIcon.tsx'
 import { memo, useMemo, type CSSProperties } from 'react'
 import { cn } from '../../lib/cn.ts'
 import { useAuthStore } from '../auth/auth.store.ts'
@@ -13,6 +14,7 @@ import { boardFilters } from './card.utils.ts'
 import { formatCountdown } from './countdown.ts'
 import { formatCompletionDate } from './completion.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
+import { ReminderButton } from '../reminders/ReminderButton.tsx'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
 import { ProjectList } from '../projects/ProjectList.tsx'
 import type { Project, ProjectDeadlineSummary, ProjectMoveDirection } from '../projects/project.types.ts'
@@ -118,6 +120,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
 
   return (
     <article
+      data-reminder-card-id={card.id}
       className={cn(
         'deadline-card relative rounded-[18px] border p-4',
         card.status === 'done' && 'deadline-card-done',
@@ -139,6 +142,7 @@ const MobileDeadlineCard = memo(function MobileDeadlineCard({ card, now }: Mobil
             )}
           </div>
           <div className="flex items-center gap-2">
+            <ReminderButton card={card} className="icon-button h-10 w-10"/>
             <button
               aria-label={activeActionLabel}
               aria-pressed={card.isActive}
@@ -294,7 +298,7 @@ export function MobileCardList({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex max-w-full shrink-0 items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
-              <Flame size={27} fill="currentColor" />
+              <BrandIcon size={44} />
             </div>
             <div>
               <h1 className="text-2xl font-black">Fireboard</h1>

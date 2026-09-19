@@ -36,6 +36,7 @@ import { getDeadlineVisualState } from './deadlineColor.ts'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
 import { useTodoStore } from '../todos/todo.store.ts'
 import { useFittedCardScale } from './useFittedCardScale.ts'
+import { ReminderButton } from '../reminders/ReminderButton.tsx'
 
 type DeadlineCardProps = {
   cameraZoom: number
@@ -439,6 +440,7 @@ function DeadlineCardComponent({
             )}
           </div>
           <div className="relative flex items-center gap-2">
+            <ReminderButton card={card}/>
             <button
               aria-label={activeActionLabel}
               aria-pressed={card.isActive}

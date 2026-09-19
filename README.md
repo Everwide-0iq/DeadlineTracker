@@ -84,6 +84,8 @@ If the project already exists, run `0001_initial_schema.sql` again after pulling
 
 ## Admin Console
 
+Telegram card reminders: deployment, bot linking and server scheduler instructions are in [docs/telegram-reminders.md](docs/telegram-reminders.md). This requires the Telegram SQL patch, one Edge Function and a Supabase Cron job; frontend deployment alone does not enable delivery.
+
 For an existing installation, run `supabase/patches/owner_console_upgrade.sql` in SQL Editor, then deploy the updated frontend. This repeatable upgrade includes the PIN safe-update fix, visual board reader, and delegated access. It preserves the configured account/PIN and board data. Fresh installations use the single main migration; do not run configuration again unless changing the owner or PIN.
 
 An optional console is available inside **Profile settings**, to the explicitly configured primary owner and their appointed console administrators. Team owners/admins do not automatically gain this privilege. It includes filtered audit events, user/project summaries, read-only personal/project boards, and exports. Only the primary owner can grant/revoke console access, revoke pending invitations, or clean up to 5,000 audit events older than 90 days.
@@ -213,6 +215,8 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 - Для приватных presence-каналов оставь Realtime Authorization включённой в Supabase и отключи public Realtime access. Приложение уже подключается к ним с `private: true`.
 
 ## Админ-панель
+
+Личные Telegram-напоминания для карточек: [настройка бота и планировщика](docs/telegram-reminders.md). Нужны SQL-обновление, Edge Function и Supabase Cron. Одного обновления сайта недостаточно для реальной отправки.
 
 Для существующей установки выполни `supabase/patches/owner_console_upgrade.sql` в SQL Editor, затем обнови фронтенд. Повторно применяемое обновление включает исправление PIN, визуальный просмотр досок и выдачу доступа. Текущий владелец, PIN и данные досок сохраняются. Для новой установки достаточно единой основной миграции; повторно вызывать настройку владельца не нужно, если не меняешь владельца или PIN.
 

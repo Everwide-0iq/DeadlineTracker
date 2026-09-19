@@ -1,4 +1,5 @@
-import { KeyRound, Loader2, LockKeyhole, Maximize2, ShieldCheck, X } from 'lucide-react'
+import { KeyRound, Loader2, LockKeyhole, Maximize2, X } from 'lucide-react'
+import { BrandIcon } from '../../components/BrandIcon.tsx'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogFocus } from '../../lib/useDialogFocus.ts'
@@ -94,7 +95,7 @@ export default function OwnerConsole({ onClose, userId }: { onClose: () => void;
   }
   const remaining = Math.max(0, Math.ceil((Date.parse(status?.unlockedUntil ?? '') - now) / 1000))
   return createPortal(<div className="owner-backdrop"><section className={wide ? 'owner-dialog owner-dialog-wide' : 'owner-dialog'} role="dialog" aria-modal="true" aria-labelledby="owner-title" ref={dialogRef}>
-    <header className="owner-header"><ShieldCheck size={24} /><div><span>FIREBOARD</span><h2 id="owner-title">{t.title}</h2></div>
+    <header className="owner-header"><BrandIcon size={40} /><div><span>FIREBOARD</span><h2 id="owner-title">{t.title}</h2></div>
       {unlocked && <><time>{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}</time><button className="icon-button" title={t.lock} aria-label={t.lock} onClick={() => void lock()}><LockKeyhole size={18} /></button></>}
       <button className="icon-button" title={t.maximize} aria-label={t.maximize} aria-pressed={wide} onClick={() => setWide(v => !v)}><Maximize2 size={18} /></button>
       <button className="icon-button" title={t.close} aria-label={t.close} onClick={close}><X size={20} /></button>

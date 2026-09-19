@@ -14,6 +14,7 @@ import type { BoardScope, Card } from './card.types.ts'
 import { formatCountdown } from './countdown.ts'
 import { formatCompletionDate } from './completion.ts'
 import { getDeadlineVisualState } from './deadlineColor.ts'
+import { ReminderButton } from '../reminders/ReminderButton.tsx'
 import { useCompletionAnimation } from './useCompletionAnimation.ts'
 import { AddMenu } from '../board/AddMenu.tsx'
 import { TodoListBlock } from '../todos/TodoListBlock.tsx'
@@ -96,8 +97,9 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
 
   return (
     <article
+      data-reminder-card-id={card.id}
       className={cn(
-        'deadline-list-row group grid grid-cols-[minmax(0,1fr)_160px_228px] items-center gap-5 rounded-2xl border px-5 py-4 transition duration-200 2xl:grid-cols-[minmax(0,1fr)_190px_350px]',
+        'deadline-list-row group grid grid-cols-[minmax(0,1fr)_160px_288px] items-center gap-5 rounded-2xl border px-5 py-4 transition duration-200 2xl:grid-cols-[minmax(0,1fr)_190px_410px]',
         card.status === 'done' && 'opacity-65 saturate-50',
         card.isActive && 'deadline-list-row-active',
         isCompleting && 'deadline-list-row-completed',
@@ -170,6 +172,7 @@ const DeadlineListRow = memo(function DeadlineListRow({ card, now }: DeadlineLis
       </div>
 
       <div className="flex items-center justify-end gap-3">
+        <ReminderButton card={card} className="list-action-button"/>
         <span className="mr-1 hidden items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--deadline-text)] 2xl:flex">
           <span className="h-2 w-2 rounded-full bg-[var(--deadline-border)] shadow-[0_0_12px_var(--deadline-glow)]" />
           {visual.label}

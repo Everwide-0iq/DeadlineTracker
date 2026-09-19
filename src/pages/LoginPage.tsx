@@ -7,6 +7,7 @@ import { LanguageToggle } from '../features/i18n/LanguageToggle.tsx'
 import { useI18nStore } from '../features/i18n/i18n.store.ts'
 import { translations } from '../features/i18n/translations.ts'
 import { env } from '../lib/env.ts'
+import { BrandIcon } from '../components/BrandIcon.tsx'
 
 type LocationState = {
   from?: {
@@ -80,7 +81,7 @@ export function LoginPage() {
         <div className="hidden min-h-[560px] flex-col justify-center gap-12 border-r border-white/10 bg-white/[0.025] p-9 lg:flex">
           <div className="flex items-center gap-3">
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
-              <Flame size={34} fill="currentColor" />
+              <BrandIcon size={56} />
             </div>
             <div>
               <h1 className="text-4xl font-black">Fireboard</h1>
@@ -122,7 +123,7 @@ export function LoginPage() {
           <div className="mx-auto w-full max-w-[405px]">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
-                <Flame size={30} fill="currentColor" />
+                <BrandIcon size={48} />
               </div>
               <h1 className="text-3xl font-black">Fireboard</h1>
             </div>

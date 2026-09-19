@@ -13,7 +13,8 @@
     "test:arcade-sql": "node scripts/check-arcade-sql.mjs",
     "test:team-sql": "node scripts/check-team-access-sql.mjs",
     "test:owner-sql": "node scripts/check-owner-console-sql.mjs",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run test:arcade-sql && npm run test:team-sql && npm run test:owner-sql && npm run build"
+    "test:reminders-sql": "node scripts/check-reminders-sql.mjs",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run test:arcade-sql && npm run test:team-sql && npm run test:owner-sql && npm run test:reminders-sql && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

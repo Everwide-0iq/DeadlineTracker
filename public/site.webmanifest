@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Fireboard",
+  "short_name": "Fireboard",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090c0e",
+  "theme_color": "#090c0e",
+  "icons": [
+    { "src": "/brand/fireboard-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/fireboard-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/fireboard-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
