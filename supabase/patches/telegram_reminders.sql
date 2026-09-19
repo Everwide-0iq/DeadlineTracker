@@ -40,6 +40,9 @@ create index if not exists card_reminders_card_idx on private.card_reminders(car
 -- Additive upgrade: existing card schedules retain their IDs, dates and status.
 alter table private.telegram_accounts add column if not exists last_test_at timestamptz;
 alter table private.card_reminders add column if not exists kind text not null default 'card';
+alter table private.card_reminders add column if not exists note text not null default '';
+alter table private.card_reminders drop constraint if exists card_reminders_note_check;
+alter table private.card_reminders add constraint card_reminders_note_check check (char_length(note)<=1000);
 alter table private.card_reminders alter column card_id drop not null;
 alter table private.card_reminders drop constraint if exists card_reminders_slot_check;
 alter table private.card_reminders add constraint card_reminders_slot_check check (slot between -43200 and 4320 or slot=9999);
@@ -80,7 +83,7 @@ begin
     'botUsername',(select bot_username from private.telegram_settings where singleton),
     'testDelivery',(select jsonb_build_object('status',r.status,'requestedAt',r.due_at,'sentAt',r.sent_at) from private.card_reminders r where r.user_id=auth.uid() and r.kind='test'),
     'testAvailableAt',(select last_test_at+interval '1 minute' from private.telegram_accounts where user_id=auth.uid()),
-    'reminders',coalesce((select jsonb_agg(jsonb_build_object('id',r.id,'cardId',r.card_id,'slot',r.slot,'dueAt',r.due_at,'status',r.status,'sentAt',r.sent_at) order by r.due_at)
+    'reminders',coalesce((select jsonb_agg(jsonb_build_object('id',r.id,'cardId',r.card_id,'slot',r.slot,'dueAt',r.due_at,'status',r.status,'sentAt',r.sent_at,'note',r.note) order by r.due_at)
       from private.card_reminders r where r.user_id=auth.uid() and r.kind='card' and private.reminder_can_view(r.card_id,auth.uid())),'[]'::jsonb)
   ) into result;
   return result;
@@ -117,14 +120,19 @@ begin
 end;
 $$;
 
-create or replace function public.set_card_reminders(target_card uuid, selected_offsets integer[] default '{}', custom_time timestamptz default null, time_zone text default 'UTC', reminder_language text default 'ru')
+-- Remove the old overload so PostgREST can resolve calls with optional arguments.
+drop function if exists public.set_card_reminders(uuid,integer[],timestamptz,text,text);
+create or replace function public.set_card_reminders(target_card uuid, selected_offsets integer[] default '{}', custom_time timestamptz default null, time_zone text default 'UTC', reminder_language text default 'ru', reminder_note text default null)
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare c public.cards; minutes integer; delivery timestamptz; slots integer[];
+declare c public.cards; minutes integer; delivery timestamptz; slots integer[]; note_value text;
 begin
   if auth.uid() is null then raise exception 'Sign in required' using errcode='42501'; end if;
   perform pg_advisory_xact_lock(hashtextextended(auth.uid()::text,714));
   select * into c from public.cards where id=target_card for update;
   if not found or not private.reminder_can_view(target_card,auth.uid()) then raise exception 'Card access required' using errcode='42501'; end if;
+  if char_length(reminder_note)>1000 then raise exception 'Reminder text is too long' using errcode='22023'; end if;
+  -- Omitted text from older clients preserves the existing personal note.
+  note_value := coalesce(reminder_note,(select note from private.card_reminders where user_id=auth.uid() and card_id=target_card order by due_at limit 1),'');
   if selected_offsets is null or cardinality(selected_offsets)>8 or array_position(selected_offsets,null) is not null
     or exists(select 1 from unnest(selected_offsets) n where n < -43200 or n > 4320) then
     raise exception 'Invalid reminder offsets' using errcode='22023';
@@ -143,11 +151,14 @@ begin
   delete from private.card_reminders where user_id=auth.uid() and card_id=target_card and not (slot=any(slots));
   foreach minutes in array slots loop
     delivery := case when minutes=9999 then custom_time else c.deadline_at+make_interval(mins=>minutes) end;
-    if exists(select 1 from private.card_reminders where user_id=auth.uid() and card_id=target_card and slot=minutes and due_at=delivery) then continue; end if;
+    if exists(select 1 from private.card_reminders where user_id=auth.uid() and card_id=target_card and slot=minutes and due_at=delivery) then
+      update private.card_reminders set note=note_value where user_id=auth.uid() and card_id=target_card and slot=minutes;
+      continue;
+    end if;
     if delivery<=now() or delivery>now()+interval '2 years' then raise exception 'Choose a future time within two years' using errcode='22023'; end if;
     delete from private.card_reminders where user_id=auth.uid() and card_id=target_card and slot=minutes;
-    insert into private.card_reminders(user_id,card_id,slot,due_at,timezone,language)
-      values(auth.uid(),target_card,minutes,delivery,time_zone,reminder_language) on conflict(user_id,card_id,slot) do nothing;
+    insert into private.card_reminders(user_id,card_id,slot,due_at,timezone,language,note)
+      values(auth.uid(),target_card,minutes,delivery,time_zone,reminder_language,note_value) on conflict(user_id,card_id,slot) do nothing;
   end loop;
   return public.telegram_reminder_state();
 end;
@@ -228,7 +239,7 @@ begin
   end if;
   update private.card_reminders set status='sending',attempts=attempts+1 where id=r.id;
   select jsonb_build_object('id',r.id,'chatId',chat::text,'cardId',c.id,'title',c.title,'project',p.name,'boardScope',c.board_scope,'projectId',c.project_id,
-    'dueAt',r.due_at,'deadlineAt',c.deadline_at,'slot',r.slot,'timezone',r.timezone,'language',r.language,'appUrl',s.app_url)
+    'dueAt',r.due_at,'deadlineAt',c.deadline_at,'slot',r.slot,'timezone',r.timezone,'language',r.language,'appUrl',s.app_url,'note',r.note)
     into result from private.telegram_settings s left join public.projects p on p.id=c.project_id where s.singleton;
   return result;
 end;
@@ -280,8 +291,8 @@ $$;
 revoke all on function public.telegram_send_test(text) from public,anon;
 grant execute on function public.telegram_send_test(text) to authenticated;
 
-revoke all on function public.telegram_reminder_state(),public.telegram_create_link(),public.telegram_disconnect(),public.set_card_reminders(uuid,integer[],timestamptz,text,text) from public,anon;
-grant execute on function public.telegram_reminder_state(),public.telegram_create_link(),public.telegram_disconnect(),public.set_card_reminders(uuid,integer[],timestamptz,text,text) to authenticated;
+revoke all on function public.telegram_reminder_state(),public.telegram_create_link(),public.telegram_disconnect(),public.set_card_reminders(uuid,integer[],timestamptz,text,text,text) from public,anon;
+grant execute on function public.telegram_reminder_state(),public.telegram_create_link(),public.telegram_disconnect(),public.set_card_reminders(uuid,integer[],timestamptz,text,text,text) to authenticated;
 revoke all on function public.telegram_finish_link(text,bigint),public.telegram_claim_reminders(),public.telegram_prepare_reminder(uuid,uuid),public.telegram_complete_reminder(uuid,uuid,text,integer),public.telegram_configure(text,text) from public,anon,authenticated;
 grant execute on function public.telegram_finish_link(text,bigint),public.telegram_claim_reminders(),public.telegram_prepare_reminder(uuid,uuid),public.telegram_complete_reminder(uuid,uuid,text,integer),public.telegram_configure(text,text) to service_role;
 

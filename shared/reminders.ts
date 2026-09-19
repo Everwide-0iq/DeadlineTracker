@@ -2,6 +2,7 @@ export const ABSOLUTE_REMINDER_SLOT = 9999
 export const MIN_REMINDER_OFFSET = -30 * 24 * 60
 export const MAX_REMINDER_OFFSET = 3 * 24 * 60
 export const MAX_CARD_REMINDERS = 8
+export const MAX_REMINDER_NOTE_LENGTH = 1000
 export const REMINDER_PRESETS = [-2880, -1440, -60, -30, 0, 30] as const
 
 export function isReminderOffset(value: number) {

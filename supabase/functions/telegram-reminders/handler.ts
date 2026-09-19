@@ -1,4 +1,7 @@
-import { offsetLabel } from '../../../shared/reminders.ts'
+import {
+  MAX_REMINDER_NOTE_LENGTH,
+  offsetLabel,
+} from '../../../shared/reminders.ts'
 
 type Environment = {
   SUPABASE_URL: string
@@ -22,6 +25,7 @@ export type Delivery = {
   timezone: string
   language: string
   appUrl: string
+  note?: string
 }
 export type TestDelivery = { kind: 'test'; chatId: string; language: string }
 
@@ -48,6 +52,10 @@ export function reminderMessage(job: Delivery | TestDelivery) {
   const url = new URL(job.appUrl)
   url.searchParams.set('card', job.cardId)
   const title = job.title.slice(0, 500)
+  const note = Array.from(job.note ?? '')
+    .slice(0, MAX_REMINDER_NOTE_LENGTH)
+    .join('')
+    .trim()
   const displayedTime =
     job.slot === 9999 ? job.dueAt : (job.deadlineAt ?? job.dueAt)
   const board =
@@ -58,7 +66,7 @@ export function reminderMessage(job: Delivery | TestDelivery) {
       : (job.project ?? 'Fireboard').slice(0, 150)
   return {
     chat_id: job.chatId,
-    text: `Fireboard · ${timing}\n\n${title}\n${board}\n\n${when.format(new Date(displayedTime))} (${job.timezone})`,
+    text: `Fireboard · ${timing}\n\n${title}\n${board}${note ? `\n\n${note}` : ''}\n\n${when.format(new Date(displayedTime))} (${job.timezone})`,
     link_preview_options: { is_disabled: true },
     reply_markup: {
       inline_keyboard: [

@@ -2,6 +2,7 @@ import { BellRing, Clock3, Loader2, Plus, Save, Trash2, X } from 'lucide-react'
 import {
   isReminderOffset,
   MAX_CARD_REMINDERS,
+  MAX_REMINDER_NOTE_LENGTH,
   offsetLabel,
 } from '../../../shared/reminders.ts'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -107,6 +108,7 @@ function ReminderForm({
   const [amount, setAmount] = useState('2')
   const [unit, setUnit] = useState(1440)
   const [direction, setDirection] = useState(-1)
+  const [note, setNote] = useState(() => rows[0]?.note ?? '')
   const [offsets, setOffsets] = useState<number[]>(() =>
     rows.filter((r) => r.slot !== 9999).map((r) => r.slot),
   )
@@ -164,7 +166,13 @@ function ReminderForm({
     try {
       await useReminderStore
         .getState()
-        .save(card.id, remove || isCustom ? [] : offsets, customAt, language)
+        .save(
+          card.id,
+          remove || isCustom ? [] : offsets,
+          customAt,
+          language,
+          note,
+        )
       if (alive.current) {
         useFeedbackStore
           .getState()
@@ -322,6 +330,21 @@ function ReminderForm({
             />
           </label>
         )}
+        <label className="reminder-note">
+          <span>
+            <strong>{t.note}</strong>
+            <small>
+              {note.length}/{MAX_REMINDER_NOTE_LENGTH}
+            </small>
+          </span>
+          <textarea
+            rows={4}
+            maxLength={MAX_REMINDER_NOTE_LENGTH}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={t.notePlaceholder}
+          />
+        </label>
       </fieldset>
       <p className="reminder-zone">
         {t.timezone}: {zone}

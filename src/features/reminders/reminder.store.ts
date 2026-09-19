@@ -14,6 +14,7 @@ type Store = {
     offsets: number[],
     custom: string | null,
     language: string,
+    note: string,
   ) => Promise<void>
   disconnect: () => Promise<void>
   sendTest: (language: string) => Promise<void>
@@ -70,7 +71,7 @@ export const useReminderStore = create<Store>((set, get) => ({
     })()
     return request
   },
-  save: async (cardId, offsets, custom, language) => {
+  save: async (cardId, offsets, custom, language, note) => {
     const version = generation
     const { data, error } = await requireSupabase()
       .rpc('set_card_reminders', {
@@ -79,6 +80,7 @@ export const useReminderStore = create<Store>((set, get) => ({
         custom_time: custom,
         time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         reminder_language: language,
+        reminder_note: note,
       })
       .abortSignal(AbortSignal.timeout(15_000))
     if (error) throw error

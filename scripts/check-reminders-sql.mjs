@@ -105,6 +105,29 @@ try {
   await fails('select telegram_create_link()', [], '22023')
   await rpc('set_card_reminders($1,$2)', [id(40), [-30, 0, 30]])
   check((await rpc('telegram_reminder_state()')).reminders.length, 3)
+  const personalNote = 'Private reminder\n<b>Bring the notes</b>'
+  await rpc("set_card_reminders($1,$2,null,'UTC','en',$3)", [
+    id(40),
+    [-30, 0, 30],
+    personalNote,
+  ])
+  check(
+    (await rpc('telegram_reminder_state()')).reminders.every(
+      (r) => r.note === personalNote,
+    ),
+    true,
+  )
+  await rpc('set_card_reminders($1,$2)', [id(40), [-30, 0, 30]])
+  check(
+    (await rpc('telegram_reminder_state()')).reminders[0].note,
+    personalNote,
+  )
+  await fails(
+    "select set_card_reminders($1,$2,null,'UTC','en',$3)",
+    [id(40), [0], 'x'.repeat(1001)],
+    '22023',
+  )
+  check((await rpc('telegram_reminder_state()')).reminders.length, 3)
   await fails('select set_card_reminders($1,$2)', [id(40), [-43201]], '22023')
   await fails('select set_card_reminders($1,$2)', [id(40), [null]], '22023')
   await fails('select set_card_reminders($1,$2,now())', [id(40), []], '22023')
@@ -155,6 +178,7 @@ try {
     first.lease,
   ])
   check(delivery.title, 'Shared')
+  check(delivery.note, delivery.chatId === '12345' ? personalNote : '')
   check(
     await rpc('telegram_prepare_reminder($1,$2)', [first.id, first.lease]),
     null,
@@ -343,6 +367,35 @@ try {
     [-43200, -2880, -1440, -90, -30, 0, 30, 4320],
   ])
   check((await rpc('telegram_reminder_state()')).reminders, beforeUpgrade)
+  await rpc("set_card_reminders($1,$2,null,'UTC','ru',$3)", [
+    id(40),
+    [-43200, -2880, -1440, -90, -30, 0, 30, 4320],
+    'Updated note',
+  ])
+  check(
+    (await rpc('telegram_reminder_state()')).reminders.map((r) => ({
+      ...r,
+      note: '',
+    })),
+    beforeUpgrade.map((r) => ({ ...r, note: '' })),
+  )
+  check(
+    (await rpc('telegram_reminder_state()')).reminders.every(
+      (r) => r.note === 'Updated note',
+    ),
+    true,
+  )
+  await rpc("set_card_reminders($1,$2,null,'UTC','ru','')", [
+    id(40),
+    [-43200, -2880, -1440, -90, -30, 0, 30, 4320],
+  ])
+  check(
+    (await rpc('telegram_reminder_state()')).reminders.every(
+      (r) => r.note === '',
+    ),
+    true,
+  )
+  beforeUpgrade = (await rpc('telegram_reminder_state()')).reminders
   await fails('select set_card_reminders($1,$2)', [id(40), [4321]], '22023')
   await fails('select set_card_reminders($1,$2)', [id(40), [9999]], '22023')
   await fails(

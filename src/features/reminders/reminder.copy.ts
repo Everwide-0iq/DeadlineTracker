@@ -33,6 +33,8 @@ export const reminderCopy = {
     exact: 'В срок',
     after: 'Через 30 минут',
     custom: 'Дата и время',
+    note: 'Дополнительный текст',
+    notePlaceholder: 'Необязательно',
     timezone: 'Часовой пояс',
     setup:
       'Telegram ещё не настроен. Владельцу сайта нужно подключить бота и планировщик.',
@@ -46,7 +48,7 @@ export const reminderCopy = {
     linkExpired: 'Ссылка истекла. Создай новую.',
     wait: 'Создать новую ссылку можно через 30 секунд.',
     privacy:
-      'Только тебе. В Telegram отправятся название, проект и время, без описания и картинок.',
+      'Только тебе. В Telegram отправятся название, проект, время и твой дополнительный текст, без описания карточки и картинок.',
     precision:
       'Отправка обычно в течение минуты. Уже отправленное сообщение отменить нельзя.',
     schedule: 'Мои напоминания',
@@ -101,6 +103,8 @@ export const reminderCopy = {
     exact: 'On time',
     after: '30 min after',
     custom: 'Date and time',
+    note: 'Additional message',
+    notePlaceholder: 'Optional',
     timezone: 'Time zone',
     setup:
       'Telegram is not configured yet. The site owner needs to connect the bot and scheduler.',
@@ -114,7 +118,7 @@ export const reminderCopy = {
     linkExpired: 'The link expired. Create a new one.',
     wait: 'Wait 30 seconds before creating a new link.',
     privacy:
-      'Only you. Telegram receives the title, project and time, without descriptions or images.',
+      'Only you. Telegram receives the title, project, time and your additional message, without the card description or images.',
     precision:
       'Usually sent within one minute. Already sent messages cannot be recalled.',
     schedule: 'My reminders',

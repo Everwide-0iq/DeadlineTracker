@@ -102,6 +102,27 @@ describe('Telegram server boundary', () => {
     expect(message.text).toContain('11:30')
     expect(message.text).not.toContain('12:00')
   })
+  it('preserves multiline personal text as plain text', () => {
+    const message = reminderMessage({
+      ...delivery,
+      note: 'Bring notes\n<b>Not HTML</b> & checklist',
+    })
+    expect(message.text).toContain('Bring notes\n<b>Not HTML</b> & checklist')
+    expect(message).not.toHaveProperty('parse_mode')
+  })
+  it('keeps the maximum Unicode note inside Telegram message limits', () => {
+    const message = reminderMessage({
+      ...delivery,
+      title: 'T'.repeat(500),
+      project: 'P'.repeat(150),
+      note: '\u{1F525}'.repeat(1000),
+    })
+    expect(message.text).toContain('\u{1F525}'.repeat(1000))
+    expect(message.text.length).toBeLessThan(4096)
+    expect(reminderMessage({ ...delivery, note: '   ' })).toEqual(
+      reminderMessage(delivery),
+    )
+  })
   it('formats day offsets without claiming a 30-minute deadline', () => {
     expect(reminderMessage({ ...delivery, slot: -2880 }).text).toContain(
       '2 days before deadline',

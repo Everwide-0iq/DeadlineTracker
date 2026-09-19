@@ -4,6 +4,8 @@ Personal reminders for ordinary cards: presets for two days, one day, one hour o
 
 ## Test Delivery
 
+Each personal card schedule can include an optional message of up to 1000 characters. The same message is used for all selected times on that card, kept private to the reminder owner and sent as plain text with line breaks. Editing it preserves job IDs and delivery statuses; it never replays a sent notification. A send already in flight may still contain the earlier text. Older clients that omit the new RPC argument preserve existing text; sending an empty string explicitly clears it. The database enforces the size limit independently of the UI.
+
 Profile > Telegram and the card reminder dialog include **Test notification**. A test enters the same server queue and travels through Cron, the worker and Telegram, without a card or any changes to board content. The UI reports queued/sent/failed/unconfirmed status. "Sent" means Telegram accepted the message, not that the phone displayed it. A server-side per-account lock enforces a one-minute cooldown and a single outstanding test. Disconnecting cancels queued tests as well as card reminders. No recipient ID can be supplied by the client.
 
 The queue uses an explicit `kind` (`card` or `test`) with database constraints and one test row per account. Test history is separate from card schedules in the state RPC. Shared interval constants/formatting live in `shared/reminders.ts`; the database independently validates every interval and limit.

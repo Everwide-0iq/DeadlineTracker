@@ -11,6 +11,7 @@ export type Reminder = {
   dueAt: string
   status: string
   sentAt: string | null
+  note: string
 }
 export type ReminderState = {
   configured: boolean
@@ -57,6 +58,7 @@ export function parseReminderState(value: Json): ReminderState {
       dueAt: row.dueAt,
       status: row.status,
       sentAt: typeof row.sentAt === 'string' ? row.sentAt : null,
+      note: typeof row.note === 'string' ? row.note : '',
     }
   })
   return {

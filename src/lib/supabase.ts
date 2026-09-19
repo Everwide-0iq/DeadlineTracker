@@ -462,7 +462,7 @@ export type Database = {
       telegram_create_link: { Args: Record<string, never>; Returns: Json }
       telegram_disconnect: { Args: Record<string, never>; Returns: undefined }
       telegram_send_test: { Args: { reminder_language: string }; Returns: Json }
-      set_card_reminders: { Args: { target_card: string; selected_offsets: number[]; custom_time: string | null; time_zone: string; reminder_language: string }; Returns: Json }
+      set_card_reminders: { Args: { target_card: string; selected_offsets: number[]; custom_time: string | null; time_zone: string; reminder_language: string; reminder_note: string }; Returns: Json }
       owner_console_status: { Args: Record<string, never>; Returns: Json }
       owner_console_board: { Args: { target_user_id?: string; target_project_id?: string }; Returns: Json }
       owner_console_access: { Args: { action_name?: string; target_email?: string; new_pin?: string }; Returns: Json }
