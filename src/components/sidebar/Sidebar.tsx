@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   CalendarDays,
+  ChevronUp,
   CheckCircle2,
   Clock3,
   Grid2X2,
@@ -11,7 +12,8 @@ import {
   ShieldCheck,
   UsersRound,
 } from 'lucide-react'
-import type { ComponentType } from 'react'
+import { useState, type ComponentType } from 'react'
+import { readStorageValue, writeStorageValue } from '../../lib/storage.ts'
 import { cn } from '../../lib/cn.ts'
 import { BrandIcon } from '../BrandIcon.tsx'
 import { boardFilters } from '../../features/cards/card.utils.ts'
@@ -27,6 +29,7 @@ import { defaultActiveColor, getFallbackNickname, type UserProfile } from '../..
 import { AddMenu } from '../../features/board/AddMenu.tsx'
 import { useSidebarSize } from './useSidebarSize.ts'
 import './sidebar.css'
+import { ScopeDeadline } from '../../features/board/ScopeDeadline.tsx'
 
 type SidebarProps = {
   activeFilter: BoardFilter
@@ -100,9 +103,10 @@ export function Sidebar({
   const profileName = profile?.nickname ?? getFallbackNickname(userEmail, t.profile.memberFallback)
   const profileColor = profile?.activeColor ?? defaultActiveColor
   const sizing = useSidebarSize(activeBoardScope)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(() => readStorageValue('fireboard.filters.collapsed') === 'true')
 
   return (
-    <aside ref={sizing.root} style={{ width: sizing.size.width }} className="resizable-sidebar relative flex h-full shrink-0 flex-col rounded-[28px] border border-white/10 bg-black/35 p-5 shadow-2xl backdrop-blur-xl">
+    <aside data-filters-collapsed={filtersCollapsed} ref={sizing.root} style={{ width: sizing.size.width }} className="resizable-sidebar relative flex h-full shrink-0 flex-col rounded-[28px] border border-white/10 bg-black/35 p-5 shadow-2xl backdrop-blur-xl">
       <div {...sizing.handle('width')} data-resize="width" className="sidebar-width-handle" aria-label={language === 'ru' ? 'Ширина боковой панели' : 'Sidebar width'} />
       <div className="mb-4 flex shrink-0 items-center gap-3 px-2 pt-2">
         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] shadow-glow">
@@ -127,20 +131,22 @@ export function Sidebar({
       <div className="mb-3 shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
         <div className="grid grid-cols-2 gap-1.5">
           <button
-            className={cn('view-toggle-button', activeBoardScope === 'shared' && 'view-toggle-button-active')}
+            className={cn('view-toggle-button scope-toggle', activeBoardScope === 'shared' && 'view-toggle-button-active')}
             type="button"
             onClick={() => onBoardScopeChange('shared')}
           >
             <UsersRound size={17} />
             {t.sidebar.team}
+            <ScopeDeadline scope="shared" />
           </button>
           <button
-            className={cn('view-toggle-button', activeBoardScope === 'personal' && 'view-toggle-button-active')}
+            className={cn('view-toggle-button scope-toggle', activeBoardScope === 'personal' && 'view-toggle-button-active')}
             type="button"
             onClick={() => onBoardScopeChange('personal')}
           >
             <LockKeyhole size={17} />
             {t.sidebar.personal}
+            <ScopeDeadline scope="personal" />
           </button>
         </div>
       </div>
@@ -202,8 +208,23 @@ export function Sidebar({
       </div>
 
       <div className="mt-auto flex shrink-0 flex-col">
-        <div className="mb-2 shrink-0 px-2 text-xs font-bold uppercase tracking-[0.22em] text-white/35">{t.sidebar.filters}</div>
-        <nav className="-mx-5 space-y-0.5 pb-2">
+        <button
+          className="sidebar-filter-toggle"
+          type="button"
+          aria-expanded={!filtersCollapsed}
+          aria-controls="sidebar-filters"
+          onClick={() => {
+            setFiltersCollapsed(!filtersCollapsed)
+            writeStorageValue('fireboard.filters.collapsed', String(!filtersCollapsed))
+          }}
+        >
+          <span>{t.sidebar.filters}</span>
+          {filtersCollapsed ? <span className="sidebar-filter-current">{t.filters[activeFilter]}</span> : null}
+          <ChevronUp size={17} />
+        </button>
+        <div className="sidebar-filter-collapse" data-collapsed={filtersCollapsed} inert={filtersCollapsed} aria-hidden={filtersCollapsed} id="sidebar-filters">
+        <div className="sidebar-filter-clip">
+        <nav className="space-y-0.5 pb-2">
           {boardFilters.map((filter) => {
             const Icon = filterIcons[filter.id]
 
@@ -223,6 +244,8 @@ export function Sidebar({
             )
           })}
         </nav>
+        </div>
+        </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-white/[0.07] px-2 pt-3">
           <LanguageToggle className="h-10" />

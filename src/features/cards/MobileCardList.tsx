@@ -25,6 +25,7 @@ import { AddMenu } from '../board/AddMenu.tsx'
 import { TodoListBlock } from '../todos/TodoListBlock.tsx'
 import type { TodoBlock, TodoItem } from '../todos/todo.types.ts'
 import './mobile.css'
+import { ScopeDeadline } from '../board/ScopeDeadline.tsx'
 
 type MobileCardListProps = {
   activeProjectId: string
@@ -330,20 +331,22 @@ export function MobileCardList({
 
         <div className="mb-3 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.035] p-1.5">
           <button
-            className={cn('view-toggle-button', boardScope === 'shared' && 'view-toggle-button-active')}
+            className={cn('view-toggle-button scope-toggle', boardScope === 'shared' && 'view-toggle-button-active')}
             type="button"
             onClick={() => onBoardScopeChange('shared')}
           >
             <UsersRound size={17} />
             {t.sidebar.team}
+            <ScopeDeadline scope="shared" />
           </button>
           <button
-            className={cn('view-toggle-button', boardScope === 'personal' && 'view-toggle-button-active')}
+            className={cn('view-toggle-button scope-toggle', boardScope === 'personal' && 'view-toggle-button-active')}
             type="button"
             onClick={() => onBoardScopeChange('personal')}
           >
             <LockKeyhole size={17} />
             {t.sidebar.personal}
+            <ScopeDeadline scope="personal" />
           </button>
         </div>
 
