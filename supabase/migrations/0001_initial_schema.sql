@@ -3013,11 +3013,11 @@ security definer
 set search_path = ''
 as $$
 declare
-  current_role text := private.team_role(target_team_id);
+  actor_team_role text := private.team_role(target_team_id);
   existing_role text;
   normalized_role text := lower(btrim(coalesce(target_role, '')));
 begin
-  if current_role not in ('owner', 'admin') then
+  if actor_team_role is null or actor_team_role not in ('owner', 'admin') then
     raise exception 'Only the owner or an administrator can update team access';
   end if;
 
@@ -3039,7 +3039,7 @@ begin
     raise exception 'Transfer ownership before changing the owner access';
   end if;
 
-  if current_role <> 'owner' and (existing_role = 'admin' or normalized_role = 'admin') then
+  if actor_team_role <> 'owner' and (existing_role = 'admin' or normalized_role = 'admin') then
     raise exception 'Only the owner can manage administrator access';
   end if;
 
@@ -3065,10 +3065,10 @@ security definer
 set search_path = ''
 as $$
 declare
-  current_role text := private.team_role(target_team_id);
+  actor_team_role text := private.team_role(target_team_id);
   existing_role text;
 begin
-  if current_role not in ('owner', 'admin') then
+  if actor_team_role is null or actor_team_role not in ('owner', 'admin') then
     raise exception 'Only the owner or an administrator can remove a member';
   end if;
 
@@ -3090,7 +3090,7 @@ begin
     raise exception 'The owner cannot be removed';
   end if;
 
-  if current_role <> 'owner' and existing_role = 'admin' then
+  if actor_team_role <> 'owner' and existing_role = 'admin' then
     raise exception 'Only the owner can remove an administrator';
   end if;
 
